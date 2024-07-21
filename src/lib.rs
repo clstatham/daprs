@@ -1,3 +1,5 @@
+use runtime::Backend;
+
 pub mod builtin;
 pub mod graph;
 pub mod runtime;
@@ -11,8 +13,36 @@ pub mod prelude {
         node::*,
         Graph,
     };
-    pub use crate::runtime::{Backend, Runtime};
+    pub use crate::runtime::{Backend, Device, Runtime};
     pub use crate::sample::{Buffer, Sample};
+}
+
+pub fn available_backends() -> Vec<Backend> {
+    let mut backends = vec![Backend::Default];
+    for host in cpal::available_hosts() {
+        match host {
+            #[cfg(target_os = "linux")]
+            cpal::HostId::Jack => {
+                backends.push(Backend::Jack);
+            }
+            #[cfg(target_os = "linux")]
+            cpal::HostId::Alsa => {
+                backends.push(Backend::Alsa);
+            }
+            #[cfg(target_os = "windows")]
+            cpal::HostId::Wasapi => {
+                backends.push(Backend::Wasapi);
+            }
+            #[allow(unreachable_patterns)]
+            _ => {}
+        }
+    }
+
+    backends
+}
+
+pub fn default_backend() -> Backend {
+    Backend::Default
 }
 
 #[cfg(test)]

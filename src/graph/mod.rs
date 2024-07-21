@@ -296,42 +296,52 @@ impl Graph {
             "Graph's cached visitor needs allocation; call `allocate_visitor()` first"
         );
 
-        self.visit(|graph, node| {
+        self.visit(|graph, node_id| {
             // copy the inputs from the source nodes to the target node
             graph.edge_cache.extend(
                 graph
                     .digraph
-                    .edges_directed(node, Direction::Incoming)
+                    .edges_directed(node_id, Direction::Incoming)
                     .map(|edge| (edge.source(), *edge.weight())),
             );
-            for (source, edge) in graph.edge_cache.drain(..) {
+            for (source_id, edge) in graph.edge_cache.drain(..) {
                 let Edge {
                     source_output,
                     target_input,
                 } = edge;
 
-                let (source, target) = graph.digraph.index_twice_mut(source, node);
+                let (source, target) = graph.digraph.index_twice_mut(source_id, node_id);
 
-                let source_buffer = if let Node::Processor(processor) = source {
-                    processor.output(source_output as usize)
-                } else if let Node::Input = source {
-                    &graph.input_buffers[source_output as usize]
-                } else {
-                    panic!("Cannot get input buffer for output node")
+                let source_buffer = match source {
+                    Node::Processor(processor) => processor.output(source_output as usize),
+                    Node::Input => {
+                        let index = graph
+                            .input_nodes
+                            .iter()
+                            .position(|&x| x == source_id)
+                            .expect("Mismatch in input node indices");
+                        &graph.input_buffers[index]
+                    }
+                    _ => panic!("Cannot get input buffer for output node"),
                 };
 
-                let target_buffer = if let Node::Processor(processor) = target {
-                    processor.input_mut(target_input as usize)
-                } else if let Node::Output = target {
-                    &mut graph.output_buffers[target_input as usize]
-                } else {
-                    panic!("Cannot get output buffer for input node")
+                let target_buffer = match target {
+                    Node::Processor(processor) => processor.input_mut(target_input as usize),
+                    Node::Output => {
+                        let index = graph
+                            .output_nodes
+                            .iter()
+                            .position(|&x| x == node_id)
+                            .expect("Mismatch in output node indices");
+                        &mut graph.output_buffers[index]
+                    }
+                    _ => panic!("Cannot get output buffer for input node"),
                 };
                 target_buffer.copy_from_slice(source_buffer);
             }
 
-            // dbg!(graph.digraph[node].name());
-            graph.digraph[node].process();
+            // process the node
+            graph.digraph[node_id].process();
         });
     }
 }

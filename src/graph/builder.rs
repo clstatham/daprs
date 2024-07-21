@@ -126,6 +126,26 @@ pub struct GraphBuilderNode<'a> {
 }
 
 impl<'a> GraphBuilderNode<'a> {
+    pub fn num_inputs(self) -> usize {
+        let graph = self.builder.graph.borrow();
+        let graph = graph
+            .as_ref()
+            .expect("GraphBuilder has already been finished");
+
+        let node = &graph.digraph[self.index];
+        node.inputs().len()
+    }
+
+    pub fn num_outputs(self) -> usize {
+        let graph = self.builder.graph.borrow();
+        let graph = graph
+            .as_ref()
+            .expect("GraphBuilder has already been finished");
+
+        let node = &graph.digraph[self.index];
+        node.outputs().len()
+    }
+
     pub fn build(self) -> Graph {
         self.builder.build()
     }

@@ -1,6 +1,6 @@
-# pyPAPR
+# PAPR
 
-**pyPAPR** is a WIP realtime digital audio processing runtime for Python.
+**PAPR** is a WIP realtime digital audio processing runtime for Rust.
 
 ## Design Goals
 

@@ -7,7 +7,11 @@ use crate::{
     sample::{Buffer, Sample},
 };
 
+/// The audio backend to use for the runtime.
+#[derive(Default, Debug)]
 pub enum Backend {
+    #[default]
+    Default,
     #[cfg(target_os = "linux")]
     Jack,
     #[cfg(target_os = "linux")]
@@ -16,14 +20,40 @@ pub enum Backend {
     Wasapi,
 }
 
+/// The audio device to use for the runtime.
+#[derive(Default, Debug, Clone)]
+pub enum Device {
+    #[default]
+    Default,
+    /// The index of the device to use.
+    Index(usize),
+    /// Substring of the device name to match. The first device with a name containing this substring will be used.
+    Name(String),
+}
+
+/// The audio graph processing runtime.
+///
+/// The runtime is responsible for running the audio graph and rendering audio samples.
+/// It can run in real-time ([`run`](Runtime::run)) or offline ([`run_offline`](Runtime::run_offline)) mode.
+///
+/// In real-time mode, the runtime will render audio samples in real-time using a specified audio backend and device.
+///
+/// In offline mode, the runtime will render audio samples as fast as possible and return the rendered output channels.
 #[derive(Default)]
 pub struct Runtime {
     graph: Graph,
 }
 
 impl Runtime {
+    /// Creates a new runtime with the given audio graph.
     pub fn new(graph: Graph) -> Self {
         Runtime { graph }
+    }
+
+    /// Resets the runtime with the given sample rate and block size.
+    /// This will reset the state of all nodes in the graph and potentially reallocate internal buffers.
+    pub fn reset(&mut self, sample_rate: f64, block_size: usize) {
+        self.graph.reset(sample_rate, block_size);
     }
 
     /// Runs the preparation phase for every node in the graph.
@@ -31,10 +61,12 @@ impl Runtime {
         self.graph.prepare_nodes();
     }
 
+    /// Returns a reference to the audio graph.
     pub fn graph(&self) -> &Graph {
         &self.graph
     }
 
+    /// Returns a mutable reference to the audio graph.
     pub fn graph_mut(&mut self) -> &mut Graph {
         &mut self.graph
     }
@@ -64,7 +96,7 @@ impl Runtime {
         let samples = (sample_rate * secs) as usize;
         let blocks = samples / block_size;
 
-        self.graph.reset(sample_rate, block_size);
+        self.reset(sample_rate, block_size);
         self.prepare();
 
         let num_outputs = self.graph.num_outputs();
@@ -87,7 +119,14 @@ impl Runtime {
         outputs
     }
 
-    pub fn run(mut self, backend: Backend) -> RuntimeHandle {
+    pub fn run_for(&mut self, duration: std::time::Duration, backend: Backend, device: Device) {
+        let runtime = std::mem::take(self);
+        let handle = runtime.run(backend, device);
+        std::thread::sleep(duration);
+        *self = handle.stop();
+    }
+
+    pub fn run(mut self, backend: Backend, device: Device) -> RuntimeHandle {
         let (kill_tx, kill_rx) = mpsc::channel();
         let (runtime_tx, runtime_rx) = mpsc::channel();
 
@@ -98,6 +137,7 @@ impl Runtime {
 
         std::thread::spawn(move || {
             let host_id = match backend {
+                Backend::Default => cpal::default_host().id(),
                 #[cfg(target_os = "linux")]
                 Backend::Alsa => cpal::available_hosts()
                     .into_iter()
@@ -116,9 +156,23 @@ impl Runtime {
             };
             let host = cpal::host_from_id(host_id).unwrap();
 
-            let device = host
-                .default_output_device()
-                .expect("No default output device found.");
+            log::info!("Using host: {:?}", host.id());
+
+            let device = match device {
+                Device::Default => host.default_output_device().unwrap(),
+                Device::Index(index) => host.output_devices().unwrap().nth(index).unwrap(),
+                Device::Name(name) => host
+                    .output_devices()
+                    .unwrap()
+                    .find(|d| d.name().unwrap().contains(&name))
+                    .unwrap(),
+            };
+
+            // let device = host
+            //     .default_output_device()
+            //     .expect("No default output device found.");
+
+            log::info!("Using device: {}", device.name().unwrap());
 
             let config = device.default_output_config().unwrap();
 
@@ -131,17 +185,12 @@ impl Runtime {
                 );
             }
 
-            println!("Configuration: {:#?}", config);
+            log::info!("Configuration: {:#?}", config);
 
             let sample_rate = config.sample_rate().0 as f64;
-            let block_size = *config.buffer_size();
-            let block_size = if let cpal::SupportedBufferSize::Range { min, max: _ } = block_size {
-                min as usize
-            } else {
-                panic!("Unsupported buffer size")
-            };
+            let initial_block_size = sample_rate as usize / 100;
 
-            self.graph.reset(sample_rate, block_size);
+            self.graph.reset(sample_rate, initial_block_size);
 
             self.prepare();
 
@@ -205,9 +254,9 @@ impl Runtime {
                 move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
                     graph.set_block_size(data.len() / channels);
                     graph.process();
+                    let outputs = graph.outputs();
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
-                            let outputs = graph.outputs();
                             let buffer = &outputs[channel_idx];
                             let value = buffer[frame_idx];
                             *sample = T::from_sample(*value);
@@ -223,7 +272,7 @@ impl Runtime {
 
         loop {
             if kill_rx.try_recv().is_ok() {
-                // stream.pause().unwrap();
+                drop(stream);
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
