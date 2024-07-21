@@ -224,6 +224,71 @@ impl<'a> std::ops::Rem<GraphBuilderNode<'a>> for GraphBuilderNode<'a> {
     }
 }
 
+impl<'a> std::ops::Neg for GraphBuilderNode<'a> {
+    type Output = GraphBuilderNode<'a>;
+
+    fn neg(self) -> GraphBuilderNode<'a> {
+        let processor = self.builder.add_processor(math::Neg);
+        processor.connect_inputs([(self, 0)]);
+        processor
+    }
+}
+
+impl<'a> std::ops::Add<f64> for GraphBuilderNode<'a> {
+    type Output = GraphBuilderNode<'a>;
+
+    fn add(self, rhs: f64) -> GraphBuilderNode<'a> {
+        let constant = self.builder.add_processor(math::Constant::new(rhs.into()));
+        let processor = self.builder.add_processor(math::Add);
+        processor.connect_inputs([(self, 0), (constant, 0)]);
+        processor
+    }
+}
+
+impl<'a> std::ops::Sub<f64> for GraphBuilderNode<'a> {
+    type Output = GraphBuilderNode<'a>;
+
+    fn sub(self, rhs: f64) -> GraphBuilderNode<'a> {
+        let constant = self.builder.add_processor(math::Constant::new(rhs.into()));
+        let processor = self.builder.add_processor(math::Sub);
+        processor.connect_inputs([(self, 0), (constant, 0)]);
+        processor
+    }
+}
+
+impl<'a> std::ops::Mul<f64> for GraphBuilderNode<'a> {
+    type Output = GraphBuilderNode<'a>;
+
+    fn mul(self, rhs: f64) -> GraphBuilderNode<'a> {
+        let constant = self.builder.add_processor(math::Constant::new(rhs.into()));
+        let processor = self.builder.add_processor(math::Mul);
+        processor.connect_inputs([(self, 0), (constant, 0)]);
+        processor
+    }
+}
+
+impl<'a> std::ops::Div<f64> for GraphBuilderNode<'a> {
+    type Output = GraphBuilderNode<'a>;
+
+    fn div(self, rhs: f64) -> GraphBuilderNode<'a> {
+        let constant = self.builder.add_processor(math::Constant::new(rhs.into()));
+        let processor = self.builder.add_processor(math::Div);
+        processor.connect_inputs([(self, 0), (constant, 0)]);
+        processor
+    }
+}
+
+impl<'a> std::ops::Rem<f64> for GraphBuilderNode<'a> {
+    type Output = GraphBuilderNode<'a>;
+
+    fn rem(self, rhs: f64) -> GraphBuilderNode<'a> {
+        let constant = self.builder.add_processor(math::Constant::new(rhs.into()));
+        let processor = self.builder.add_processor(math::Rem);
+        processor.connect_inputs([(self, 0), (constant, 0)]);
+        processor
+    }
+}
+
 impl<'a> std::ops::AddAssign<GraphBuilderNode<'a>> for GraphBuilderNode<'a> {
     fn add_assign(&mut self, rhs: GraphBuilderNode<'a>) {
         *self = *self + rhs;
@@ -250,6 +315,36 @@ impl<'a> std::ops::DivAssign<GraphBuilderNode<'a>> for GraphBuilderNode<'a> {
 
 impl<'a> std::ops::RemAssign<GraphBuilderNode<'a>> for GraphBuilderNode<'a> {
     fn rem_assign(&mut self, rhs: GraphBuilderNode<'a>) {
+        *self = *self % rhs;
+    }
+}
+
+impl<'a> std::ops::AddAssign<f64> for GraphBuilderNode<'a> {
+    fn add_assign(&mut self, rhs: f64) {
+        *self = *self + rhs;
+    }
+}
+
+impl<'a> std::ops::SubAssign<f64> for GraphBuilderNode<'a> {
+    fn sub_assign(&mut self, rhs: f64) {
+        *self = *self - rhs;
+    }
+}
+
+impl<'a> std::ops::MulAssign<f64> for GraphBuilderNode<'a> {
+    fn mul_assign(&mut self, rhs: f64) {
+        *self = *self * rhs;
+    }
+}
+
+impl<'a> std::ops::DivAssign<f64> for GraphBuilderNode<'a> {
+    fn div_assign(&mut self, rhs: f64) {
+        *self = *self / rhs;
+    }
+}
+
+impl<'a> std::ops::RemAssign<f64> for GraphBuilderNode<'a> {
+    fn rem_assign(&mut self, rhs: f64) {
         *self = *self % rhs;
     }
 }
