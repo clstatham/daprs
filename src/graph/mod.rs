@@ -19,7 +19,7 @@ pub type DiGraph = StableDiGraph<Node, Edge, GraphIx>;
 
 pub type Visitor = Bfs<NodeIndex, <DiGraph as Visitable>::Map>;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Graph {
     digraph: DiGraph,
 
@@ -206,6 +206,20 @@ impl Graph {
         }
     }
 
+    pub fn set_block_size(&mut self, block_size: usize) {
+        self.visit(|graph, node| {
+            graph.digraph[node].set_block_size(block_size);
+        });
+
+        for input in &mut self.input_buffers {
+            input.resize(block_size);
+        }
+
+        for output in &mut self.output_buffers {
+            output.resize(block_size);
+        }
+    }
+
     /// Allocates all [`Node`]s' internal input and output buffers, along with various internal resources to the graph.
     ///
     /// This should be run at least once before the audio thread starts running, and again anytime the buffer size or sample rate change or the graph structure is modified.
@@ -225,11 +239,11 @@ impl Graph {
         });
 
         for input in &mut self.input_buffers {
-            *input = Buffer::zeros(block_size);
+            input.resize(block_size);
         }
 
         for output in &mut self.output_buffers {
-            *output = Buffer::zeros(block_size);
+            output.resize(block_size);
         }
 
         // preallocate the edge cache used in `process()`
@@ -298,8 +312,6 @@ impl Graph {
 
                 let (source, target) = graph.digraph.index_twice_mut(source, node);
 
-                // copy the input buffer to the output buffer
-                // let source_buffer = &source.outputs()[source_output as usize];
                 let source_buffer = if let Node::Processor(processor) = source {
                     processor.output(source_output as usize)
                 } else if let Node::Input = source {
@@ -318,8 +330,7 @@ impl Graph {
                 target_buffer.copy_from_slice(source_buffer);
             }
 
-            // run the processing logic for the node
-            dbg!(graph.digraph[node].name());
+            // dbg!(graph.digraph[node].name());
             graph.digraph[node].process();
         });
     }

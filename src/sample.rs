@@ -147,11 +147,17 @@ impl Display for Sample {
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
 /// It can also be [`collected`](std::iter::Iterator::collect) from an iterator of [`Sample`]s.
 #[derive(Debug, PartialEq, Clone)]
-pub struct Buffer(Box<[Sample]>);
+pub struct Buffer(Vec<Sample>);
 
 impl Buffer {
     pub fn zeros(length: usize) -> Self {
-        Buffer(vec![Sample::new(0.0); length].into_boxed_slice())
+        Buffer(vec![Sample::new(0.0); length])
+    }
+
+    pub fn resize(&mut self, length: usize) {
+        if self.len() != length {
+            self.0.resize(length, Sample::new(0.0));
+        }
     }
 
     pub fn map_mut<F>(&mut self, mut f: F)
@@ -167,7 +173,7 @@ impl Buffer {
 impl From<Vec<Sample>> for Buffer {
     #[inline]
     fn from(value: Vec<Sample>) -> Self {
-        Buffer(value.into_boxed_slice())
+        Buffer(value)
     }
 }
 

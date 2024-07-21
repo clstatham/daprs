@@ -3,7 +3,7 @@ use crate::{
     sample::Buffer,
 };
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SubGraph {
     pub graph: Graph,
 }

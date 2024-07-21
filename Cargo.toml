@@ -3,5 +3,10 @@ name = "pypapr"
 version = "0.1.0"
 edition = "2021"
 
+[[example]]
+name = "run_sine"
+path = "examples/run_sine.rs"
+
 [dependencies]
+cpal = { version = "0.15.3", features = ["jack"] }
 petgraph = "0.6.5"

@@ -3,6 +3,7 @@ use crate::{
     sample::{Buffer, Sample},
 };
 
+#[derive(Debug, Clone)]
 pub struct Constant {
     pub value: Sample,
 }
@@ -35,6 +36,7 @@ impl Process for Constant {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Add;
 
 impl Process for Add {
@@ -62,6 +64,7 @@ impl Process for Add {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Sub;
 
 impl Process for Sub {
@@ -89,6 +92,7 @@ impl Process for Sub {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Mul;
 
 impl Process for Mul {
@@ -116,6 +120,7 @@ impl Process for Mul {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Div;
 
 impl Process for Div {
@@ -143,6 +148,7 @@ impl Process for Div {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Rem;
 
 impl Process for Rem {
@@ -170,6 +176,7 @@ impl Process for Rem {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Sin;
 
 impl Process for Sin {
@@ -197,6 +204,7 @@ impl Process for Sin {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Cos;
 
 impl Process for Cos {
@@ -224,6 +232,7 @@ impl Process for Cos {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Sqrt;
 
 impl Process for Sqrt {
@@ -251,6 +260,7 @@ impl Process for Sqrt {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Abs;
 
 impl Process for Abs {
@@ -278,6 +288,7 @@ impl Process for Abs {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Neg;
 
 impl Process for Neg {
@@ -305,6 +316,7 @@ impl Process for Neg {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Exp;
 
 impl Process for Exp {
@@ -332,6 +344,7 @@ impl Process for Exp {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Ln;
 
 impl Process for Ln {

@@ -1,6 +1,6 @@
 use crate::{graph::node::Process, sample::Buffer};
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct SampleCount {
     count: u64,
 }
@@ -31,7 +31,7 @@ impl Process for SampleCount {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct Time {
     sample_count: u64,
     sample_rate: f64,

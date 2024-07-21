@@ -1,5 +1,6 @@
 use crate::{graph::node::Process, sample::Buffer};
 
+#[derive(Debug, Clone)]
 pub struct Dac {
     pub num_channels: u8,
 }

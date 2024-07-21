@@ -5,7 +5,7 @@ use crate::sample::Buffer;
 /// A trait for processing audio samples.
 ///
 /// This is usually used as part of a [`Node`], operating on its internal input/output buffers.
-pub trait Process: 'static {
+pub trait Process: 'static + Send + Sync + ProcessorClone {
     fn name(&self) -> &str {
         std::any::type_name::<Self>()
     }
@@ -31,16 +31,35 @@ pub trait Process: 'static {
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]);
 }
 
+pub trait ProcessorClone {
+    fn clone_boxed(&self) -> Box<dyn Process>;
+}
+
+impl<T: ?Sized> ProcessorClone for T
+where
+    T: Clone + Process,
+{
+    fn clone_boxed(&self) -> Box<dyn Process> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn Process> {
+    fn clone(&self) -> Self {
+        self.clone_boxed()
+    }
+}
+
 impl Debug for dyn Process {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name())
+        f.write_str(self.name())
     }
 }
 
 /// A node in the audio graph.
 ///
 /// This is a wrapper around a [`Processor`] that provides input and output buffers for the processor to use.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Processor {
     processor: Box<dyn Process>,
     input_buffers: Box<[Buffer]>,
@@ -56,11 +75,17 @@ impl Processor {
         }
     }
 
+    pub fn set_block_size(&mut self, block_size: usize) {
+        for input in self.input_buffers.iter_mut() {
+            input.resize(block_size);
+        }
+        for output in self.output_buffers.iter_mut() {
+            output.resize(block_size);
+        }
+    }
+
     pub fn reset(&mut self, sample_rate: f64, block_size: usize) {
-        self.input_buffers =
-            vec![Buffer::zeros(block_size); self.processor.num_inputs()].into_boxed_slice();
-        self.output_buffers =
-            vec![Buffer::zeros(block_size); self.processor.num_outputs()].into_boxed_slice();
+        self.set_block_size(block_size);
         self.processor.reset(sample_rate, block_size);
     }
 
@@ -127,7 +152,7 @@ impl Processor {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node {
     Input,
     Processor(Processor),
@@ -176,6 +201,12 @@ impl Node {
             processor.outputs()
         } else {
             &[]
+        }
+    }
+
+    pub fn set_block_size(&mut self, block_size: usize) {
+        if let Self::Processor(processor) = self {
+            processor.set_block_size(block_size);
         }
     }
 
