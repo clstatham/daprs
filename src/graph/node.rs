@@ -1,14 +1,17 @@
 use std::fmt::Debug;
 
-use crate::sample::Buffer;
+use crate::sample::{Buffer, SignalKind};
 
 /// A trait for processing audio samples.
 ///
 /// This is usually used as part of a [`Node`], operating on its internal input/output buffers.
-pub trait Process: 'static + Send + Sync + ProcessorClone {
+pub trait Process: 'static + Send + Sync + ProcessClone {
     fn name(&self) -> &str {
         std::any::type_name::<Self>()
     }
+
+    fn input_kind(&self) -> SignalKind;
+    fn output_kind(&self) -> SignalKind;
 
     /// Returns the number of input buffers/channels this [`Processor`] expects.
     fn num_inputs(&self) -> usize;
@@ -21,7 +24,7 @@ pub trait Process: 'static + Send + Sync + ProcessorClone {
 
     /// Called whenever the global sample or block size changes.
     #[allow(unused)]
-    fn reset(&mut self, sample_rate: f64, block_size: usize) {}
+    fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {}
 
     /// Processes the given inputs and writes the results to the given outputs.
     ///
@@ -29,11 +32,11 @@ pub trait Process: 'static + Send + Sync + ProcessorClone {
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]);
 }
 
-pub trait ProcessorClone {
+pub trait ProcessClone {
     fn clone_boxed(&self) -> Box<dyn Process>;
 }
 
-impl<T: ?Sized> ProcessorClone for T
+impl<T: ?Sized> ProcessClone for T
 where
     T: Clone + Process,
 {
@@ -65,26 +68,51 @@ pub struct Processor {
 }
 
 impl Processor {
-    pub fn new(processor: Box<dyn Process>) -> Self {
+    pub fn new(processor: impl Process) -> Self {
         Self {
-            input_buffers: vec![Buffer::zeros(0); processor.num_inputs()].into_boxed_slice(),
-            output_buffers: vec![Buffer::zeros(0); processor.num_outputs()].into_boxed_slice(),
-            processor,
+            input_buffers: vec![Buffer::zeros(0, processor.input_kind()); processor.num_inputs()]
+                .into_boxed_slice(),
+            output_buffers: vec![
+                Buffer::zeros(0, processor.output_kind());
+                processor.num_outputs()
+            ]
+            .into_boxed_slice(),
+            processor: Box::new(processor),
         }
     }
 
-    pub fn set_block_size(&mut self, block_size: usize) {
+    pub fn input_kind(&self) -> SignalKind {
+        self.processor.input_kind()
+    }
+
+    pub fn output_kind(&self) -> SignalKind {
+        self.processor.output_kind()
+    }
+
+    pub fn set_block_size(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
+        let input_kind = self.input_kind();
+        let output_kind = self.output_kind();
+        let control_block_size = (block_size as f64 * control_rate / audio_rate).ceil() as usize;
+
         for input in self.input_buffers.iter_mut() {
-            input.resize(block_size);
+            if input_kind == SignalKind::Control {
+                input.resize(control_block_size);
+            } else {
+                input.resize(block_size);
+            }
         }
         for output in self.output_buffers.iter_mut() {
-            output.resize(block_size);
+            if output_kind == SignalKind::Control {
+                output.resize(control_block_size);
+            } else {
+                output.resize(block_size);
+            }
         }
     }
 
-    pub fn reset(&mut self, sample_rate: f64, block_size: usize) {
-        self.set_block_size(block_size);
-        self.processor.reset(sample_rate, block_size);
+    pub fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
+        self.set_block_size(audio_rate, control_rate, block_size);
+        self.processor.reset(audio_rate, control_rate, block_size);
     }
 
     #[inline]
@@ -118,17 +146,6 @@ impl Processor {
     }
 
     #[inline]
-    pub fn block_size(&self) -> usize {
-        if let Some(first) = self.inputs().first() {
-            first.len()
-        } else if let Some(first) = self.outputs().first() {
-            first.len()
-        } else {
-            0
-        }
-    }
-
-    #[inline]
     pub fn prepare(&mut self) {
         self.processor.prepare();
     }
@@ -151,23 +168,39 @@ impl Processor {
 }
 
 #[derive(Debug, Clone)]
-pub enum Node {
+pub enum GraphNode {
     Input,
     Processor(Processor),
     Output,
 }
 
-impl Node {
+impl GraphNode {
     pub fn new_input() -> Self {
         Self::Input
     }
 
-    pub fn new_processor<P: Process>(processor: P) -> Self {
-        Self::Processor(Processor::new(Box::new(processor)))
+    pub fn new_processor(processor: impl Process) -> Self {
+        Self::Processor(Processor::new(processor))
     }
 
     pub fn new_output() -> Self {
         Self::Output
+    }
+
+    pub fn input_kind(&self) -> SignalKind {
+        match self {
+            Self::Input => SignalKind::Audio,
+            Self::Processor(processor) => processor.input_kind(),
+            Self::Output => SignalKind::Audio,
+        }
+    }
+
+    pub fn output_kind(&self) -> SignalKind {
+        match self {
+            Self::Input => SignalKind::Audio,
+            Self::Processor(processor) => processor.output_kind(),
+            Self::Output => SignalKind::Audio,
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -202,15 +235,15 @@ impl Node {
         }
     }
 
-    pub fn set_block_size(&mut self, block_size: usize) {
+    pub fn set_block_size(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         if let Self::Processor(processor) = self {
-            processor.set_block_size(block_size);
+            processor.set_block_size(audio_rate, control_rate, block_size);
         }
     }
 
-    pub fn reset(&mut self, sample_rate: f64, block_size: usize) {
+    pub fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         if let Self::Processor(processor) = self {
-            processor.reset(sample_rate, block_size);
+            processor.reset(audio_rate, control_rate, block_size);
         }
     }
 

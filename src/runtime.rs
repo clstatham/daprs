@@ -52,8 +52,8 @@ impl Runtime {
 
     /// Resets the runtime with the given sample rate and block size.
     /// This will reset the state of all nodes in the graph and potentially reallocate internal buffers.
-    pub fn reset(&mut self, sample_rate: f64, block_size: usize) {
-        self.graph.reset(sample_rate, block_size);
+    pub fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
+        self.graph.reset(audio_rate, control_rate, block_size);
     }
 
     /// Runs the preparation phase for every node in the graph.
@@ -89,14 +89,15 @@ impl Runtime {
     pub fn run_offline(
         &mut self,
         duration: std::time::Duration,
-        sample_rate: f64,
+        audio_rate: f64,
+        control_rate: f64,
         block_size: usize,
     ) -> Box<[Box<[Sample]>]> {
         let secs = duration.as_secs_f64();
-        let samples = (sample_rate * secs) as usize;
+        let samples = (audio_rate * secs) as usize;
         let blocks = samples / block_size;
 
-        self.reset(sample_rate, block_size);
+        self.reset(audio_rate, control_rate, block_size);
         self.prepare();
 
         let num_outputs = self.graph.num_outputs();
@@ -119,14 +120,20 @@ impl Runtime {
         outputs
     }
 
-    pub fn run_for(&mut self, duration: std::time::Duration, backend: Backend, device: Device) {
+    pub fn run_for(
+        &mut self,
+        duration: std::time::Duration,
+        backend: Backend,
+        device: Device,
+        control_rate: f64,
+    ) {
         let runtime = std::mem::take(self);
-        let handle = runtime.run(backend, device);
+        let handle = runtime.run(backend, device, control_rate);
         std::thread::sleep(duration);
         *self = handle.stop();
     }
 
-    pub fn run(mut self, backend: Backend, device: Device) -> RuntimeHandle {
+    pub fn run(mut self, backend: Backend, device: Device, control_rate: f64) -> RuntimeHandle {
         let (kill_tx, kill_rx) = mpsc::channel();
         let (runtime_tx, runtime_rx) = mpsc::channel();
 
@@ -187,44 +194,85 @@ impl Runtime {
 
             log::info!("Configuration: {:#?}", config);
 
-            let sample_rate = config.sample_rate().0 as f64;
-            let initial_block_size = sample_rate as usize / 100;
+            let audio_rate = config.sample_rate().0 as f64;
+            let initial_block_size = audio_rate as usize / 100;
 
-            self.graph.reset(sample_rate, initial_block_size);
+            self.graph
+                .reset(audio_rate, control_rate, initial_block_size);
 
             self.prepare();
 
             match config.sample_format() {
-                cpal::SampleFormat::I8 => {
-                    self.run_inner::<i8>(&device, &config.config(), kill_rx, runtime_tx)
-                }
-                cpal::SampleFormat::I16 => {
-                    self.run_inner::<i16>(&device, &config.config(), kill_rx, runtime_tx)
-                }
-                cpal::SampleFormat::I32 => {
-                    self.run_inner::<i32>(&device, &config.config(), kill_rx, runtime_tx)
-                }
-                cpal::SampleFormat::I64 => {
-                    self.run_inner::<i64>(&device, &config.config(), kill_rx, runtime_tx)
-                }
-                cpal::SampleFormat::U8 => {
-                    self.run_inner::<u8>(&device, &config.config(), kill_rx, runtime_tx)
-                }
-                cpal::SampleFormat::U16 => {
-                    self.run_inner::<u16>(&device, &config.config(), kill_rx, runtime_tx)
-                }
-                cpal::SampleFormat::U32 => {
-                    self.run_inner::<u32>(&device, &config.config(), kill_rx, runtime_tx)
-                }
-                cpal::SampleFormat::U64 => {
-                    self.run_inner::<u64>(&device, &config.config(), kill_rx, runtime_tx)
-                }
-                cpal::SampleFormat::F32 => {
-                    self.run_inner::<f32>(&device, &config.config(), kill_rx, runtime_tx)
-                }
-                cpal::SampleFormat::F64 => {
-                    self.run_inner::<f64>(&device, &config.config(), kill_rx, runtime_tx)
-                }
+                cpal::SampleFormat::I8 => self.run_inner::<i8>(
+                    &device,
+                    &config.config(),
+                    control_rate,
+                    kill_rx,
+                    runtime_tx,
+                ),
+                cpal::SampleFormat::I16 => self.run_inner::<i16>(
+                    &device,
+                    &config.config(),
+                    control_rate,
+                    kill_rx,
+                    runtime_tx,
+                ),
+                cpal::SampleFormat::I32 => self.run_inner::<i32>(
+                    &device,
+                    &config.config(),
+                    control_rate,
+                    kill_rx,
+                    runtime_tx,
+                ),
+                cpal::SampleFormat::I64 => self.run_inner::<i64>(
+                    &device,
+                    &config.config(),
+                    control_rate,
+                    kill_rx,
+                    runtime_tx,
+                ),
+                cpal::SampleFormat::U8 => self.run_inner::<u8>(
+                    &device,
+                    &config.config(),
+                    control_rate,
+                    kill_rx,
+                    runtime_tx,
+                ),
+                cpal::SampleFormat::U16 => self.run_inner::<u16>(
+                    &device,
+                    &config.config(),
+                    control_rate,
+                    kill_rx,
+                    runtime_tx,
+                ),
+                cpal::SampleFormat::U32 => self.run_inner::<u32>(
+                    &device,
+                    &config.config(),
+                    control_rate,
+                    kill_rx,
+                    runtime_tx,
+                ),
+                cpal::SampleFormat::U64 => self.run_inner::<u64>(
+                    &device,
+                    &config.config(),
+                    control_rate,
+                    kill_rx,
+                    runtime_tx,
+                ),
+                cpal::SampleFormat::F32 => self.run_inner::<f32>(
+                    &device,
+                    &config.config(),
+                    control_rate,
+                    kill_rx,
+                    runtime_tx,
+                ),
+                cpal::SampleFormat::F64 => self.run_inner::<f64>(
+                    &device,
+                    &config.config(),
+                    control_rate,
+                    kill_rx,
+                    runtime_tx,
+                ),
 
                 sample_format => {
                     panic!("Unsupported sample format {:?}", sample_format);
@@ -239,12 +287,14 @@ impl Runtime {
         self,
         device: &cpal::Device,
         config: &cpal::StreamConfig,
+        control_rate: f64,
         kill_rx: mpsc::Receiver<()>,
         runtime_tx: mpsc::Sender<Runtime>,
     ) where
         T: cpal::SizedSample + cpal::FromSample<f64>,
     {
         let channels = config.channels as usize;
+        let audio_rate = config.sample_rate.0 as f64;
 
         let mut graph = self.graph.clone();
 
@@ -252,7 +302,7 @@ impl Runtime {
             .build_output_stream(
                 config,
                 move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
-                    graph.set_block_size(data.len() / channels);
+                    graph.set_block_size(audio_rate, control_rate, data.len() / channels);
                     graph.process();
                     let outputs = graph.outputs();
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {

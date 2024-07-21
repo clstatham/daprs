@@ -147,16 +147,22 @@ impl Display for Sample {
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
 /// It can also be [`collected`](std::iter::Iterator::collect) from an iterator of [`Sample`]s.
 #[derive(Debug, PartialEq, Clone)]
-pub struct Buffer(Vec<Sample>);
+pub struct Buffer {
+    buf: Vec<Sample>,
+    kind: SignalKind,
+}
 
 impl Buffer {
-    pub fn zeros(length: usize) -> Self {
-        Buffer(vec![Sample::new(0.0); length])
+    pub fn zeros(length: usize, kind: SignalKind) -> Self {
+        Buffer {
+            buf: vec![Sample::new(0.0); length],
+            kind,
+        }
     }
 
     pub fn resize(&mut self, length: usize) {
         if self.len() != length {
-            self.0.resize(length, Sample::new(0.0));
+            self.buf.resize(length, Sample::new(0.0));
         }
     }
 
@@ -164,23 +170,17 @@ impl Buffer {
     where
         F: FnMut(&mut Sample),
     {
-        for sample in self.0.iter_mut() {
+        for sample in self.buf.iter_mut() {
             f(sample);
         }
     }
-}
 
-impl From<Vec<Sample>> for Buffer {
     #[inline]
-    fn from(value: Vec<Sample>) -> Self {
-        Buffer(value)
-    }
-}
-
-impl Buffer {
-    #[inline]
-    pub fn from_slice(value: &[Sample]) -> Self {
-        Buffer(value.into())
+    pub fn from_slice(value: &[Sample], kind: SignalKind) -> Self {
+        Buffer {
+            buf: value.to_vec(),
+            kind,
+        }
     }
 }
 
@@ -188,72 +188,61 @@ impl Deref for Buffer {
     type Target = [Sample];
     #[inline]
     fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
+        self.buf.as_ref()
     }
 }
 
 impl DerefMut for Buffer {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.as_mut()
+        self.buf.as_mut()
     }
 }
 
 impl AsRef<[Sample]> for Buffer {
     #[inline]
     fn as_ref(&self) -> &[Sample] {
-        self.0.as_ref()
+        self.buf.as_ref()
     }
 }
 
-impl FromIterator<Sample> for Buffer {
-    #[inline]
-    fn from_iter<T: IntoIterator<Item = Sample>>(iter: T) -> Self {
-        Buffer(iter.into_iter().collect())
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SignalKind {
+    None,
+    Control,
+    Audio,
 }
 
-impl AddAssign<&Buffer> for &mut Buffer {
-    #[inline]
-    fn add_assign(&mut self, rhs: &Buffer) {
-        for (lhs, rhs) in self.0.iter_mut().zip(rhs.0.iter()) {
-            *lhs += *rhs;
+impl SignalKind {
+    pub fn is_audio(self) -> bool {
+        matches!(self, Self::Audio)
+    }
+
+    pub fn is_control(self) -> bool {
+        matches!(self, Self::Control)
+    }
+
+    pub fn can_take_as_input(self, other: SignalKind) -> bool {
+        match self {
+            Self::None => false,
+            Self::Control => other.is_control(),
+            Self::Audio => other.is_audio(),
         }
     }
 }
 
-impl SubAssign<&Buffer> for &mut Buffer {
-    #[inline]
-    fn sub_assign(&mut self, rhs: &Buffer) {
-        for (lhs, rhs) in self.0.iter_mut().zip(rhs.0.iter()) {
-            *lhs -= *rhs;
-        }
-    }
+pub trait SignalKindMarker: Copy + Send + Sync + 'static {
+    const KIND: SignalKind;
 }
 
-impl MulAssign<&Buffer> for &mut Buffer {
-    #[inline]
-    fn mul_assign(&mut self, rhs: &Buffer) {
-        for (lhs, rhs) in self.0.iter_mut().zip(rhs.0.iter()) {
-            *lhs *= *rhs;
-        }
-    }
+#[derive(Debug, Clone, Copy)]
+pub struct Audio;
+impl SignalKindMarker for Audio {
+    const KIND: SignalKind = SignalKind::Audio;
 }
 
-impl DivAssign<&Buffer> for &mut Buffer {
-    #[inline]
-    fn div_assign(&mut self, rhs: &Buffer) {
-        for (lhs, rhs) in self.0.iter_mut().zip(rhs.0.iter()) {
-            *lhs /= *rhs;
-        }
-    }
-}
-
-impl RemAssign<&Buffer> for &mut Buffer {
-    #[inline]
-    fn rem_assign(&mut self, rhs: &Buffer) {
-        for (lhs, rhs) in self.0.iter_mut().zip(rhs.0.iter()) {
-            *lhs %= *rhs;
-        }
-    }
+#[derive(Debug, Clone, Copy)]
+pub struct Control;
+impl SignalKindMarker for Control {
+    const KIND: SignalKind = SignalKind::Control;
 }

@@ -1,11 +1,11 @@
 use edge::Edge;
-use node::{Node, Process};
+use node::{GraphNode, Process};
 use petgraph::{
     prelude::{Direction, EdgeRef, StableDiGraph},
     visit::{Bfs, Visitable},
 };
 
-use crate::sample::{Buffer, Sample};
+use crate::sample::{Buffer, Sample, SignalKind};
 
 pub mod builder;
 pub mod edge;
@@ -15,7 +15,7 @@ pub type GraphIx = u32;
 pub type NodeIndex = petgraph::graph::NodeIndex<GraphIx>;
 pub type EdgeIndex = petgraph::graph::EdgeIndex<GraphIx>;
 
-pub type DiGraph = StableDiGraph<Node, Edge, GraphIx>;
+pub type DiGraph = StableDiGraph<GraphNode, Edge, GraphIx>;
 
 pub type Visitor = Bfs<NodeIndex, <DiGraph as Visitable>::Map>;
 
@@ -48,6 +48,14 @@ impl Graph {
         Self::default()
     }
 
+    pub fn new_builder() -> builder::GraphBuilder {
+        builder::GraphBuilder::new()
+    }
+
+    pub fn builder(self) -> builder::GraphBuilder {
+        builder::GraphBuilder::from_graph(self)
+    }
+
     #[inline]
     /// Returns the inner [`StableDiGraph`] of the graph.
     pub fn digraph(&self) -> &DiGraph {
@@ -69,30 +77,28 @@ impl Graph {
     /// Adds a new [`Input`](Node::Input) node to the graph.
     pub fn add_input(&mut self) -> NodeIndex {
         self.needs_reset = true;
-        let idx = self.digraph.add_node(Node::new_input());
+        let idx = self.digraph.add_node(GraphNode::new_input());
         self.input_nodes.push(idx);
-        self.input_buffers.push(Buffer::zeros(0));
+        self.input_buffers.push(Buffer::zeros(0, SignalKind::Audio));
         idx
     }
 
     /// Adds a new [`Output`](Node::Output) node to the graph.
     pub fn add_output(&mut self) -> NodeIndex {
         self.needs_reset = true;
-        let idx = self.digraph.add_node(Node::new_output());
+        let idx = self.digraph.add_node(GraphNode::new_output());
         self.output_nodes.push(idx);
-        self.output_buffers.push(Buffer::zeros(0));
+        self.output_buffers
+            .push(Buffer::zeros(0, SignalKind::Audio));
         idx
     }
 
     /// Adds a new [`Node`] with the given [`Process`] functionality to the graph.
-    pub fn add_processor<P>(&mut self, processor: P) -> NodeIndex
-    where
-        P: Process + 'static,
-    {
+    pub fn add_processor(&mut self, processor: impl Process) -> NodeIndex {
         self.needs_reset = true;
         self.needs_prepare = true;
         self.needs_visitor_alloc = true;
-        self.digraph.add_node(Node::new_processor(processor))
+        self.digraph.add_node(GraphNode::new_processor(processor))
     }
 
     /// Connects two [`Node`]s with a new [`Edge`].
@@ -206,9 +212,9 @@ impl Graph {
         }
     }
 
-    pub fn set_block_size(&mut self, block_size: usize) {
+    pub fn set_block_size(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         self.visit(|graph, node| {
-            graph.digraph[node].set_block_size(block_size);
+            graph.digraph[node].set_block_size(audio_rate, control_rate, block_size);
         });
 
         for input in &mut self.input_buffers {
@@ -223,13 +229,13 @@ impl Graph {
     /// Allocates all [`Node`]s' internal input and output buffers, along with various internal resources to the graph.
     ///
     /// This should be run at least once before the audio thread starts running, and again anytime the buffer size or sample rate change or the graph structure is modified.
-    pub fn reset(&mut self, sample_rate: f64, block_size: usize) {
+    pub fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         let mut max_edges = 0;
 
         self.allocate_visitor();
         self.visit(|graph, node| {
             // allocate the node's inputs and outputs
-            graph.digraph[node].reset(sample_rate, block_size);
+            graph.digraph[node].reset(audio_rate, control_rate, block_size);
 
             let num_inputs = graph
                 .digraph
@@ -266,18 +272,18 @@ impl Graph {
     #[inline]
     pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut Buffer {
         match &mut self.digraph[node] {
-            Node::Input => &mut self.input_buffers[input_index],
-            Node::Processor(processor) => processor.input_mut(input_index),
-            Node::Output => panic!("Cannot get input buffer for output node"),
+            GraphNode::Input => &mut self.input_buffers[input_index],
+            GraphNode::Processor(processor) => processor.input_mut(input_index),
+            GraphNode::Output => panic!("Cannot get input buffer for output node"),
         }
     }
 
     #[inline]
     pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &Buffer {
         match &self.digraph[node] {
-            Node::Input => panic!("Cannot get output buffer for input node"),
-            Node::Processor(processor) => processor.output(output_index),
-            Node::Output => &self.output_buffers[output_index],
+            GraphNode::Input => panic!("Cannot get output buffer for input node"),
+            GraphNode::Processor(processor) => processor.output(output_index),
+            GraphNode::Output => &self.output_buffers[output_index],
         }
     }
 
@@ -313,8 +319,8 @@ impl Graph {
                 let (source, target) = graph.digraph.index_twice_mut(source_id, node_id);
 
                 let source_buffer = match source {
-                    Node::Processor(processor) => processor.output(source_output as usize),
-                    Node::Input => {
+                    GraphNode::Processor(processor) => processor.output(source_output as usize),
+                    GraphNode::Input => {
                         let index = graph
                             .input_nodes
                             .iter()
@@ -326,8 +332,8 @@ impl Graph {
                 };
 
                 let target_buffer = match target {
-                    Node::Processor(processor) => processor.input_mut(target_input as usize),
-                    Node::Output => {
+                    GraphNode::Processor(processor) => processor.input_mut(target_input as usize),
+                    GraphNode::Output => {
                         let index = graph
                             .output_nodes
                             .iter()

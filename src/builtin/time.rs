@@ -1,13 +1,43 @@
-use crate::{graph::node::Process, sample::Buffer};
+use crate::{
+    graph::node::Process,
+    sample::{Audio, Buffer, Control, SignalKind, SignalKindMarker},
+};
 
 #[derive(Default, Debug, Clone)]
-pub struct SampleCount {
+pub struct SampleCount<K: SignalKindMarker> {
     count: u64,
+    _kind: std::marker::PhantomData<K>,
 }
 
-impl Process for SampleCount {
+impl SampleCount<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            count: 0,
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl SampleCount<Control> {
+    pub fn kr() -> Self {
+        Self {
+            count: 0,
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for SampleCount<K> {
     fn name(&self) -> &str {
         "sample_count"
+    }
+
+    fn input_kind(&self) -> SignalKind {
+        SignalKind::None
+    }
+
+    fn output_kind(&self) -> SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -32,14 +62,43 @@ impl Process for SampleCount {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct Time {
+pub struct Time<K: SignalKindMarker> {
     sample_count: u64,
     sample_rate: f64,
+    _kind: std::marker::PhantomData<K>,
 }
 
-impl Process for Time {
+impl Time<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            sample_count: 0,
+            sample_rate: 0.0,
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Time<Control> {
+    pub fn kr() -> Self {
+        Self {
+            sample_count: 0,
+            sample_rate: 0.0,
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Time<K> {
     fn name(&self) -> &str {
         "time"
+    }
+
+    fn input_kind(&self) -> SignalKind {
+        SignalKind::None
+    }
+
+    fn output_kind(&self) -> SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -52,8 +111,8 @@ impl Process for Time {
 
     fn prepare(&mut self) {}
 
-    fn reset(&mut self, sample_rate: f64, _block_size: usize) {
-        self.sample_rate = sample_rate;
+    fn reset(&mut self, audio_rate: f64, _control_rate: f64, _block_size: usize) {
+        self.sample_rate = audio_rate;
         self.sample_count = 0;
     }
 

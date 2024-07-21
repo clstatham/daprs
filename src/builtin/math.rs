@@ -1,22 +1,52 @@
 use crate::{
     graph::node::Process,
-    sample::{Buffer, Sample},
+    sample::{Audio, Buffer, Control, Sample, SignalKindMarker},
 };
 
 #[derive(Debug, Clone)]
-pub struct Constant {
+pub struct Constant<K: SignalKindMarker> {
     pub value: Sample,
+    _kind: std::marker::PhantomData<K>,
 }
 
-impl Constant {
-    pub fn new(value: Sample) -> Self {
-        Self { value }
+impl Constant<Audio> {
+    pub fn ar(value: Sample) -> Self {
+        Self {
+            value,
+            _kind: std::marker::PhantomData,
+        }
     }
 }
 
-impl Process for Constant {
+impl Constant<Control> {
+    pub fn kr(value: Sample) -> Self {
+        Self {
+            value,
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Constant<K> {
+    pub fn new(value: Sample) -> Self {
+        Self {
+            value,
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Constant<K> {
     fn name(&self) -> &str {
         "constant"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        crate::sample::SignalKind::None
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -37,11 +67,37 @@ impl Process for Constant {
 }
 
 #[derive(Debug, Clone)]
-pub struct Add;
+pub struct Add<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Add {
+impl Add<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Add<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Add<K> {
     fn name(&self) -> &str {
         "add"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -65,11 +121,37 @@ impl Process for Add {
 }
 
 #[derive(Debug, Clone)]
-pub struct Sub;
+pub struct Sub<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Sub {
+impl Sub<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Sub<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Sub<K> {
     fn name(&self) -> &str {
         "sub"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -93,11 +175,37 @@ impl Process for Sub {
 }
 
 #[derive(Debug, Clone)]
-pub struct Mul;
+pub struct Mul<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Mul {
+impl Mul<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Mul<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Mul<K> {
     fn name(&self) -> &str {
         "mul"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -121,11 +229,37 @@ impl Process for Mul {
 }
 
 #[derive(Debug, Clone)]
-pub struct Div;
+pub struct Div<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Div {
+impl Div<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Div<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Div<K> {
     fn name(&self) -> &str {
         "div"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -149,11 +283,37 @@ impl Process for Div {
 }
 
 #[derive(Debug, Clone)]
-pub struct Rem;
+pub struct Rem<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Rem {
+impl Rem<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Rem<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Rem<K> {
     fn name(&self) -> &str {
         "rem"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -177,11 +337,37 @@ impl Process for Rem {
 }
 
 #[derive(Debug, Clone)]
-pub struct Sin;
+pub struct Sin<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Sin {
+impl Sin<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Sin<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Sin<K> {
     fn name(&self) -> &str {
         "sin"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -205,11 +391,37 @@ impl Process for Sin {
 }
 
 #[derive(Debug, Clone)]
-pub struct Cos;
+pub struct Cos<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Cos {
+impl Cos<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Cos<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Cos<K> {
     fn name(&self) -> &str {
         "cos"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -233,11 +445,37 @@ impl Process for Cos {
 }
 
 #[derive(Debug, Clone)]
-pub struct Sqrt;
+pub struct Sqrt<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Sqrt {
+impl Sqrt<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Sqrt<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Sqrt<K> {
     fn name(&self) -> &str {
         "sqrt"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -261,11 +499,37 @@ impl Process for Sqrt {
 }
 
 #[derive(Debug, Clone)]
-pub struct Abs;
+pub struct Abs<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Abs {
+impl Abs<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Abs<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Abs<K> {
     fn name(&self) -> &str {
         "abs"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -289,11 +553,37 @@ impl Process for Abs {
 }
 
 #[derive(Debug, Clone)]
-pub struct Neg;
+pub struct Neg<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Neg {
+impl Neg<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Neg<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Neg<K> {
     fn name(&self) -> &str {
         "neg"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -317,11 +607,37 @@ impl Process for Neg {
 }
 
 #[derive(Debug, Clone)]
-pub struct Exp;
+pub struct Exp<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Exp {
+impl Exp<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Exp<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Exp<K> {
     fn name(&self) -> &str {
         "exp"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
@@ -345,11 +661,37 @@ impl Process for Exp {
 }
 
 #[derive(Debug, Clone)]
-pub struct Ln;
+pub struct Ln<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
 
-impl Process for Ln {
+impl Ln<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Ln<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Ln<K> {
     fn name(&self) -> &str {
         "ln"
+    }
+
+    fn input_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
+    }
+
+    fn output_kind(&self) -> crate::sample::SignalKind {
+        K::KIND
     }
 
     fn num_inputs(&self) -> usize {
