@@ -25,9 +25,7 @@ pub trait Process: 'static + Send + Sync + ProcessorClone {
 
     /// Processes the given inputs and writes the results to the given outputs.
     ///
-    /// The number of inputs and outputs must match the number returned by [`Processor::num_inputs`] and [`Processor::num_outputs`].
-    ///
-    /// The length of each input and output buffer must match the block size returned by [`Node::block_size`].
+    /// The number of inputs and outputs must match the number returned by [`Process::num_inputs`] and [`Process::num_outputs`].
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]);
 }
 

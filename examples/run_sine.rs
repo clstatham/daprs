@@ -3,7 +3,11 @@ use std::time::Duration;
 use papr::prelude::*;
 
 fn main() {
-    env_logger::init_from_env(env_logger::Env::new().filter("PAPR_LOG"));
+    env_logger::init_from_env(
+        env_logger::Env::new()
+            .filter("PAPR_LOG")
+            .default_filter_or("info"),
+    );
 
     let graph = GraphBuilder::new();
     let out1 = graph.add_output();

@@ -54,15 +54,15 @@ impl Graph {
         &self.digraph
     }
 
-    /// Returns `true` if [`allocate_nodes`](Graph::allocate_nodes) must be called before the next [`process`](Graph::process) call.
+    /// Returns `true` if [`reset`](Graph::reset) must be called before the next [`process`](Graph::process) call.
     #[inline]
-    pub fn needs_reallocation(&self) -> bool {
+    pub fn needs_reset(&self) -> bool {
         self.needs_reset
     }
 
     /// Returns `true` if [`prepare_nodes`](Graph::prepare_nodes) must be called before the next [`process`](Graph::process) call.
     #[inline]
-    pub fn needs_preparation(&self) -> bool {
+    pub fn needs_prepare(&self) -> bool {
         self.needs_prepare
     }
 
@@ -84,7 +84,7 @@ impl Graph {
         idx
     }
 
-    /// Adds a new [`Node`] with the given [`Processor`] to the graph.
+    /// Adds a new [`Node`] with the given [`Process`] functionality to the graph.
     pub fn add_processor<P>(&mut self, processor: P) -> NodeIndex
     where
         P: Process + 'static,

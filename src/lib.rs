@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use runtime::Backend;
 
 pub mod builtin;
