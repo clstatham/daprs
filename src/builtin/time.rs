@@ -1,7 +1,9 @@
 use crate::{
     graph::node::Process,
-    sample::{Audio, Buffer, Control, SignalKind, SignalKindMarker},
+    sample::{Audio, Buffer, Control, Sample, SignalKind, SignalKindMarker},
 };
+
+use super::linear_resample;
 
 #[derive(Default, Debug, Clone)]
 pub struct SampleCount<K: SignalKindMarker> {
@@ -32,12 +34,12 @@ impl<K: SignalKindMarker> Process for SampleCount<K> {
         "sample_count"
     }
 
-    fn input_kind(&self) -> SignalKind {
-        SignalKind::None
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![]
     }
 
-    fn output_kind(&self) -> SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -93,12 +95,12 @@ impl<K: SignalKindMarker> Process for Time<K> {
         "time"
     }
 
-    fn input_kind(&self) -> SignalKind {
-        SignalKind::None
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![]
     }
 
-    fn output_kind(&self) -> SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -113,7 +115,6 @@ impl<K: SignalKindMarker> Process for Time<K> {
 
     fn reset(&mut self, audio_rate: f64, _control_rate: f64, _block_size: usize) {
         self.sample_rate = audio_rate;
-        self.sample_count = 0;
     }
 
     #[inline]
@@ -123,6 +124,69 @@ impl<K: SignalKindMarker> Process for Time<K> {
             let time = (self.sample_count as f64) / self.sample_rate;
             output[i] = time.into();
             self.sample_count += 1;
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConstSampleDelay<K: SignalKindMarker> {
+    buffer: Box<[Sample]>,
+    index: usize,
+    _kind: std::marker::PhantomData<K>,
+}
+
+impl ConstSampleDelay<Audio> {
+    pub fn ar(delay: usize) -> Self {
+        Self {
+            buffer: vec![Sample::new(0.0); delay].into_boxed_slice(),
+            index: 0,
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl ConstSampleDelay<Control> {
+    pub fn kr(delay: usize) -> Self {
+        Self {
+            buffer: vec![Sample::new(0.0); delay].into_boxed_slice(),
+            index: 0,
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for ConstSampleDelay<K> {
+    fn name(&self) -> &str {
+        "delay"
+    }
+
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
+    }
+
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
+    }
+
+    fn num_inputs(&self) -> usize {
+        1
+    }
+
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
+    fn prepare(&mut self) {}
+
+    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
+        let input = &inputs[0];
+        let output = &mut outputs[0];
+
+        for i in 0..output.len() {
+            let sample = self.buffer[self.index];
+            output[i] = sample;
+            self.buffer[self.index] = input[i];
+            self.index = (self.index + 1) % self.buffer.len();
         }
     }
 }

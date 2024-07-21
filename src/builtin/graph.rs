@@ -19,12 +19,12 @@ impl Process for SubGraph {
         "graph"
     }
 
-    fn input_kind(&self) -> SignalKind {
-        SignalKind::Audio
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![SignalKind::Audio; self.graph.num_inputs()]
     }
 
-    fn output_kind(&self) -> SignalKind {
-        SignalKind::Audio
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![SignalKind::Audio; self.graph.num_outputs()]
     }
 
     fn num_inputs(&self) -> usize {

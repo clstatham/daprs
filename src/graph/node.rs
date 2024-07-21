@@ -10,8 +10,8 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
         std::any::type_name::<Self>()
     }
 
-    fn input_kind(&self) -> SignalKind;
-    fn output_kind(&self) -> SignalKind;
+    fn input_kinds(&self) -> Vec<SignalKind>;
+    fn output_kinds(&self) -> Vec<SignalKind>;
 
     /// Returns the number of input buffers/channels this [`Processor`] expects.
     fn num_inputs(&self) -> usize;
@@ -69,40 +69,42 @@ pub struct Processor {
 
 impl Processor {
     pub fn new(processor: impl Process) -> Self {
+        let mut input_buffers = Vec::with_capacity(processor.num_inputs());
+        for kind in processor.input_kinds() {
+            input_buffers.push(Buffer::zeros(0, kind));
+        }
+        let mut output_buffers = Vec::with_capacity(processor.num_outputs());
+        for kind in processor.output_kinds() {
+            output_buffers.push(Buffer::zeros(0, kind));
+        }
+
         Self {
-            input_buffers: vec![Buffer::zeros(0, processor.input_kind()); processor.num_inputs()]
-                .into_boxed_slice(),
-            output_buffers: vec![
-                Buffer::zeros(0, processor.output_kind());
-                processor.num_outputs()
-            ]
-            .into_boxed_slice(),
+            input_buffers: input_buffers.into_boxed_slice(),
+            output_buffers: output_buffers.into_boxed_slice(),
             processor: Box::new(processor),
         }
     }
 
-    pub fn input_kind(&self) -> SignalKind {
-        self.processor.input_kind()
+    pub fn input_kinds(&self) -> Vec<SignalKind> {
+        self.processor.input_kinds()
     }
 
-    pub fn output_kind(&self) -> SignalKind {
-        self.processor.output_kind()
+    pub fn output_kinds(&self) -> Vec<SignalKind> {
+        self.processor.output_kinds()
     }
 
     pub fn set_block_size(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
-        let input_kind = self.input_kind();
-        let output_kind = self.output_kind();
         let control_block_size = (block_size as f64 * control_rate / audio_rate).ceil() as usize;
 
         for input in self.input_buffers.iter_mut() {
-            if input_kind == SignalKind::Control {
+            if input.kind() == SignalKind::Control {
                 input.resize(control_block_size);
             } else {
                 input.resize(block_size);
             }
         }
         for output in self.output_buffers.iter_mut() {
-            if output_kind == SignalKind::Control {
+            if output.kind() == SignalKind::Control {
                 output.resize(control_block_size);
             } else {
                 output.resize(block_size);
@@ -187,19 +189,19 @@ impl GraphNode {
         Self::Output
     }
 
-    pub fn input_kind(&self) -> SignalKind {
+    pub fn input_kinds(&self) -> Vec<SignalKind> {
         match self {
-            Self::Input => SignalKind::Audio,
-            Self::Processor(processor) => processor.input_kind(),
-            Self::Output => SignalKind::Audio,
+            Self::Input => vec![SignalKind::Audio],
+            Self::Processor(processor) => processor.input_kinds(),
+            Self::Output => vec![SignalKind::Audio],
         }
     }
 
-    pub fn output_kind(&self) -> SignalKind {
+    pub fn output_kinds(&self) -> Vec<SignalKind> {
         match self {
-            Self::Input => SignalKind::Audio,
-            Self::Processor(processor) => processor.output_kind(),
-            Self::Output => SignalKind::Audio,
+            Self::Input => vec![SignalKind::Audio],
+            Self::Processor(processor) => processor.output_kinds(),
+            Self::Output => vec![SignalKind::Audio],
         }
     }
 

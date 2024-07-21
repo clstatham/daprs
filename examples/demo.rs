@@ -17,6 +17,18 @@ pub fn fm_sine_wave<'a>(
     (time * frequency * std::f64::consts::TAU + fm_input * fm_amplitude).sin() * amplitude
 }
 
+pub fn mix<'a>(inputs: &[Node<'a>]) -> Node<'a> {
+    if inputs.len() == 1 {
+        inputs[0]
+    } else {
+        let mut sum = inputs[0];
+        for input in &inputs[1..] {
+            sum += *input;
+        }
+        sum
+    }
+}
+
 fn main() {
     // initialize logging
     env_logger::init_from_env(
@@ -30,6 +42,7 @@ fn main() {
     let out1 = graph.output();
     let out2 = graph.output();
     let time = graph.processor(Time::ar());
+    let delay = graph.processor(ConstSampleDelay::ar(4800));
 
     let freq1 = graph.kr_constant(440.0);
     let freq2 = graph.kr_constant(220.0);
@@ -37,12 +50,16 @@ fn main() {
     let amp2 = graph.kr_constant(0.5);
     let gain = graph.kr_constant(0.5);
 
-    let sine_wave = sine_wave(freq1.to_ar(), amp1.to_ar(), time);
-    let fm = fm_sine_wave(freq2.to_ar(), amp2.to_ar(), sine_wave, gain.to_ar(), time);
+    let sine1 = sine_wave(freq1.to_ar(), amp1.to_ar(), time);
+    delay.connect_input(0, sine1, 0);
+
+    let sine2 = sine_wave(freq2.to_ar(), amp2.to_ar(), time);
+
+    let master = mix(&[delay, sine2]) * gain.to_ar();
 
     // connect the outputs
-    out1.connect_inputs([(fm, 0)]);
-    out2.connect_inputs([(fm, 0)]);
+    out1.connect_inputs([(master, 0)]);
+    out2.connect_inputs([(master, 0)]);
 
     // create a runtime and run it for 2 seconds
     let mut runtime = Runtime::new(graph.build());
@@ -50,6 +67,6 @@ fn main() {
         Duration::from_secs(2),
         Backend::Default,
         Device::Default,
-        441.0,
+        480.0,
     );
 }

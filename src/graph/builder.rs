@@ -2,10 +2,7 @@ use std::{cell::RefCell, fmt::Debug};
 
 use crate::{builtin::*, sample::SignalKind};
 
-use super::{
-    node::{Process, Processor},
-    Graph, NodeIndex,
-};
+use super::{node::Process, Graph, NodeIndex};
 
 #[derive(Clone, Copy)]
 pub struct GraphBuilderRef<'a> {
@@ -167,22 +164,22 @@ impl<'a> Node<'a> {
         self.builder
     }
 
-    pub fn input_kind(self) -> SignalKind {
+    pub fn input_kinds(self) -> Vec<SignalKind> {
         let graph = self.builder.graph.borrow();
         let graph = graph
             .as_ref()
             .expect("GraphBuilder has already been finished");
 
-        graph.digraph[self.index].input_kind()
+        graph.digraph[self.index].input_kinds()
     }
 
-    pub fn output_kind(self) -> SignalKind {
+    pub fn output_kinds(self) -> Vec<SignalKind> {
         let graph = self.builder.graph.borrow();
         let graph = graph
             .as_ref()
             .expect("GraphBuilder has already been finished");
 
-        graph.digraph[self.index].output_kind()
+        graph.digraph[self.index].output_kinds()
     }
 
     pub fn to_ar(self) -> Node<'a> {
@@ -192,8 +189,11 @@ impl<'a> Node<'a> {
                 .as_ref()
                 .expect("GraphBuilder has already been finished");
 
-            let kind = graph.digraph[self.index].output_kind();
-            if kind == SignalKind::Audio {
+            let kinds = graph.digraph[self.index].output_kinds();
+            if kinds.len() != 1 {
+                panic!("Cannot convert a node with multiple output kinds to audio rate");
+            };
+            if kinds[0] == SignalKind::Audio {
                 return self;
             }
         }
@@ -210,8 +210,11 @@ impl<'a> Node<'a> {
                 .as_ref()
                 .expect("GraphBuilder has already been finished");
 
-            let kind = graph.digraph[self.index].output_kind();
-            if kind == SignalKind::Control {
+            let kinds = graph.digraph[self.index].output_kinds();
+            if kinds.len() != 1 {
+                panic!("Cannot convert a node with multiple output kinds to control rate");
+            };
+            if kinds[0] == SignalKind::Control {
                 return self;
             }
         }
@@ -221,69 +224,95 @@ impl<'a> Node<'a> {
         processor
     }
 
+    pub fn connect_input(self, input_index: u32, source: Node<'a>, source_output: u32) {
+        self.builder
+            .connect(source, source_output, self, input_index);
+    }
+
     pub fn connect_inputs(self, inputs: impl IntoIterator<Item = (Node<'a>, u32)>) {
         for (target_input, (source, source_output)) in inputs.into_iter().enumerate() {
-            if self.input_kind().can_take_as_input(source.output_kind()) {
-                self.builder
-                    .connect(source, source_output, self, target_input as u32);
-            } else {
-                panic!(
-                    "Cannot connect node of kind {:?} to {:?}",
-                    source.output_kind(),
-                    self.input_kind()
-                );
-            }
+            let target_input_kind = self.input_kinds()[target_input];
+            let source_output_kind = source.output_kinds()[source_output as usize];
+            assert_eq!(
+                target_input_kind, source_output_kind,
+                "Cannot connect nodes with different signal kinds"
+            );
+
+            self.builder
+                .connect(source, source_output, self, target_input as u32);
         }
     }
 
     pub fn sin(self) -> Node<'a> {
-        let processor = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot take sin of a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Sin::ar()),
             SignalKind::Control => self.builder.add_processor(math::Sin::kr()),
-            _ => panic!("Cannot take sin of a node of kind {:?}", self.output_kind()),
         };
         processor.connect_inputs([(self, 0)]);
         processor
     }
 
     pub fn cos(self) -> Node<'a> {
-        let processor = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot take cos of a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Cos::ar()),
             SignalKind::Control => self.builder.add_processor(math::Cos::kr()),
-            _ => panic!("Cannot take cos of a node of kind {:?}", self.output_kind()),
         };
         processor.connect_inputs([(self, 0)]);
         processor
     }
 
     pub fn sqrt(self) -> Node<'a> {
-        let processor = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot take sqrt of a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Sqrt::ar()),
             SignalKind::Control => self.builder.add_processor(math::Sqrt::kr()),
-            _ => panic!(
-                "Cannot take sqrt of a node of kind {:?}",
-                self.output_kind()
-            ),
         };
         processor.connect_inputs([(self, 0)]);
         processor
     }
 
     pub fn exp(self) -> Node<'a> {
-        let processor = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot take exp of a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Exp::ar()),
             SignalKind::Control => self.builder.add_processor(math::Exp::kr()),
-            _ => panic!("Cannot take exp of a node of kind {:?}", self.output_kind()),
         };
         processor.connect_inputs([(self, 0)]);
         processor
     }
 
     pub fn ln(self) -> Node<'a> {
-        let processor = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot take ln of a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Ln::ar()),
             SignalKind::Control => self.builder.add_processor(math::Ln::kr()),
-            _ => panic!("Cannot take ln of a node of kind {:?}", self.output_kind()),
         };
         processor.connect_inputs([(self, 0)]);
         processor
@@ -301,14 +330,23 @@ impl<'a> std::ops::Add<Node<'a>> for Node<'a> {
 
     fn add(self, rhs: Node<'a>) -> Node<'a> {
         assert!(
-            self.output_kind() == rhs.output_kind(),
+            self.output_kinds() == rhs.output_kinds(),
             "Cannot add nodes of different signal kinds"
         );
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot add a node with multiple outputs"
+        );
+        assert_eq!(
+            rhs.num_outputs(),
+            1,
+            "Cannot add a node with multiple outputs"
+        );
 
-        let processor = match self.output_kind() {
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Add::ar()),
             SignalKind::Control => self.builder.add_processor(math::Add::kr()),
-            _ => panic!("Cannot add nodes of kind {:?}", self.output_kind()),
         };
 
         processor.connect_inputs([(self, 0), (rhs, 0)]);
@@ -321,14 +359,23 @@ impl<'a> std::ops::Sub<Node<'a>> for Node<'a> {
 
     fn sub(self, rhs: Node<'a>) -> Node<'a> {
         assert!(
-            self.output_kind() == rhs.output_kind(),
+            self.output_kinds() == rhs.output_kinds(),
             "Cannot subtract nodes of different signal kinds"
         );
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot subtract a node with multiple outputs"
+        );
+        assert_eq!(
+            rhs.num_outputs(),
+            1,
+            "Cannot subtract a node with multiple outputs"
+        );
 
-        let processor = match self.output_kind() {
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Sub::ar()),
             SignalKind::Control => self.builder.add_processor(math::Sub::kr()),
-            _ => panic!("Cannot subtract nodes of kind {:?}", self.output_kind()),
         };
 
         processor.connect_inputs([(self, 0), (rhs, 0)]);
@@ -341,14 +388,23 @@ impl<'a> std::ops::Mul<Node<'a>> for Node<'a> {
 
     fn mul(self, rhs: Node<'a>) -> Node<'a> {
         assert!(
-            self.output_kind() == rhs.output_kind(),
+            self.output_kinds() == rhs.output_kinds(),
             "Cannot multiply nodes of different signal kinds"
         );
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot multiply a node with multiple outputs"
+        );
+        assert_eq!(
+            rhs.num_outputs(),
+            1,
+            "Cannot multiply a node with multiple outputs"
+        );
 
-        let processor = match self.output_kind() {
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Mul::ar()),
             SignalKind::Control => self.builder.add_processor(math::Mul::kr()),
-            _ => panic!("Cannot multiply nodes of kind {:?}", self.output_kind()),
         };
 
         processor.connect_inputs([(self, 0), (rhs, 0)]);
@@ -361,14 +417,23 @@ impl<'a> std::ops::Div<Node<'a>> for Node<'a> {
 
     fn div(self, rhs: Node<'a>) -> Node<'a> {
         assert!(
-            self.output_kind() == rhs.output_kind(),
+            self.output_kinds() == rhs.output_kinds(),
             "Cannot divide nodes of different signal kinds"
         );
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot divide a node with multiple outputs"
+        );
+        assert_eq!(
+            rhs.num_outputs(),
+            1,
+            "Cannot divide a node with multiple outputs"
+        );
 
-        let processor = match self.output_kind() {
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Div::ar()),
             SignalKind::Control => self.builder.add_processor(math::Div::kr()),
-            _ => panic!("Cannot divide nodes of kind {:?}", self.output_kind()),
         };
 
         processor.connect_inputs([(self, 0), (rhs, 0)]);
@@ -381,14 +446,23 @@ impl<'a> std::ops::Rem<Node<'a>> for Node<'a> {
 
     fn rem(self, rhs: Node<'a>) -> Node<'a> {
         assert!(
-            self.output_kind() == rhs.output_kind(),
+            self.output_kinds() == rhs.output_kinds(),
             "Cannot modulo nodes of different signal kinds"
         );
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot modulo a node with multiple outputs"
+        );
+        assert_eq!(
+            rhs.num_outputs(),
+            1,
+            "Cannot modulo a node with multiple outputs"
+        );
 
-        let processor = match self.output_kind() {
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Rem::ar()),
             SignalKind::Control => self.builder.add_processor(math::Rem::kr()),
-            _ => panic!("Cannot modulo nodes of kind {:?}", self.output_kind()),
         };
 
         processor.connect_inputs([(self, 0), (rhs, 0)]);
@@ -400,10 +474,14 @@ impl<'a> std::ops::Neg for Node<'a> {
     type Output = Node<'a>;
 
     fn neg(self) -> Node<'a> {
-        let processor = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot negate a node with multiple outputs"
+        );
+        let processor = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Neg::ar()),
             SignalKind::Control => self.builder.add_processor(math::Neg::kr()),
-            _ => panic!("Cannot negate a node of kind {:?}", self.output_kind()),
         };
         processor.connect_inputs([(self, 0)]);
         processor
@@ -414,13 +492,14 @@ impl<'a> std::ops::Add<f64> for Node<'a> {
     type Output = Node<'a>;
 
     fn add(self, rhs: f64) -> Node<'a> {
-        let constant = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot add a constant to a node with multiple outputs"
+        );
+        let constant = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Constant::ar(rhs.into())),
             SignalKind::Control => self.builder.add_processor(math::Constant::kr(rhs.into())),
-            _ => panic!(
-                "Cannot add a constant to a node of kind {:?}",
-                self.output_kind()
-            ),
         };
         self + constant
     }
@@ -430,13 +509,14 @@ impl<'a> std::ops::Sub<f64> for Node<'a> {
     type Output = Node<'a>;
 
     fn sub(self, rhs: f64) -> Node<'a> {
-        let constant = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot subtract a constant from a node with multiple outputs"
+        );
+        let constant = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Constant::ar(rhs.into())),
             SignalKind::Control => self.builder.add_processor(math::Constant::kr(rhs.into())),
-            _ => panic!(
-                "Cannot subtract a constant from a node of kind {:?}",
-                self.output_kind()
-            ),
         };
         self - constant
     }
@@ -446,13 +526,14 @@ impl<'a> std::ops::Mul<f64> for Node<'a> {
     type Output = Node<'a>;
 
     fn mul(self, rhs: f64) -> Node<'a> {
-        let constant = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot multiply a node with multiple outputs by a constant"
+        );
+        let constant = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Constant::ar(rhs.into())),
             SignalKind::Control => self.builder.add_processor(math::Constant::kr(rhs.into())),
-            _ => panic!(
-                "Cannot multiply a node of kind {:?} by a constant",
-                self.output_kind()
-            ),
         };
         self * constant
     }
@@ -462,13 +543,14 @@ impl<'a> std::ops::Div<f64> for Node<'a> {
     type Output = Node<'a>;
 
     fn div(self, rhs: f64) -> Node<'a> {
-        let constant = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot divide a node with multiple outputs by a constant"
+        );
+        let constant = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Constant::ar(rhs.into())),
             SignalKind::Control => self.builder.add_processor(math::Constant::kr(rhs.into())),
-            _ => panic!(
-                "Cannot divide a node of kind {:?} by a constant",
-                self.output_kind()
-            ),
         };
         self / constant
     }
@@ -478,13 +560,14 @@ impl<'a> std::ops::Rem<f64> for Node<'a> {
     type Output = Node<'a>;
 
     fn rem(self, rhs: f64) -> Node<'a> {
-        let constant = match self.output_kind() {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot modulo a node with multiple outputs by a constant"
+        );
+        let constant = match self.output_kinds()[0] {
             SignalKind::Audio => self.builder.add_processor(math::Constant::ar(rhs.into())),
             SignalKind::Control => self.builder.add_processor(math::Constant::kr(rhs.into())),
-            _ => panic!(
-                "Cannot modulo a node of kind {:?} by a constant",
-                self.output_kind()
-            ),
         };
         self % constant
     }

@@ -1,6 +1,6 @@
 use crate::{
     graph::node::Process,
-    sample::{Audio, Buffer, Control, Sample, SignalKindMarker},
+    sample::{Audio, Buffer, Control, Sample, SignalKind, SignalKindMarker},
 };
 
 #[derive(Debug, Clone)]
@@ -41,12 +41,12 @@ impl<K: SignalKindMarker> Process for Constant<K> {
         "constant"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        crate::sample::SignalKind::None
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -92,12 +92,12 @@ impl<K: SignalKindMarker> Process for Add<K> {
         "add"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND, K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -146,12 +146,12 @@ impl<K: SignalKindMarker> Process for Sub<K> {
         "sub"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND, K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -200,12 +200,12 @@ impl<K: SignalKindMarker> Process for Mul<K> {
         "mul"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND, K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -254,12 +254,12 @@ impl<K: SignalKindMarker> Process for Div<K> {
         "div"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND, K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -308,12 +308,12 @@ impl<K: SignalKindMarker> Process for Rem<K> {
         "rem"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND, K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -362,12 +362,12 @@ impl<K: SignalKindMarker> Process for Sin<K> {
         "sin"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -416,12 +416,12 @@ impl<K: SignalKindMarker> Process for Cos<K> {
         "cos"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -470,12 +470,12 @@ impl<K: SignalKindMarker> Process for Sqrt<K> {
         "sqrt"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -524,12 +524,12 @@ impl<K: SignalKindMarker> Process for Abs<K> {
         "abs"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -578,12 +578,12 @@ impl<K: SignalKindMarker> Process for Neg<K> {
         "neg"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -632,12 +632,12 @@ impl<K: SignalKindMarker> Process for Exp<K> {
         "exp"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {
@@ -686,12 +686,12 @@ impl<K: SignalKindMarker> Process for Ln<K> {
         "ln"
     }
 
-    fn input_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
-    fn output_kind(&self) -> crate::sample::SignalKind {
-        K::KIND
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
     }
 
     fn num_inputs(&self) -> usize {

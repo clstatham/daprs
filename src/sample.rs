@@ -160,6 +160,10 @@ impl Buffer {
         }
     }
 
+    pub fn kind(&self) -> SignalKind {
+        self.kind
+    }
+
     pub fn resize(&mut self, length: usize) {
         if self.len() != length {
             self.buf.resize(length, Sample::new(0.0));
@@ -208,7 +212,6 @@ impl AsRef<[Sample]> for Buffer {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SignalKind {
-    None,
     Control,
     Audio,
 }
@@ -224,7 +227,6 @@ impl SignalKind {
 
     pub fn can_take_as_input(self, other: SignalKind) -> bool {
         match self {
-            Self::None => false,
             Self::Control => other.is_control(),
             Self::Audio => other.is_audio(),
         }

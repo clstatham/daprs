@@ -214,7 +214,7 @@ impl Graph {
 
     pub fn set_block_size(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         self.visit(|graph, node| {
-            graph.digraph[node].set_block_size(audio_rate, control_rate, block_size);
+            graph.digraph[node].reset(audio_rate, control_rate, block_size);
         });
 
         for input in &mut self.input_buffers {
