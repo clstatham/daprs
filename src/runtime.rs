@@ -8,6 +8,7 @@ use crate::{
 };
 
 pub enum Backend {
+    #[cfg(target_os = "linux")]
     Jack,
     #[cfg(target_os = "linux")]
     Alsa,
@@ -102,15 +103,16 @@ impl Runtime {
                     .into_iter()
                     .find(|h| *h == cpal::HostId::Alsa)
                     .expect("ALSA host was requested but not found"),
-                #[cfg(target_os = "windows")]
-                Backend::Wasapi => cpal::available_hosts()
-                    .into_iter()
-                    .find(|h| **h == cpal::HostId::Wasapi)
-                    .expect("WASAPI host was requested but not found"),
+                #[cfg(target_os = "linux")]
                 Backend::Jack => cpal::available_hosts()
                     .into_iter()
                     .find(|h| *h == cpal::HostId::Jack)
                     .expect("Jack host was requested but not found"),
+                #[cfg(target_os = "windows")]
+                Backend::Wasapi => cpal::available_hosts()
+                    .into_iter()
+                    .find(|h| *h == cpal::HostId::Wasapi)
+                    .expect("WASAPI host was requested but not found"),
             };
             let host = cpal::host_from_id(host_id).unwrap();
 
