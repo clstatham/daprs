@@ -3,8 +3,11 @@ name = "papr"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "papr"
+
 [workspace]
-members = ["papr-playground"]
+members = ["papr-playground", "papr-python"]
 
 [dependencies]
 cpal = { version = "0.15.3", features = ["jack"] }

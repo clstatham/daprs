@@ -2,8 +2,6 @@ use std::f64::consts::PI;
 
 use crate::prelude::*;
 
-use super::sinc;
-
 #[derive(Debug, Clone)]
 pub struct BlSawOsc<K: SignalKindMarker> {
     sample_rate: f64,

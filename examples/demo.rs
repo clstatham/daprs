@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use papr::prelude::*;
 
-pub fn mix<'a>(inputs: &[Node<'a>]) -> Node<'a> {
+pub fn mix(inputs: &[Node]) -> Node {
     if inputs.len() == 1 {
-        inputs[0]
+        inputs[0].clone()
     } else {
-        let mut sum = inputs[0];
+        let mut sum = inputs[0].clone();
         for input in &inputs[1..] {
-            sum += *input;
+            sum += input.clone();
         }
         sum
     }
@@ -50,7 +50,7 @@ fn main() {
     let master = env * saw1 * gain.to_ar();
 
     // connect the outputs
-    out1.connect_inputs([(master, 0)]);
+    out1.connect_inputs([(master.clone(), 0)]);
     out2.connect_inputs([(master, 0)]);
 
     // create a runtime and run it for 8 seconds
