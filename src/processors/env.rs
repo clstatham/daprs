@@ -1,6 +1,6 @@
 use crate::{prelude::*, sample::SignalKindMarker};
 
-use super::linear_resample;
+use super::resample;
 
 #[derive(Debug, Clone)]
 pub struct DecayEnv<K: SignalKindMarker> {
@@ -83,16 +83,8 @@ impl<K: SignalKindMarker> Process for DecayEnv<K> {
         let decay = &inputs[1];
         let curve = &inputs[2];
 
-        match K::KIND {
-            SignalKind::Audio => {
-                linear_resample(decay, &mut self.decay_buf, self.audio_rate);
-                linear_resample(curve, &mut self.curve_buf, self.audio_rate);
-            }
-            SignalKind::Control => {
-                self.decay_buf.copy_from_slice(decay);
-                self.curve_buf.copy_from_slice(curve);
-            }
-        }
+        resample(decay, &mut self.decay_buf);
+        resample(curve, &mut self.curve_buf);
 
         let output = &mut outputs[0];
 

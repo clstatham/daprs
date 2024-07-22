@@ -111,8 +111,11 @@ impl<K: SignalKindMarker> Process for Time<K> {
 
     fn prepare(&mut self) {}
 
-    fn reset(&mut self, audio_rate: f64, _control_rate: f64, _block_size: usize) {
-        self.sample_rate = audio_rate;
+    fn reset(&mut self, audio_rate: f64, control_rate: f64, _block_size: usize) {
+        match K::KIND {
+            SignalKind::Audio => self.sample_rate = audio_rate,
+            SignalKind::Control => self.sample_rate = control_rate,
+        }
     }
 
     #[inline]

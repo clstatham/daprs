@@ -7,6 +7,14 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Launch demo",
+            "program": "${workspaceFolder}/target/debug/examples/demo.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in library 'pypapr'",
             "cargo": {
                 "args": [
@@ -22,6 +30,6 @@
             },
             "args": [],
             "cwd": "${workspaceFolder}"
-        }
+        },
     ]
 }

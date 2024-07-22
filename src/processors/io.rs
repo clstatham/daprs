@@ -1,9 +1,6 @@
-use crate::{
-    graph::node::Process,
-    sample::{Buffer, SignalKind},
-};
+use crate::prelude::*;
 
-use super::linear_resample;
+use super::resample;
 
 /// Smooths a control signal at audio rate using a one-pole filter. This processor outputs an audio rate signal.
 #[derive(Default, Debug, Clone)]
@@ -44,7 +41,7 @@ impl Process for Smooth {
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
         let control = &inputs[0];
         let output = &mut outputs[0];
-        linear_resample(control, output, self.audio_rate);
+        resample(control, output);
     }
 }
 
@@ -87,6 +84,58 @@ impl Process for Quantize {
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
         let audio = &inputs[0];
         let output = &mut outputs[0];
-        linear_resample(audio, output, self.control_rate);
+        resample(audio, output);
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct DebugPrint<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
+
+impl DebugPrint<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl DebugPrint<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for DebugPrint<K> {
+    fn name(&self) -> &str {
+        "debug_print"
+    }
+
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
+    }
+
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
+    }
+
+    fn num_inputs(&self) -> usize {
+        1
+    }
+
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
+    fn prepare(&mut self) {}
+
+    #[inline]
+    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
+        let input = &inputs[0];
+        println!("{:#?}", input);
+        outputs[0].copy_from_slice(input);
     }
 }

@@ -1,0 +1,9 @@
+[package]
+name = "papr-playground"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+iced = "0.12.1"
+iced_audio = "0.12.0"
+papr = { path = "../" }

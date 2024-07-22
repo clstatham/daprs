@@ -3,20 +3,20 @@
 use cpal::traits::{DeviceTrait, HostTrait};
 use runtime::Backend;
 
-pub mod builtin;
 pub mod graph;
+pub mod processors;
 pub mod runtime;
 pub mod sample;
 
 #[allow(unused_imports)]
 pub mod prelude {
-    pub use crate::builtin::{env::*, graph::*, io::*, math::*, osc::*, time::*};
     pub use crate::graph::{
         builder::{GraphBuilder, Node},
         edge::Edge,
         node::Process,
         Graph,
     };
+    pub use crate::processors::{env::*, functional::*, graph::*, io::*, math::*, osc::*, time::*};
     pub use crate::runtime::{Backend, Device, Runtime};
     pub use crate::sample::{Audio, Buffer, Control, Sample, SignalKind, SignalKindMarker};
 }
@@ -90,7 +90,7 @@ mod tests {
 
         let mut runtime = Runtime::new(graph.build());
 
-        let bufs = runtime.run_offline(std::time::Duration::from_secs(2), 32.0, 32.0, 64);
+        let bufs = runtime.run_offline(std::time::Duration::from_secs(2), 32.0, 32.0, 32);
         assert_eq!(bufs.len(), 1);
         let buf = &bufs[0];
         assert_eq!(buf.len(), 64);
@@ -98,7 +98,7 @@ mod tests {
         let mut sum = 0.0f64;
         for i in 0..64 {
             sum += *buf[i];
-            // println!("{}", *buf[i]);
+            println!("{}", *buf[i]);
         }
         assert!(sum.abs() < 1e-5);
     }

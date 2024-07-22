@@ -1,6 +1,6 @@
 use std::{cell::RefCell, fmt::Debug};
 
-use crate::{builtin::*, sample::SignalKind};
+use crate::{processors::*, sample::SignalKind};
 
 use super::{node::Process, Graph, NodeIndex};
 
@@ -367,6 +367,111 @@ impl<'a> Node<'a> {
             SignalKind::Control => self.builder.add_processor(math::Gt::kr()),
         };
         processor.connect_inputs([(self, 0), (other, 0)]);
+        processor
+    }
+
+    pub fn lt(self, other: Node<'a>) -> Node<'a> {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot compare a node with multiple outputs"
+        );
+        assert_eq!(
+            other.num_outputs(),
+            1,
+            "Cannot compare a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
+            SignalKind::Audio => self.builder.add_processor(math::Lt::ar()),
+            SignalKind::Control => self.builder.add_processor(math::Lt::kr()),
+        };
+        processor.connect_inputs([(self, 0), (other, 0)]);
+        processor
+    }
+
+    pub fn eq(self, other: Node<'a>) -> Node<'a> {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot compare a node with multiple outputs"
+        );
+        assert_eq!(
+            other.num_outputs(),
+            1,
+            "Cannot compare a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
+            SignalKind::Audio => self.builder.add_processor(math::Eq::ar()),
+            SignalKind::Control => self.builder.add_processor(math::Eq::kr()),
+        };
+        processor.connect_inputs([(self, 0), (other, 0)]);
+        processor
+    }
+
+    pub fn clip(self, min: Node<'a>, max: Node<'a>) -> Node<'a> {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot clip a node with multiple outputs"
+        );
+        assert_eq!(
+            min.num_outputs(),
+            1,
+            "Cannot clip a node with multiple outputs"
+        );
+        assert_eq!(
+            max.num_outputs(),
+            1,
+            "Cannot clip a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
+            SignalKind::Audio => self.builder.add_processor(math::Clip::ar()),
+            SignalKind::Control => self.builder.add_processor(math::Clip::kr()),
+        };
+        processor.connect_inputs([(self, 0), (min, 0), (max, 0)]);
+        processor
+    }
+
+    pub fn if_else(self, if_true: Node<'a>, if_false: Node<'a>) -> Node<'a> {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot use if_else with a node with multiple outputs"
+        );
+        assert_eq!(
+            if_true.num_outputs(),
+            1,
+            "Cannot use if_else with a node with multiple outputs"
+        );
+        assert_eq!(
+            if_false.num_outputs(),
+            1,
+            "Cannot use if_else with a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
+            SignalKind::Audio => self.builder.add_processor(control::IfElse::ar()),
+            SignalKind::Control => self.builder.add_processor(control::IfElse::kr()),
+        };
+        processor.connect_inputs([(self, 0), (if_true, 0), (if_false, 0)]);
+        processor
+    }
+
+    pub fn debug_print(self) -> Node<'a> {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot debug_print a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
+            SignalKind::Audio => self.builder.add_processor(io::DebugPrint::ar()),
+            SignalKind::Control => self.builder.add_processor(io::DebugPrint::kr()),
+        };
+        processor.connect_inputs([(self, 0)]);
         processor
     }
 }

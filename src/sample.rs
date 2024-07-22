@@ -1,5 +1,5 @@
 use std::{
-    fmt::Display,
+    fmt::{Debug, Display},
     ops::{
         Add, AddAssign, Deref, DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub,
         SubAssign,
@@ -7,9 +7,16 @@ use std::{
 };
 
 /// A single 64-bit floating-point sample of signal data.
-#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Default, Clone, Copy, PartialEq, PartialOrd)]
 #[repr(transparent)]
 pub struct Sample(f64);
+
+impl Debug for Sample {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
 
 impl Sample {
     #[inline]
@@ -146,10 +153,16 @@ impl Display for Sample {
 /// An owning, fixed-length array of [`Sample`]s.
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
 /// It can also be [`collected`](std::iter::Iterator::collect) from an iterator of [`Sample`]s.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(PartialEq, Clone)]
 pub struct Buffer {
     buf: Vec<Sample>,
     kind: SignalKind,
+}
+
+impl Debug for Buffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.buf.iter()).finish()
+    }
 }
 
 impl Buffer {

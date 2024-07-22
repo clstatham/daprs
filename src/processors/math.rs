@@ -1,7 +1,68 @@
+use std::sync::Arc;
+
 use crate::{
     graph::node::Process,
     sample::{Audio, Buffer, Control, Sample, SignalKind, SignalKindMarker},
 };
+
+#[derive(Clone)]
+pub struct Lambda<K: SignalKindMarker> {
+    #[allow(clippy::type_complexity)]
+    func: Arc<dyn Fn(&[Sample], &mut [Sample]) + Send + Sync + 'static>,
+    _kind: std::marker::PhantomData<K>,
+}
+
+impl Lambda<Audio> {
+    pub fn ar<F>(func: F) -> Self
+    where
+        F: Fn(&[Sample], &mut [Sample]) + Send + Sync + 'static,
+    {
+        Self {
+            func: Arc::new(func),
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Lambda<Control> {
+    pub fn kr<F>(func: F) -> Self
+    where
+        F: Fn(&[Sample], &mut [Sample]) + Send + Sync + 'static,
+    {
+        Self {
+            func: Arc::new(func),
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Lambda<K> {
+    fn name(&self) -> &str {
+        "lambda"
+    }
+
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
+    }
+
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
+    }
+
+    fn num_inputs(&self) -> usize {
+        1
+    }
+
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
+    fn prepare(&mut self) {}
+
+    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
+        (self.func)(&inputs[0], &mut outputs[0]);
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Constant<K: SignalKindMarker> {
@@ -63,6 +124,18 @@ impl<K: SignalKindMarker> Process for Constant<K> {
     fn process(&mut self, _inputs: &[Buffer], outputs: &mut [Buffer]) {
         let out = &mut outputs[0];
         out.fill(self.value);
+    }
+}
+
+impl From<f64> for Constant<Control> {
+    fn from(value: f64) -> Self {
+        Self::kr(value.into())
+    }
+}
+
+impl From<f64> for Constant<Audio> {
+    fn from(value: f64) -> Self {
+        Self::ar(value.into())
     }
 }
 
@@ -491,6 +564,66 @@ impl<K: SignalKindMarker> Process for Eq<K> {
         let out = &mut outputs[0];
         for (o, (a, b)) in out.iter_mut().zip(inputs[0].iter().zip(inputs[1].iter())) {
             *o = if a == b { 1.0 } else { 0.0 }.into();
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Clip<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
+
+impl Clip<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Clip<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Clip<K> {
+    fn name(&self) -> &str {
+        "clip"
+    }
+
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND, K::KIND, K::KIND]
+    }
+
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
+    }
+
+    fn num_inputs(&self) -> usize {
+        3
+    }
+
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
+    fn prepare(&mut self) {}
+
+    #[inline]
+    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
+        let (in_buf, min_buf, max_buf) = (&inputs[0], &inputs[1], &inputs[2]);
+        let out = &mut outputs[0];
+
+        for (o, i, min, max) in itertools::izip!(
+            out.iter_mut(),
+            in_buf.iter(),
+            min_buf.iter(),
+            max_buf.iter()
+        ) {
+            *o = i.clamp(**min, **max).into();
         }
     }
 }

@@ -96,26 +96,30 @@ impl Runtime {
     ) -> Box<[Box<[Sample]>]> {
         let secs = duration.as_secs_f64();
         let samples = (audio_rate * secs) as usize;
-        let blocks = samples / block_size;
 
         self.reset(audio_rate, control_rate, block_size);
         self.prepare();
 
-        let num_outputs = self.graph.num_outputs();
+        let num_outputs: usize = self.graph.num_outputs();
 
         let mut outputs: Box<[Box<[Sample]>]> =
-            vec![vec![Sample::default(); samples].into_boxed_slice(); num_outputs]
+            vec![vec![Sample::new(0.0); samples].into_boxed_slice(); num_outputs]
                 .into_boxed_slice();
 
-        for block_index in 0..blocks {
+        let mut sample_count = 0;
+
+        while sample_count < samples {
+            let actual_block_size = (samples - sample_count).min(block_size);
+            self.graph
+                .set_block_size(audio_rate, control_rate, actual_block_size);
             self.graph.process();
 
-            for (i, graph_output) in self.graph.outputs().iter().enumerate() {
-                let output = &mut outputs[i];
-                let block_offset = block_index * block_size;
-                let output_slice = &mut output[block_offset..(block_offset + block_size)];
-                output_slice.copy_from_slice(graph_output);
+            for (i, output) in outputs.iter_mut().enumerate() {
+                let buffer = self.graph.get_output(i);
+                output[sample_count..sample_count + actual_block_size].copy_from_slice(buffer);
             }
+
+            sample_count += actual_block_size;
         }
 
         outputs

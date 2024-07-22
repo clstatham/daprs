@@ -60,11 +60,17 @@ impl Debug for dyn Process {
 /// A node in the audio graph.
 ///
 /// This is a wrapper around a [`Processor`] that provides input and output buffers for the processor to use.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Processor {
     processor: Box<dyn Process>,
     input_buffers: Box<[Buffer]>,
     output_buffers: Box<[Buffer]>,
+}
+
+impl Debug for Processor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.processor.name())
+    }
 }
 
 impl Processor {
@@ -169,11 +175,21 @@ impl Processor {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum GraphNode {
     Input,
     Processor(Processor),
     Output,
+}
+
+impl Debug for GraphNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Input => f.write_str("Input"),
+            Self::Processor(processor) => Debug::fmt(processor, f),
+            Self::Output => f.write_str("Output"),
+        }
+    }
 }
 
 impl GraphNode {

@@ -302,7 +302,7 @@ impl Graph {
             "Graph's cached visitor needs allocation; call `allocate_visitor()` first"
         );
 
-        self.visit(|graph, node_id| {
+        self.visit(|graph: &mut Graph, node_id| {
             // copy the inputs from the source nodes to the target node
             graph.edge_cache.extend(
                 graph
@@ -349,5 +349,9 @@ impl Graph {
             // process the node
             graph.digraph[node_id].process();
         });
+    }
+
+    pub fn write_dot<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        write!(writer, "{:?}", petgraph::dot::Dot::new(&self.digraph))
     }
 }
