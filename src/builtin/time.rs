@@ -3,8 +3,6 @@ use crate::{
     sample::{Audio, Buffer, Control, Sample, SignalKind, SignalKindMarker},
 };
 
-use super::linear_resample;
-
 #[derive(Default, Debug, Clone)]
 pub struct SampleCount<K: SignalKindMarker> {
     count: u64,

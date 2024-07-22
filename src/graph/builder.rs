@@ -49,6 +49,16 @@ impl<'a> GraphBuilderRef<'a> {
         }
     }
 
+    pub fn ar_constant(&self, value: f64) -> Node<'a> {
+        let processor = math::Constant::ar(value.into());
+        self.add_processor(processor)
+    }
+
+    pub fn kr_constant(&self, value: f64) -> Node<'a> {
+        let processor = math::Constant::kr(value.into());
+        self.add_processor(processor)
+    }
+
     pub fn connect(
         &self,
         source: Node<'a>,
@@ -182,6 +192,12 @@ impl<'a> Node<'a> {
         graph.digraph[self.index].output_kinds()
     }
 
+    /// Converts this node's single output to an audio rate signal. If the node already outputs an audio rate signal, this is a no-op.
+    ///
+    /// # Panics
+    ///
+    /// - If the node has multiple outputs
+    /// - If the graph has already been built
     pub fn to_ar(self) -> Node<'a> {
         {
             let graph = self.builder.graph.borrow();
@@ -191,7 +207,7 @@ impl<'a> Node<'a> {
 
             let kinds = graph.digraph[self.index].output_kinds();
             if kinds.len() != 1 {
-                panic!("Cannot convert a node with multiple output kinds to audio rate");
+                panic!("Cannot convert a node with multiple outputs to audio rate");
             };
             if kinds[0] == SignalKind::Audio {
                 return self;
@@ -203,6 +219,12 @@ impl<'a> Node<'a> {
         processor
     }
 
+    /// Converts this node's single output to a control rate signal. If the node already outputs a control rate signal, this is a no-op.
+    ///
+    /// # Panics
+    ///
+    /// - If the node has multiple outputs
+    /// - If the graph has already been built
     pub fn to_kr(self) -> Node<'a> {
         {
             let graph = self.builder.graph.borrow();
@@ -212,7 +234,7 @@ impl<'a> Node<'a> {
 
             let kinds = graph.digraph[self.index].output_kinds();
             if kinds.len() != 1 {
-                panic!("Cannot convert a node with multiple output kinds to control rate");
+                panic!("Cannot convert a node with multiple outputs to control rate");
             };
             if kinds[0] == SignalKind::Control {
                 return self;
@@ -224,11 +246,21 @@ impl<'a> Node<'a> {
         processor
     }
 
+    /// Connects an input of this node to an output of another node.
     pub fn connect_input(self, input_index: u32, source: Node<'a>, source_output: u32) {
         self.builder
             .connect(source, source_output, self, input_index);
     }
 
+    /// Connects multiple inputs of this node to outputs of other nodes.
+    ///
+    /// The connections are given by an iterator of `(source, source_output)` pairs, and connected to the inputs in the order they are given by the iterator.
+    ///
+    /// For example, `connect_inputs([(source1, 0), (source2, 0)])` will connect the first input of this node to the first output of `source1`, and the second input of this node to the first output of `source2`.
+    ///
+    /// # Panics
+    ///
+    /// - If any of the inputs or outputs have different signal kinds
     pub fn connect_inputs(self, inputs: impl IntoIterator<Item = (Node<'a>, u32)>) {
         for (target_input, (source, source_output)) in inputs.into_iter().enumerate() {
             let target_input_kind = self.input_kinds()[target_input];
@@ -315,6 +347,26 @@ impl<'a> Node<'a> {
             SignalKind::Control => self.builder.add_processor(math::Ln::kr()),
         };
         processor.connect_inputs([(self, 0)]);
+        processor
+    }
+
+    pub fn gt(self, other: Node<'a>) -> Node<'a> {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "Cannot compare a node with multiple outputs"
+        );
+        assert_eq!(
+            other.num_outputs(),
+            1,
+            "Cannot compare a node with multiple outputs"
+        );
+
+        let processor = match self.output_kinds()[0] {
+            SignalKind::Audio => self.builder.add_processor(math::Gt::ar()),
+            SignalKind::Control => self.builder.add_processor(math::Gt::kr()),
+        };
+        processor.connect_inputs([(self, 0), (other, 0)]);
         processor
     }
 }

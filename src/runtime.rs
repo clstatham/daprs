@@ -23,9 +23,10 @@ pub enum Backend {
 /// The audio device to use for the runtime.
 #[derive(Default, Debug, Clone)]
 pub enum Device {
+    /// Use the default audio device as returned by [`cpal::Host::default_output_device`].
     #[default]
     Default,
-    /// The index of the device to use.
+    /// Use the audio device at the given index.
     Index(usize),
     /// Substring of the device name to match. The first device with a name containing this substring will be used.
     Name(String),

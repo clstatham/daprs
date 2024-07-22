@@ -153,6 +153,8 @@ pub struct Buffer {
 }
 
 impl Buffer {
+    /// Creates a new buffer filled with zeros.
+    #[inline]
     pub fn zeros(length: usize, kind: SignalKind) -> Self {
         Buffer {
             buf: vec![Sample::new(0.0); length],
@@ -160,16 +162,33 @@ impl Buffer {
         }
     }
 
+    /// Returns the buffer's signal kind.
+    #[inline]
     pub fn kind(&self) -> SignalKind {
         self.kind
     }
 
+    /// Resizes the buffer to the given length, filling any new elements with zeros.
+    #[inline]
     pub fn resize(&mut self, length: usize) {
         if self.len() != length {
             self.buf.resize(length, Sample::new(0.0));
         }
     }
 
+    /// Maps each sample in `other` with `f`, storing the result in the correspeonding sample in `self`.
+    #[inline]
+    pub fn copy_map<F>(&mut self, other: &[Sample], mut f: F)
+    where
+        F: FnMut(Sample) -> Sample,
+    {
+        for (a, b) in self.buf.iter_mut().zip(other.iter()) {
+            *a = f(*b);
+        }
+    }
+
+    /// Iterates over each sample in the buffer, calling `f` with a mutable reference to each sample.
+    #[inline]
     pub fn map_mut<F>(&mut self, mut f: F)
     where
         F: FnMut(&mut Sample),
@@ -207,6 +226,26 @@ impl AsRef<[Sample]> for Buffer {
     #[inline]
     fn as_ref(&self) -> &[Sample] {
         self.buf.as_ref()
+    }
+}
+
+impl<'a> IntoIterator for &'a Buffer {
+    type Item = &'a Sample;
+    type IntoIter = std::slice::Iter<'a, Sample>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.buf.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Buffer {
+    type Item = &'a mut Sample;
+    type IntoIter = std::slice::IterMut<'a, Sample>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.buf.iter_mut()
     }
 }
 

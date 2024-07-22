@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+use cpal::traits::{DeviceTrait, HostTrait};
 use runtime::Backend;
 
 pub mod builtin;
@@ -9,15 +10,15 @@ pub mod sample;
 
 #[allow(unused_imports)]
 pub mod prelude {
-    pub use crate::builtin::{graph::*, io::*, math::*, time::*};
+    pub use crate::builtin::{env::*, graph::*, io::*, math::*, osc::*, time::*};
     pub use crate::graph::{
         builder::{GraphBuilder, Node},
         edge::Edge,
-        node::*,
+        node::Process,
         Graph,
     };
     pub use crate::runtime::{Backend, Device, Runtime};
-    pub use crate::sample::{Buffer, Sample};
+    pub use crate::sample::{Audio, Buffer, Control, Sample, SignalKind, SignalKindMarker};
 }
 
 pub fn available_backends() -> Vec<Backend> {
@@ -46,6 +47,29 @@ pub fn available_backends() -> Vec<Backend> {
 
 pub fn default_backend() -> Backend {
     Backend::Default
+}
+
+pub fn list_backends() {
+    println!("Listing available backends:");
+    for (i, backend) in available_backends().into_iter().enumerate() {
+        println!("  {}: {:?}", i, backend);
+    }
+}
+
+pub fn list_devices(backend: Backend) {
+    println!("Listing devices for backend: {:?}", backend);
+    let host = match backend {
+        Backend::Default => cpal::default_host(),
+        #[cfg(target_os = "linux")]
+        Backend::Jack => cpal::host_from_id(cpal::HostId::Jack).unwrap(),
+        #[cfg(target_os = "linux")]
+        Backend::Alsa => cpal::host_from_id(cpal::HostId::Alsa).unwrap(),
+        #[cfg(target_os = "windows")]
+        Backend::Wasapi => cpal::host_from_id(cpal::HostId::Wasapi).unwrap(),
+    };
+    for (i, device) in host.output_devices().unwrap().enumerate() {
+        println!("  {}: {:?}", i, device.name());
+    }
 }
 
 #[cfg(test)]

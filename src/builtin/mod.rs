@@ -1,8 +1,10 @@
 use crate::sample::Sample;
 
+pub mod env;
 pub mod graph;
 pub mod io;
 pub mod math;
+pub mod osc;
 pub mod time;
 
 /// Resamples the input signal to the output signal's length using a linear interpolation algorithm.

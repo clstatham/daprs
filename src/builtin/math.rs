@@ -337,6 +337,165 @@ impl<K: SignalKindMarker> Process for Rem<K> {
 }
 
 #[derive(Debug, Clone)]
+pub struct Gt<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
+
+impl Gt<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Gt<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Gt<K> {
+    fn name(&self) -> &str {
+        "gt"
+    }
+
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND, K::KIND]
+    }
+
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
+    }
+
+    fn num_inputs(&self) -> usize {
+        2
+    }
+
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
+    fn prepare(&mut self) {}
+
+    #[inline]
+    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
+        let out = &mut outputs[0];
+        for (o, (a, b)) in out.iter_mut().zip(inputs[0].iter().zip(inputs[1].iter())) {
+            *o = if a > b { 1.0 } else { 0.0 }.into();
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Lt<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
+
+impl Lt<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Lt<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Lt<K> {
+    fn name(&self) -> &str {
+        "lt"
+    }
+
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND, K::KIND]
+    }
+
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
+    }
+
+    fn num_inputs(&self) -> usize {
+        2
+    }
+
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
+    fn prepare(&mut self) {}
+
+    #[inline]
+    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
+        let out = &mut outputs[0];
+        for (o, (a, b)) in out.iter_mut().zip(inputs[0].iter().zip(inputs[1].iter())) {
+            *o = if a < b { 1.0 } else { 0.0 }.into();
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Eq<K: SignalKindMarker> {
+    _kind: std::marker::PhantomData<K>,
+}
+
+impl Eq<Audio> {
+    pub fn ar() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Eq<Control> {
+    pub fn kr() -> Self {
+        Self {
+            _kind: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<K: SignalKindMarker> Process for Eq<K> {
+    fn name(&self) -> &str {
+        "eq"
+    }
+
+    fn input_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND, K::KIND]
+    }
+
+    fn output_kinds(&self) -> Vec<SignalKind> {
+        vec![K::KIND]
+    }
+
+    fn num_inputs(&self) -> usize {
+        2
+    }
+
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
+    fn prepare(&mut self) {}
+
+    #[inline]
+    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
+        let out = &mut outputs[0];
+        for (o, (a, b)) in out.iter_mut().zip(inputs[0].iter().zip(inputs[1].iter())) {
+            *o = if a == b { 1.0 } else { 0.0 }.into();
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Sin<K: SignalKindMarker> {
     _kind: std::marker::PhantomData<K>,
 }
@@ -383,10 +542,7 @@ impl<K: SignalKindMarker> Process for Sin<K> {
     #[inline]
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
         let out = &mut outputs[0];
-        out.copy_from_slice(&inputs[0]);
-        out.map_mut(|s| {
-            *s = s.sin().into();
-        });
+        out.copy_map(&inputs[0], |s| s.sin().into());
     }
 }
 
@@ -437,10 +593,7 @@ impl<K: SignalKindMarker> Process for Cos<K> {
     #[inline]
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
         let out = &mut outputs[0];
-        out.copy_from_slice(&inputs[0]);
-        out.map_mut(|s| {
-            *s = s.cos().into();
-        });
+        out.copy_map(&inputs[0], |s| s.cos().into());
     }
 }
 
@@ -491,10 +644,7 @@ impl<K: SignalKindMarker> Process for Sqrt<K> {
     #[inline]
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
         let out = &mut outputs[0];
-        out.copy_from_slice(&inputs[0]);
-        out.map_mut(|s| {
-            *s = s.sqrt().into();
-        });
+        out.copy_map(&inputs[0], |s| s.sqrt().into());
     }
 }
 
@@ -545,10 +695,7 @@ impl<K: SignalKindMarker> Process for Abs<K> {
     #[inline]
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
         let out = &mut outputs[0];
-        out.copy_from_slice(&inputs[0]);
-        out.map_mut(|s| {
-            *s = s.abs().into();
-        });
+        out.copy_map(&inputs[0], |s| s.abs().into());
     }
 }
 
@@ -599,10 +746,7 @@ impl<K: SignalKindMarker> Process for Neg<K> {
     #[inline]
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
         let out = &mut outputs[0];
-        out.copy_from_slice(&inputs[0]);
-        out.map_mut(|s| {
-            *s = -*s;
-        });
+        out.copy_map(&inputs[0], |s| -s);
     }
 }
 
@@ -653,10 +797,7 @@ impl<K: SignalKindMarker> Process for Exp<K> {
     #[inline]
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
         let out = &mut outputs[0];
-        out.copy_from_slice(&inputs[0]);
-        out.map_mut(|s| {
-            *s = s.exp().into();
-        });
+        out.copy_map(&inputs[0], |s| s.exp().into());
     }
 }
 
@@ -707,9 +848,6 @@ impl<K: SignalKindMarker> Process for Ln<K> {
     #[inline]
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
         let out = &mut outputs[0];
-        out.copy_from_slice(&inputs[0]);
-        out.map_mut(|s| {
-            *s = s.ln().into();
-        });
+        out.copy_map(&inputs[0], |s| s.ln().into());
     }
 }
