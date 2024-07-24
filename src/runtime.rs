@@ -2,10 +2,7 @@ use std::sync::mpsc;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use crate::{
-    graph::Graph,
-    sample::{Buffer, Sample},
-};
+use crate::{graph::Graph, sample::Sample};
 
 /// The audio backend to use for the runtime.
 #[derive(Default, Debug)]
@@ -80,7 +77,7 @@ impl Runtime {
 
     /// Renders the next block of audio and returns the rendered output channels.
     #[inline]
-    pub fn next_buffer(&mut self) -> &[Buffer] {
+    pub fn next_buffer(&mut self) -> impl Iterator<Item = &[Sample]> + '_ {
         self.graph.process();
 
         self.graph.outputs()
@@ -137,28 +134,18 @@ impl Runtime {
 
         let num_channels = outputs.len();
 
-        let mut writer = hound::WavWriter::create(
-            file_path,
-            hound::WavSpec {
-                channels: num_channels as u16,
-                sample_rate: audio_rate as u32,
-                bits_per_sample: 32,
-                sample_format: hound::SampleFormat::Float,
-            },
-        )
-        .unwrap();
-
         let num_samples = outputs[0].len();
+
+        let mut samples = vec![0.0; num_samples * num_channels];
 
         for sample_index in 0..num_samples {
             for channel_index in 0..num_channels {
-                writer
-                    .write_sample(*outputs[channel_index][sample_index] as f32)
-                    .unwrap();
+                let i = sample_index * num_channels + channel_index;
+                samples[i] = *outputs[channel_index][sample_index];
             }
         }
 
-        writer.finalize().unwrap();
+        wavers::write(file_path, &samples, audio_rate as i32, num_channels as u16).unwrap();
     }
 
     pub fn run_for(
@@ -345,10 +332,9 @@ impl Runtime {
                 move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
                     graph.set_block_size(audio_rate, control_rate, data.len() / channels);
                     graph.process();
-                    let outputs = graph.outputs();
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
-                            let buffer = &outputs[channel_idx];
+                            let buffer = graph.get_output(channel_idx);
                             let value = buffer[frame_idx];
                             *sample = T::from_sample(*value);
                         }

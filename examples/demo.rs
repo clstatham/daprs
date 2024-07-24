@@ -35,9 +35,10 @@ fn main() {
     env.connect_input(1, 1.0, 0);
     env.connect_input(2, 0.9999, 0);
 
-    let saw1 = bl_saw_osc(&graph, 440.0);
+    let saw1 = sine_osc(&graph, 440.0, 1.0, time_ar);
 
-    let master = env * saw1 * 0.1;
+    let master = env * saw1 * 1.0;
+    // let master = saw1;
 
     // connect the outputs
     out1.connect_inputs([(master, 0)]);

@@ -7,14 +7,14 @@ edition = "2021"
 name = "papr"
 
 [workspace]
-members = ["papr-playground"]
+members = []
 
 [dependencies]
 cpal = { version = "0.15.3", features = ["jack"] }
 itertools = "0.13.0"
 log = "0.4.22"
 petgraph = "0.6.5"
-hound = "3.5"
+wavers = "1.4"
 
 [[example]]
 name = "demo"

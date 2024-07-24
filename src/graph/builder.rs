@@ -10,6 +10,18 @@ use super::{
     Graph, NodeIndex,
 };
 
+#[macro_export]
+macro_rules! add_node {
+    ($graph:ident : $proc:expr; {$(($source: expr => $source_out:literal) @ $input_index:literal),*}) => {{
+        let node = $graph.processor($proc);
+        $(
+            node.connect_input($input_index, $source, $source_out);
+        )*
+        node
+    }};
+}
+
+/// A builder for constructing a [`Graph`].
 #[derive(Clone)]
 pub struct GraphBuilder {
     graph: Arc<Mutex<Option<Graph>>>,
@@ -24,12 +36,14 @@ impl Default for GraphBuilder {
 }
 
 impl GraphBuilder {
+    /// Creates a new [`GraphBuilder`] with the given [`Graph`] as a starting point.
     pub fn new(graph: Graph) -> Self {
         Self {
             graph: Arc::new(Mutex::new(Some(graph))),
         }
     }
 
+    /// Creates a new input node on the graph.
     pub fn input(&self) -> Node {
         let mut graph = self.graph.lock().unwrap();
         let graph = graph
@@ -43,6 +57,7 @@ impl GraphBuilder {
         }
     }
 
+    /// Creates a new output node on the graph.
     pub fn output(&self) -> Node {
         let mut graph = self.graph.lock().unwrap();
         let graph = graph
@@ -56,6 +71,7 @@ impl GraphBuilder {
         }
     }
 
+    /// Creates a new processor node on the graph from a [`Processor`] object.
     pub fn processor_object(&self, processor: Processor) -> Node {
         let mut graph = self.graph.lock().unwrap();
         let graph = graph
@@ -69,6 +85,7 @@ impl GraphBuilder {
         }
     }
 
+    /// Creates a new processor node on the graph from a type that implements [`Process`].
     pub fn processor(&self, processor: impl Process) -> Node {
         let mut graph = self.graph.lock().unwrap();
         let graph = graph
@@ -82,16 +99,19 @@ impl GraphBuilder {
         }
     }
 
+    /// Creates a new audio-rate constant node on the graph.
     pub fn ar_constant(&self, value: f64) -> Node {
         let processor = math::Constant::ar(value.into());
         self.processor(processor)
     }
 
+    /// Creates a new control-rate constant node on the graph.
     pub fn kr_constant(&self, value: f64) -> Node {
         let processor = math::Constant::kr(value.into());
         self.processor(processor)
     }
 
+    /// Connects an output of one node to an input of another node.
     pub fn connect(&self, source: Node, source_output: u32, target: Node, target_input: u32) {
         assert!(
             Arc::ptr_eq(&source.builder.graph, &self.graph),
@@ -110,6 +130,7 @@ impl GraphBuilder {
         graph.connect(source.index, source_output, target.index, target_input);
     }
 
+    /// Finishes building the graph and returns the constructed [`Graph`].
     pub fn build(&self) -> Graph {
         self.graph
             .lock()

@@ -10,6 +10,7 @@ pub mod sample;
 
 #[allow(unused_imports)]
 pub mod prelude {
+    pub use crate::add_node;
     pub use crate::graph::{
         builder::{GraphBuilder, Node},
         edge::Edge,
@@ -90,7 +91,7 @@ mod tests {
 
         let mut runtime = Runtime::new(graph.build());
 
-        let bufs = runtime.run_offline(std::time::Duration::from_secs(2), 32.0, 32.0, 32);
+        let bufs = runtime.run_offline(std::time::Duration::from_secs(2), 32.0, 32.0, 4);
         assert_eq!(bufs.len(), 1);
         let buf = &bufs[0];
         assert_eq!(buf.len(), 64);
