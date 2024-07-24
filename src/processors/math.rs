@@ -2,14 +2,14 @@ use std::sync::Arc;
 
 use crate::{
     graph::node::Process,
-    sample::{Audio, Buffer, Control, Sample, SignalKind, SignalKindMarker},
+    sample::{Audio, Buffer, Control, Sample, SignalRate, SignalRateMarker},
 };
 
 #[derive(Clone)]
-pub struct Lambda<K: SignalKindMarker> {
+pub struct Lambda<R: SignalRateMarker> {
     #[allow(clippy::type_complexity)]
     func: Arc<dyn Fn(&[Sample], &mut [Sample]) + Send + Sync + 'static>,
-    _kind: std::marker::PhantomData<K>,
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Lambda<Audio> {
@@ -19,7 +19,7 @@ impl Lambda<Audio> {
     {
         Self {
             func: Arc::new(func),
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -31,22 +31,22 @@ impl Lambda<Control> {
     {
         Self {
             func: Arc::new(func),
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Lambda<K> {
+impl<R: SignalRateMarker> Process for Lambda<R> {
     fn name(&self) -> &str {
         "lambda"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -65,16 +65,16 @@ impl<K: SignalKindMarker> Process for Lambda<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Constant<K: SignalKindMarker> {
+pub struct Constant<R: SignalRateMarker> {
     pub value: Sample,
-    _kind: std::marker::PhantomData<K>,
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Constant<Audio> {
     pub fn ar(value: Sample) -> Self {
         Self {
             value,
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -83,31 +83,31 @@ impl Constant<Control> {
     pub fn kr(value: Sample) -> Self {
         Self {
             value,
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Constant<K> {
+impl<R: SignalRateMarker> Constant<R> {
     pub fn new(value: Sample) -> Self {
         Self {
             value,
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Constant<K> {
+impl<R: SignalRateMarker> Process for Constant<R> {
     fn name(&self) -> &str {
         "constant"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
+    fn input_rates(&self) -> Vec<SignalRate> {
         vec![]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -140,14 +140,14 @@ impl From<f64> for Constant<Audio> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Add<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Add<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Add<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -155,22 +155,22 @@ impl Add<Audio> {
 impl Add<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Add<K> {
+impl<R: SignalRateMarker> Process for Add<R> {
     fn name(&self) -> &str {
         "add"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -194,14 +194,14 @@ impl<K: SignalKindMarker> Process for Add<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Sub<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Sub<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Sub<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -209,22 +209,22 @@ impl Sub<Audio> {
 impl Sub<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Sub<K> {
+impl<R: SignalRateMarker> Process for Sub<R> {
     fn name(&self) -> &str {
         "sub"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -248,14 +248,14 @@ impl<K: SignalKindMarker> Process for Sub<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Mul<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Mul<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Mul<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -263,22 +263,22 @@ impl Mul<Audio> {
 impl Mul<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Mul<K> {
+impl<R: SignalRateMarker> Process for Mul<R> {
     fn name(&self) -> &str {
         "mul"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -302,14 +302,14 @@ impl<K: SignalKindMarker> Process for Mul<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Div<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Div<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Div<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -317,22 +317,22 @@ impl Div<Audio> {
 impl Div<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Div<K> {
+impl<R: SignalRateMarker> Process for Div<R> {
     fn name(&self) -> &str {
         "div"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -356,14 +356,14 @@ impl<K: SignalKindMarker> Process for Div<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Rem<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Rem<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Rem<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -371,22 +371,22 @@ impl Rem<Audio> {
 impl Rem<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Rem<K> {
+impl<R: SignalRateMarker> Process for Rem<R> {
     fn name(&self) -> &str {
         "rem"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -410,14 +410,14 @@ impl<K: SignalKindMarker> Process for Rem<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Gt<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Gt<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Gt<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -425,22 +425,22 @@ impl Gt<Audio> {
 impl Gt<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Gt<K> {
+impl<R: SignalRateMarker> Process for Gt<R> {
     fn name(&self) -> &str {
         "gt"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -463,14 +463,14 @@ impl<K: SignalKindMarker> Process for Gt<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Lt<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Lt<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Lt<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -478,22 +478,22 @@ impl Lt<Audio> {
 impl Lt<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Lt<K> {
+impl<R: SignalRateMarker> Process for Lt<R> {
     fn name(&self) -> &str {
         "lt"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -516,14 +516,14 @@ impl<K: SignalKindMarker> Process for Lt<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Eq<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Eq<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Eq<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -531,22 +531,22 @@ impl Eq<Audio> {
 impl Eq<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Eq<K> {
+impl<R: SignalRateMarker> Process for Eq<R> {
     fn name(&self) -> &str {
         "eq"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -569,14 +569,14 @@ impl<K: SignalKindMarker> Process for Eq<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Clip<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Clip<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Clip<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -584,22 +584,22 @@ impl Clip<Audio> {
 impl Clip<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Clip<K> {
+impl<R: SignalRateMarker> Process for Clip<R> {
     fn name(&self) -> &str {
         "clip"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, K::KIND, K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, R::RATE, R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -629,14 +629,14 @@ impl<K: SignalKindMarker> Process for Clip<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Sin<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Sin<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Sin<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -644,22 +644,22 @@ impl Sin<Audio> {
 impl Sin<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Sin<K> {
+impl<R: SignalRateMarker> Process for Sin<R> {
     fn name(&self) -> &str {
         "sin"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -680,14 +680,14 @@ impl<K: SignalKindMarker> Process for Sin<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Cos<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Cos<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Cos<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -695,22 +695,22 @@ impl Cos<Audio> {
 impl Cos<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Cos<K> {
+impl<R: SignalRateMarker> Process for Cos<R> {
     fn name(&self) -> &str {
         "cos"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -731,14 +731,14 @@ impl<K: SignalKindMarker> Process for Cos<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Sqrt<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Sqrt<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Sqrt<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -746,22 +746,22 @@ impl Sqrt<Audio> {
 impl Sqrt<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Sqrt<K> {
+impl<R: SignalRateMarker> Process for Sqrt<R> {
     fn name(&self) -> &str {
         "sqrt"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -782,14 +782,14 @@ impl<K: SignalKindMarker> Process for Sqrt<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Abs<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Abs<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Abs<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -797,22 +797,22 @@ impl Abs<Audio> {
 impl Abs<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Abs<K> {
+impl<R: SignalRateMarker> Process for Abs<R> {
     fn name(&self) -> &str {
         "abs"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -833,14 +833,14 @@ impl<K: SignalKindMarker> Process for Abs<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Neg<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Neg<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Neg<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -848,22 +848,22 @@ impl Neg<Audio> {
 impl Neg<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Neg<K> {
+impl<R: SignalRateMarker> Process for Neg<R> {
     fn name(&self) -> &str {
         "neg"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -884,14 +884,14 @@ impl<K: SignalKindMarker> Process for Neg<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Exp<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Exp<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Exp<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -899,22 +899,22 @@ impl Exp<Audio> {
 impl Exp<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Exp<K> {
+impl<R: SignalRateMarker> Process for Exp<R> {
     fn name(&self) -> &str {
         "exp"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -935,14 +935,14 @@ impl<K: SignalKindMarker> Process for Exp<K> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Ln<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct Ln<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl Ln<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -950,22 +950,22 @@ impl Ln<Audio> {
 impl Ln<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for Ln<K> {
+impl<R: SignalRateMarker> Process for Ln<R> {
     fn name(&self) -> &str {
         "ln"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {

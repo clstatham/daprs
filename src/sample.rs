@@ -156,7 +156,7 @@ impl Display for Sample {
 #[derive(PartialEq, Clone)]
 pub struct Buffer {
     buf: Vec<Sample>,
-    kind: SignalKind,
+    rate: SignalRate,
 }
 
 impl Debug for Buffer {
@@ -168,17 +168,17 @@ impl Debug for Buffer {
 impl Buffer {
     /// Creates a new buffer filled with zeros.
     #[inline]
-    pub fn zeros(length: usize, kind: SignalKind) -> Self {
+    pub fn zeros(length: usize, rate: SignalRate) -> Self {
         Buffer {
             buf: vec![Sample::new(0.0); length],
-            kind,
+            rate,
         }
     }
 
-    /// Returns the buffer's signal kind.
+    /// Returns the buffer's signal rate.
     #[inline]
-    pub fn kind(&self) -> SignalKind {
-        self.kind
+    pub fn rate(&self) -> SignalRate {
+        self.rate
     }
 
     /// Resizes the buffer to the given length, filling any new elements with zeros.
@@ -212,10 +212,10 @@ impl Buffer {
     }
 
     #[inline]
-    pub fn from_slice(value: &[Sample], kind: SignalKind) -> Self {
+    pub fn from_slice(value: &[Sample], rate: SignalRate) -> Self {
         Buffer {
             buf: value.to_vec(),
-            kind,
+            rate,
         }
     }
 }
@@ -263,12 +263,12 @@ impl<'a> IntoIterator for &'a mut Buffer {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SignalKind {
+pub enum SignalRate {
     Control,
     Audio,
 }
 
-impl SignalKind {
+impl SignalRate {
     pub fn is_audio(self) -> bool {
         matches!(self, Self::Audio)
     }
@@ -277,7 +277,7 @@ impl SignalKind {
         matches!(self, Self::Control)
     }
 
-    pub fn can_take_as_input(self, other: SignalKind) -> bool {
+    pub fn can_take_as_input(self, other: SignalRate) -> bool {
         match self {
             Self::Control => other.is_control(),
             Self::Audio => other.is_audio(),
@@ -285,18 +285,18 @@ impl SignalKind {
     }
 }
 
-pub trait SignalKindMarker: Copy + Send + Sync + 'static {
-    const KIND: SignalKind;
+pub trait SignalRateMarker: Copy + Send + Sync + 'static {
+    const RATE: SignalRate;
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Audio;
-impl SignalKindMarker for Audio {
-    const KIND: SignalKind = SignalKind::Audio;
+impl SignalRateMarker for Audio {
+    const RATE: SignalRate = SignalRate::Audio;
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Control;
-impl SignalKindMarker for Control {
-    const KIND: SignalKind = SignalKind::Control;
+impl SignalRateMarker for Control {
+    const RATE: SignalRate = SignalRate::Control;
 }

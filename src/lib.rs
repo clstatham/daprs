@@ -18,7 +18,7 @@ pub mod prelude {
     };
     pub use crate::processors::{env::*, functional::*, graph::*, io::*, math::*, osc::*, time::*};
     pub use crate::runtime::{Backend, Device, Runtime};
-    pub use crate::sample::{Audio, Buffer, Control, Sample, SignalKind, SignalKindMarker};
+    pub use crate::sample::{Audio, Buffer, Control, Sample, SignalRate, SignalRateMarker};
 }
 
 pub fn available_backends() -> Vec<Backend> {

@@ -1,15 +1,15 @@
-use crate::{prelude::*, sample::SignalKindMarker};
+use crate::{prelude::*, sample::SignalRateMarker};
 
 use super::resample;
 
 #[derive(Debug, Clone)]
-pub struct DecayEnv<K: SignalKindMarker> {
+pub struct DecayEnv<R: SignalRateMarker> {
     audio_rate: f64,
     control_rate: f64,
     level: f64,
     decay_buf: Buffer,
     curve_buf: Buffer,
-    _kind: std::marker::PhantomData<K>,
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl DecayEnv<Audio> {
@@ -18,9 +18,9 @@ impl DecayEnv<Audio> {
             audio_rate: 0.0,
             control_rate: 0.0,
             level: 0.0,
-            decay_buf: Buffer::zeros(0, SignalKind::Control),
-            curve_buf: Buffer::zeros(0, SignalKind::Control),
-            _kind: std::marker::PhantomData,
+            decay_buf: Buffer::zeros(0, SignalRate::Control),
+            curve_buf: Buffer::zeros(0, SignalRate::Control),
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -31,24 +31,24 @@ impl DecayEnv<Control> {
             audio_rate: 0.0,
             control_rate: 0.0,
             level: 0.0,
-            decay_buf: Buffer::zeros(0, SignalKind::Control),
-            curve_buf: Buffer::zeros(0, SignalKind::Control),
-            _kind: std::marker::PhantomData,
+            decay_buf: Buffer::zeros(0, SignalRate::Control),
+            curve_buf: Buffer::zeros(0, SignalRate::Control),
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for DecayEnv<K> {
+impl<R: SignalRateMarker> Process for DecayEnv<R> {
     fn name(&self) -> &str {
         "decay_env"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, SignalKind::Control, SignalKind::Control]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, SignalRate::Control, SignalRate::Control]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -65,12 +65,12 @@ impl<K: SignalKindMarker> Process for DecayEnv<K> {
         self.audio_rate = audio_rate;
         self.control_rate = control_rate;
         let control_block_size = block_size / self.control_rate as usize;
-        match K::KIND {
-            SignalKind::Audio => {
+        match R::RATE {
+            SignalRate::Audio => {
                 self.decay_buf.resize(block_size);
                 self.curve_buf.resize(block_size);
             }
-            SignalKind::Control => {
+            SignalRate::Control => {
                 self.decay_buf.resize(control_block_size);
                 self.curve_buf.resize(control_block_size);
             }
@@ -88,9 +88,9 @@ impl<K: SignalKindMarker> Process for DecayEnv<K> {
 
         let output = &mut outputs[0];
 
-        let rate = match K::KIND {
-            SignalKind::Audio => self.audio_rate,
-            SignalKind::Control => self.control_rate,
+        let rate = match R::RATE {
+            SignalRate::Audio => self.audio_rate,
+            SignalRate::Control => self.control_rate,
         };
 
         for (output, trigger, decay, curve) in

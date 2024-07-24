@@ -14,12 +14,12 @@ impl Process for Smooth {
         "smooth"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![SignalKind::Control]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![SignalRate::Control]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![SignalKind::Audio]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![SignalRate::Audio]
     }
 
     fn num_inputs(&self) -> usize {
@@ -57,12 +57,12 @@ impl Process for Quantize {
         "quantize"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![SignalKind::Audio]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![SignalRate::Audio]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![SignalKind::Control]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![SignalRate::Control]
     }
 
     fn num_inputs(&self) -> usize {
@@ -89,14 +89,14 @@ impl Process for Quantize {
 }
 
 #[derive(Default, Debug, Clone)]
-pub struct DebugPrint<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct DebugPrint<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl DebugPrint<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -104,22 +104,22 @@ impl DebugPrint<Audio> {
 impl DebugPrint<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for DebugPrint<K> {
+impl<R: SignalRateMarker> Process for DebugPrint<R> {
     fn name(&self) -> &str {
         "debug_print"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {

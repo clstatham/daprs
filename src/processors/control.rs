@@ -1,14 +1,14 @@
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct IfElse<K: SignalKindMarker> {
-    _kind: std::marker::PhantomData<K>,
+pub struct IfElse<R: SignalRateMarker> {
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl IfElse<Audio> {
     pub fn ar() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -16,22 +16,22 @@ impl IfElse<Audio> {
 impl IfElse<Control> {
     pub fn kr() -> Self {
         Self {
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for IfElse<K> {
+impl<R: SignalRateMarker> Process for IfElse<R> {
     fn name(&self) -> &str {
         "if_else"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND, K::KIND, K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE, R::RATE, R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {

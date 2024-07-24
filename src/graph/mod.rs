@@ -5,7 +5,7 @@ use petgraph::{
     visit::{Bfs, Visitable},
 };
 
-use crate::sample::{Buffer, Sample, SignalKind};
+use crate::sample::{Buffer, Sample, SignalRate};
 
 pub mod builder;
 pub mod edge;
@@ -79,7 +79,7 @@ impl Graph {
         self.needs_reset = true;
         let idx = self.digraph.add_node(GraphNode::new_input());
         self.input_nodes.push(idx);
-        self.input_buffers.push(Buffer::zeros(0, SignalKind::Audio));
+        self.input_buffers.push(Buffer::zeros(0, SignalRate::Audio));
         idx
     }
 
@@ -89,7 +89,7 @@ impl Graph {
         let idx = self.digraph.add_node(GraphNode::new_output());
         self.output_nodes.push(idx);
         self.output_buffers
-            .push(Buffer::zeros(0, SignalKind::Audio));
+            .push(Buffer::zeros(0, SignalRate::Audio));
         idx
     }
 

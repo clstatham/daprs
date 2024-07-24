@@ -3,10 +3,10 @@ use std::f64::consts::PI;
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct BlSawOsc<K: SignalKindMarker> {
+pub struct BlSawOsc<R: SignalRateMarker> {
     sample_rate: f64,
     phase: f64,
-    _kind: std::marker::PhantomData<K>,
+    _rate: std::marker::PhantomData<R>,
 }
 
 impl BlSawOsc<Audio> {
@@ -14,7 +14,7 @@ impl BlSawOsc<Audio> {
         Self {
             sample_rate: 0.0,
             phase: 0.0,
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
@@ -24,22 +24,22 @@ impl BlSawOsc<Control> {
         Self {
             sample_rate: 0.0,
             phase: 0.0,
-            _kind: std::marker::PhantomData,
+            _rate: std::marker::PhantomData,
         }
     }
 }
 
-impl<K: SignalKindMarker> Process for BlSawOsc<K> {
+impl<R: SignalRateMarker> Process for BlSawOsc<R> {
     fn name(&self) -> &str {
         "bl_saw_osc"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![K::KIND]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![R::RATE]
     }
 
     fn num_inputs(&self) -> usize {
@@ -53,9 +53,9 @@ impl<K: SignalKindMarker> Process for BlSawOsc<K> {
     fn prepare(&mut self) {}
 
     fn reset(&mut self, audio_rate: f64, control_rate: f64, _block_size: usize) {
-        match K::KIND {
-            SignalKind::Audio => self.sample_rate = audio_rate,
-            SignalKind::Control => self.sample_rate = control_rate,
+        match R::RATE {
+            SignalRate::Audio => self.sample_rate = audio_rate,
+            SignalRate::Control => self.sample_rate = control_rate,
         }
     }
 

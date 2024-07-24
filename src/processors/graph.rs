@@ -1,6 +1,6 @@
 use crate::{
     graph::{node::Process, Graph},
-    sample::{Buffer, SignalKind},
+    sample::{Buffer, SignalRate},
 };
 
 #[derive(Default, Clone)]
@@ -19,12 +19,12 @@ impl Process for SubGraph {
         "graph"
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind> {
-        vec![SignalKind::Audio; self.graph.num_inputs()]
+    fn input_rates(&self) -> Vec<SignalRate> {
+        vec![SignalRate::Audio; self.graph.num_inputs()]
     }
 
-    fn output_kinds(&self) -> Vec<SignalKind> {
-        vec![SignalKind::Audio; self.graph.num_outputs()]
+    fn output_rates(&self) -> Vec<SignalRate> {
+        vec![SignalRate::Audio; self.graph.num_outputs()]
     }
 
     fn num_inputs(&self) -> usize {

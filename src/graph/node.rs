@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::sample::{Buffer, SignalKind};
+use crate::sample::{Buffer, SignalRate};
 
 /// A trait for processing audio samples.
 ///
@@ -10,8 +10,8 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
         std::any::type_name::<Self>()
     }
 
-    fn input_kinds(&self) -> Vec<SignalKind>;
-    fn output_kinds(&self) -> Vec<SignalKind>;
+    fn input_rates(&self) -> Vec<SignalRate>;
+    fn output_rates(&self) -> Vec<SignalRate>;
 
     /// Returns the number of input buffers/channels this [`Processor`] expects.
     fn num_inputs(&self) -> usize;
@@ -80,12 +80,12 @@ impl Debug for Processor {
 impl Processor {
     pub fn new(processor: impl Process) -> Self {
         let mut input_buffers = Vec::with_capacity(processor.num_inputs());
-        for kind in processor.input_kinds() {
-            input_buffers.push(Buffer::zeros(0, kind));
+        for rate in processor.input_rates() {
+            input_buffers.push(Buffer::zeros(0, rate));
         }
         let mut output_buffers = Vec::with_capacity(processor.num_outputs());
-        for kind in processor.output_kinds() {
-            output_buffers.push(Buffer::zeros(0, kind));
+        for rate in processor.output_rates() {
+            output_buffers.push(Buffer::zeros(0, rate));
         }
 
         Self {
@@ -97,12 +97,12 @@ impl Processor {
 
     pub fn new_from_boxed(processor: Box<dyn Process>) -> Self {
         let mut input_buffers = Vec::with_capacity(processor.num_inputs());
-        for kind in processor.input_kinds() {
-            input_buffers.push(Buffer::zeros(0, kind));
+        for rate in processor.input_rates() {
+            input_buffers.push(Buffer::zeros(0, rate));
         }
         let mut output_buffers = Vec::with_capacity(processor.num_outputs());
-        for kind in processor.output_kinds() {
-            output_buffers.push(Buffer::zeros(0, kind));
+        for rate in processor.output_rates() {
+            output_buffers.push(Buffer::zeros(0, rate));
         }
 
         Self {
@@ -112,26 +112,26 @@ impl Processor {
         }
     }
 
-    pub fn input_kinds(&self) -> Vec<SignalKind> {
-        self.processor.input_kinds()
+    pub fn input_rates(&self) -> Vec<SignalRate> {
+        self.processor.input_rates()
     }
 
-    pub fn output_kinds(&self) -> Vec<SignalKind> {
-        self.processor.output_kinds()
+    pub fn output_rates(&self) -> Vec<SignalRate> {
+        self.processor.output_rates()
     }
 
     pub fn set_block_size(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         let control_block_size = (block_size as f64 * control_rate / audio_rate).ceil() as usize;
 
         for input in self.input_buffers.iter_mut() {
-            if input.kind() == SignalKind::Control {
+            if input.rate() == SignalRate::Control {
                 input.resize(control_block_size);
             } else {
                 input.resize(block_size);
             }
         }
         for output in self.output_buffers.iter_mut() {
-            if output.kind() == SignalKind::Control {
+            if output.rate() == SignalRate::Control {
                 output.resize(control_block_size);
             } else {
                 output.resize(block_size);
@@ -230,19 +230,19 @@ impl GraphNode {
         Self::Output
     }
 
-    pub fn input_kinds(&self) -> Vec<SignalKind> {
+    pub fn input_rates(&self) -> Vec<SignalRate> {
         match self {
-            Self::Input => vec![SignalKind::Audio],
-            Self::Processor(processor) => processor.input_kinds(),
-            Self::Output => vec![SignalKind::Audio],
+            Self::Input => vec![SignalRate::Audio],
+            Self::Processor(processor) => processor.input_rates(),
+            Self::Output => vec![SignalRate::Audio],
         }
     }
 
-    pub fn output_kinds(&self) -> Vec<SignalKind> {
+    pub fn output_rates(&self) -> Vec<SignalRate> {
         match self {
-            Self::Input => vec![SignalKind::Audio],
-            Self::Processor(processor) => processor.output_kinds(),
-            Self::Output => vec![SignalKind::Audio],
+            Self::Input => vec![SignalRate::Audio],
+            Self::Processor(processor) => processor.output_rates(),
+            Self::Output => vec![SignalRate::Audio],
         }
     }
 
