@@ -120,20 +120,20 @@ impl GraphBuilder {
 }
 
 pub trait IntoNode<'g> {
-    fn into_node(self, sibling: Node<'g>, kind: SignalKind) -> Node<'g>;
+    fn into_node(self, graph: &'g GraphBuilder, kind: SignalKind) -> Node<'g>;
 }
 
 impl<'g> IntoNode<'g> for Node<'g> {
-    fn into_node(self, _: Node<'g>, kind: SignalKind) -> Node<'g> {
+    fn into_node(self, _: &'g GraphBuilder, kind: SignalKind) -> Node<'g> {
         self.to_kind(kind)
     }
 }
 
 impl<'g> IntoNode<'g> for f64 {
-    fn into_node(self, sibling: Node<'g>, kind: SignalKind) -> Node<'g> {
+    fn into_node(self, graph: &'g GraphBuilder, kind: SignalKind) -> Node<'g> {
         match kind {
-            SignalKind::Audio => sibling.graph().ar_constant(self),
-            SignalKind::Control => sibling.graph().kr_constant(self),
+            SignalKind::Audio => graph.ar_constant(self),
+            SignalKind::Control => graph.kr_constant(self),
         }
     }
 }
@@ -254,7 +254,8 @@ impl<'g> Node<'g> {
     }
 
     /// Connects an input of this node to an output of another node.
-    pub fn connect_input(&self, input_index: u32, source: Node, source_output: u32) {
+    pub fn connect_input(&self, input_index: u32, source: impl IntoNode<'g>, source_output: u32) {
+        let source = source.into_node(self.graph(), self.input_kinds()[input_index as usize]);
         self.builder
             .connect(source, source_output, *self, input_index);
     }
@@ -268,9 +269,10 @@ impl<'g> Node<'g> {
     /// # Panics
     ///
     /// - If any of the inputs or outputs have different signal kinds
-    pub fn connect_inputs(&self, inputs: impl IntoIterator<Item = (Node<'g>, u32)>) {
+    pub fn connect_inputs<I: IntoNode<'g>>(&self, inputs: impl IntoIterator<Item = (I, u32)>) {
         for (target_input, (source, source_output)) in inputs.into_iter().enumerate() {
             let target_input_kind = self.input_kinds()[target_input];
+            let source = source.into_node(self.graph(), target_input_kind);
             let source_output_kind = source.output_kinds()[source_output as usize];
             assert_eq!(
                 target_input_kind, source_output_kind,
@@ -372,12 +374,14 @@ impl<'g> Node<'g> {
         processor
     }
 
-    pub fn clip(&self, min: Node<'g>, max: Node<'g>) -> Node<'g> {
+    pub fn clip(&self, min: impl IntoNode<'g>, max: impl IntoNode<'g>) -> Node<'g> {
         assert_eq!(
             self.num_outputs(),
             1,
             "Cannot clip a node with multiple outputs"
         );
+        let min = min.into_node(self.graph(), self.output_kinds()[0]);
+        let max = max.into_node(self.graph(), self.output_kinds()[0]);
         assert_eq!(
             min.num_outputs(),
             1,
@@ -397,12 +401,14 @@ impl<'g> Node<'g> {
         processor
     }
 
-    pub fn if_else(&self, if_true: Node<'g>, if_false: Node<'g>) -> Node<'g> {
+    pub fn if_else(&self, if_true: impl IntoNode<'g>, if_false: impl IntoNode<'g>) -> Node<'g> {
         assert_eq!(
             self.num_outputs(),
             1,
             "Cannot use if_else with a node with multiple outputs"
         );
+        let if_true = if_true.into_node(self.graph(), self.output_kinds()[0]);
+        let if_false = if_false.into_node(self.graph(), self.output_kinds()[0]);
         assert_eq!(
             if_true.num_outputs(),
             1,
@@ -444,7 +450,7 @@ impl<'g> Node<'g> {
             "Cannot compare a node with multiple outputs"
         );
 
-        let rhs = rhs.into_node(*self, self.output_kinds()[0]);
+        let rhs = rhs.into_node(self.graph(), self.output_kinds()[0]);
         assert_eq!(
             rhs.num_outputs(),
             1,
@@ -466,7 +472,7 @@ impl<'g> Node<'g> {
             "Cannot compare a node with multiple outputs"
         );
 
-        let rhs = rhs.into_node(*self, self.output_kinds()[0]);
+        let rhs = rhs.into_node(self.graph(), self.output_kinds()[0]);
         assert_eq!(
             rhs.num_outputs(),
             1,
@@ -488,7 +494,7 @@ impl<'g> Node<'g> {
             "Cannot compare a node with multiple outputs"
         );
 
-        let rhs = rhs.into_node(*self, self.output_kinds()[0]);
+        let rhs = rhs.into_node(self.graph(), self.output_kinds()[0]);
         assert_eq!(
             rhs.num_outputs(),
             1,

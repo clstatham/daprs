@@ -27,27 +27,17 @@ fn main() {
     let out1 = graph.output();
     let out2 = graph.output();
     let time_ar = graph.processor(Time::ar());
-    let time_kr = graph.processor(Time::kr());
 
-    let freq1 = graph.kr_constant(2.0);
-    let amp1 = graph.kr_constant(1.0);
-    let width1 = graph.kr_constant(0.01);
+    let trigger = pwm_osc(&graph, 2.0, 1.0, 0.01, time_ar);
 
     let env = graph.processor(DecayEnv::ar());
-    let decay = graph.kr_constant(1.0);
-    let curve = graph.kr_constant(0.9999);
+    env.connect_input(0, trigger, 0);
+    env.connect_input(1, 1.0, 0);
+    env.connect_input(2, 0.9999, 0);
 
-    let freq2 = graph.kr_constant(440.0);
-    let amp2 = graph.kr_constant(1.0);
+    let saw1 = bl_saw_osc(&graph, 440.0);
 
-    let gain = graph.kr_constant(0.1);
-
-    let trigger = pwm_osc(&graph, freq1.to_ar(), amp1.to_ar(), width1.to_ar(), time_ar);
-    env.connect_inputs([(trigger, 0), (decay, 0), (curve, 0)]);
-
-    let saw1 = bl_saw_osc(&graph, freq2.to_ar());
-
-    let master = env * saw1 * gain.to_ar();
+    let master = env * saw1 * 0.1;
 
     // connect the outputs
     out1.connect_inputs([(master, 0)]);
