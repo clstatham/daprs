@@ -49,11 +49,11 @@ impl Graph {
     }
 
     pub fn new_builder() -> builder::GraphBuilder {
-        builder::GraphBuilder::new()
+        builder::GraphBuilder::default()
     }
 
     pub fn builder(self) -> builder::GraphBuilder {
-        builder::GraphBuilder::from_graph(self)
+        builder::GraphBuilder::new(self)
     }
 
     #[inline]
@@ -91,6 +91,13 @@ impl Graph {
         self.output_buffers
             .push(Buffer::zeros(0, SignalKind::Audio));
         idx
+    }
+
+    pub fn add_processor_object(&mut self, processor: node::Processor) -> NodeIndex {
+        self.needs_reset = true;
+        self.needs_prepare = true;
+        self.needs_visitor_alloc = true;
+        self.digraph.add_node(GraphNode::Processor(processor))
     }
 
     /// Adds a new [`Node`] with the given [`Process`] functionality to the graph.

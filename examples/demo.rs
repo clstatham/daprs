@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use papr::prelude::*;
 
-pub fn mix(inputs: &[Node]) -> Node {
+pub fn mix<'g>(inputs: &[Node<'g>]) -> Node<'g> {
     if inputs.len() == 1 {
-        inputs[0].clone()
+        inputs[0]
     } else {
-        let mut sum = inputs[0].clone();
+        let mut sum = inputs[0];
         for input in &inputs[1..] {
-            sum += input.clone();
+            sum += *input;
         }
         sum
     }
@@ -50,7 +50,7 @@ fn main() {
     let master = env * saw1 * gain.to_ar();
 
     // connect the outputs
-    out1.connect_inputs([(master.clone(), 0)]);
+    out1.connect_inputs([(master, 0)]);
     out2.connect_inputs([(master, 0)]);
 
     // create a runtime and run it for 8 seconds
@@ -62,30 +62,11 @@ fn main() {
 
     let mut runtime = Runtime::new(graph);
 
-    let out = runtime.run_offline(Duration::from_secs(8), 48_000.0, 48000.0, 512);
-
-    // write the output to a file
-    let mut writer = hound::WavWriter::create(
+    runtime.run_offline_to_file(
         "target/output.wav",
-        hound::WavSpec {
-            channels: runtime.graph().num_outputs() as u16,
-            sample_rate: 48_000,
-            bits_per_sample: 32,
-            sample_format: hound::SampleFormat::Float,
-        },
-    )
-    .unwrap();
-
-    let num_channels = out.len();
-    let num_samples = out[0].len();
-
-    for sample_index in 0..num_samples {
-        for channel_index in 0..num_channels {
-            writer
-                .write_sample(*out[channel_index][sample_index] as f32)
-                .unwrap();
-        }
-    }
-
-    writer.finalize().unwrap();
+        Duration::from_secs(8),
+        48_000.0,
+        48_000.0,
+        512,
+    );
 }

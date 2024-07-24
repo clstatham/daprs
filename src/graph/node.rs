@@ -30,6 +30,10 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
     ///
     /// The number of inputs and outputs must match the number returned by [`Process::num_inputs`] and [`Process::num_outputs`].
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]);
+
+    fn processor(&self) -> Processor {
+        Processor::new_from_boxed(self.clone_boxed())
+    }
 }
 
 pub trait ProcessClone {
@@ -57,9 +61,9 @@ impl Debug for dyn Process {
     }
 }
 
-/// A node in the audio graph.
+/// A node in the audio graph that processes audio samples.
 ///
-/// This is a wrapper around a [`Processor`] that provides input and output buffers for the processor to use.
+/// This is a wrapper around a [`Box<dyn Process>`](Process) that provides input and output buffers for the processor to use.
 #[derive(Clone)]
 pub struct Processor {
     processor: Box<dyn Process>,
@@ -88,6 +92,23 @@ impl Processor {
             input_buffers: input_buffers.into_boxed_slice(),
             output_buffers: output_buffers.into_boxed_slice(),
             processor: Box::new(processor),
+        }
+    }
+
+    pub fn new_from_boxed(processor: Box<dyn Process>) -> Self {
+        let mut input_buffers = Vec::with_capacity(processor.num_inputs());
+        for kind in processor.input_kinds() {
+            input_buffers.push(Buffer::zeros(0, kind));
+        }
+        let mut output_buffers = Vec::with_capacity(processor.num_outputs());
+        for kind in processor.output_kinds() {
+            output_buffers.push(Buffer::zeros(0, kind));
+        }
+
+        Self {
+            input_buffers: input_buffers.into_boxed_slice(),
+            output_buffers: output_buffers.into_boxed_slice(),
+            processor,
         }
     }
 
@@ -195,6 +216,10 @@ impl Debug for GraphNode {
 impl GraphNode {
     pub fn new_input() -> Self {
         Self::Input
+    }
+
+    pub fn new_processor_pbject(processor: Processor) -> Self {
+        Self::Processor(processor)
     }
 
     pub fn new_processor(processor: impl Process) -> Self {

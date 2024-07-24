@@ -78,7 +78,7 @@ mod tests {
 
     #[test]
     pub fn test_runtime_offline() {
-        let graph = GraphBuilder::new();
+        let graph = GraphBuilder::default();
         let time = graph.processor(Time::ar());
         let two_pi = graph.processor(Constant::ar(std::f64::consts::TAU.into()));
         let freq = graph.processor(Constant::ar(2.0.into()));

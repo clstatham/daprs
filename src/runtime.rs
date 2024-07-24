@@ -125,6 +125,42 @@ impl Runtime {
         outputs
     }
 
+    pub fn run_offline_to_file(
+        &mut self,
+        file_path: impl AsRef<std::path::Path>,
+        duration: std::time::Duration,
+        audio_rate: f64,
+        control_rate: f64,
+        block_size: usize,
+    ) {
+        let outputs = self.run_offline(duration, audio_rate, control_rate, block_size);
+
+        let num_channels = outputs.len();
+
+        let mut writer = hound::WavWriter::create(
+            file_path,
+            hound::WavSpec {
+                channels: num_channels as u16,
+                sample_rate: audio_rate as u32,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            },
+        )
+        .unwrap();
+
+        let num_samples = outputs[0].len();
+
+        for sample_index in 0..num_samples {
+            for channel_index in 0..num_channels {
+                writer
+                    .write_sample(*outputs[channel_index][sample_index] as f32)
+                    .unwrap();
+            }
+        }
+
+        writer.finalize().unwrap();
+    }
+
     pub fn run_for(
         &mut self,
         duration: std::time::Duration,
