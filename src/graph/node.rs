@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::sample::{Signal, SignalKind, SignalRate, SignalSpec};
+use crate::signal::{Signal, SignalKind, SignalRate, SignalSpec};
 
 /// A trait for processing audio samples.
 ///

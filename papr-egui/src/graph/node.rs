@@ -1,6 +1,6 @@
 use papr::{
     prelude::Process,
-    sample::{Buffer, SignalRate},
+    signal::{Buffer, SignalRate},
 };
 
 pub trait Ui {

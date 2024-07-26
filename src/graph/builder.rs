@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     processors::*,
-    sample::{SignalRate, SignalSpec},
+    signal::{SignalRate, SignalSpec},
 };
 
 use super::{

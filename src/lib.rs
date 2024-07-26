@@ -6,7 +6,7 @@ use runtime::Backend;
 pub mod graph;
 pub mod processors;
 pub mod runtime;
-pub mod sample;
+pub mod signal;
 
 #[allow(unused_imports)]
 pub mod prelude {
@@ -19,7 +19,7 @@ pub mod prelude {
     };
     pub use crate::processors::{env::*, functional::*, graph::*, io::*, math::*, osc::*, time::*};
     pub use crate::runtime::{Backend, Device, Runtime};
-    pub use crate::sample::{
+    pub use crate::signal::{
         Buffer, Sample, Signal, SignalData, SignalKind, SignalRate, SignalSpec,
     };
 }

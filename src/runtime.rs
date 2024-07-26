@@ -4,7 +4,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::{
     graph::Graph,
-    sample::{Sample, Signal, SignalData},
+    signal::{Sample, Signal, SignalData},
 };
 
 /// The audio backend to use for the runtime.

@@ -1,4 +1,4 @@
-use crate::sample::Sample;
+use crate::signal::Sample;
 
 pub mod env;
 #[macro_use]

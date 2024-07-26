@@ -1,6 +1,6 @@
 use crate::{
     prelude::*,
-    sample::{Signal, SignalKind, SignalSpec},
+    signal::{Signal, SignalKind, SignalSpec},
 };
 
 #[derive(Debug, Clone)]

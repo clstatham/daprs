@@ -13,7 +13,7 @@ macro_rules! proc_fn {
             $($arg: impl $crate::graph::builder::IntoNode<'g>),*
         ) -> $crate::graph::builder::Node<'g> {
             $(
-                let $arg = $arg.into_node($graph, $crate::sample::SignalRate::$rate);
+                let $arg = $arg.into_node($graph, $crate::signal::SignalRate::$rate);
             )*
             $body
         }

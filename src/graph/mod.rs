@@ -6,7 +6,7 @@ use petgraph::{
     visit::{Bfs, DfsPostOrder, Visitable},
 };
 
-use crate::sample::Signal;
+use crate::signal::Signal;
 
 #[macro_use]
 pub mod builder;
