@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::proc_fn;
 
-proc_fn!(sine_osc(graph, frequency: Audio, amplitude: Audio, time: Audio) {
+proc_fn!(sine_osc(graph, frequency: Control, amplitude: Control, time: Audio) {
     (time * frequency.to_ar() * std::f64::consts::TAU).sin() * amplitude.to_ar()
 });
 

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::sample::{Buffer, SignalRate};
+use crate::sample::{Signal, SignalKind, SignalRate, SignalSpec};
 
 /// A trait for processing audio samples.
 ///
@@ -10,20 +10,20 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
         std::any::type_name::<Self>()
     }
 
-    /// Returns the expected [`SignalRate`]s of the inputs of this [`Process`].
-    fn input_rates(&self) -> Vec<SignalRate>;
+    /// Returns information about the inputs this [`Process`] expects.
+    fn input_spec(&self) -> Vec<SignalSpec>;
 
-    /// Returns the [`SignalRate`]s of the outputs this [`Process`] produces.
-    fn output_rates(&self) -> Vec<SignalRate>;
+    /// Returns information about the outputs this [`Process`] produces.
+    fn output_spec(&self) -> Vec<SignalSpec>;
 
     /// Returns the number of input buffers/channels this [`Process`] expects.
     fn num_inputs(&self) -> usize {
-        self.input_rates().len()
+        self.input_spec().len()
     }
 
     /// Returns the number of output buffers/channels this [`Process`] produces.
     fn num_outputs(&self) -> usize {
-        self.output_rates().len()
+        self.output_spec().len()
     }
 
     /// Called before the first [`Process::process`] call, and anytime the graph changes.
@@ -31,12 +31,12 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
 
     /// Called whenever the runtime's sample rates or block size change.
     #[allow(unused)]
-    fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {}
+    fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {}
 
     /// Processes the given input buffers and writes the results to the given output buffers.
     ///
     /// The number of input and output buffers must match the numbers returned by [`Process::num_inputs`] and [`Process::num_outputs`].
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]);
+    fn process(&mut self, inputs: &[Signal], outputs: &mut [Signal]);
 
     /// Clones this [`Process`] into a [`Processor`] object that can be used in the audio graph.
     fn processor(&self) -> Processor {
@@ -81,8 +81,8 @@ impl Debug for dyn Process {
 #[derive(Clone)]
 pub struct Processor {
     processor: Box<dyn Process>,
-    input_buffers: Box<[Buffer]>,
-    output_buffers: Box<[Buffer]>,
+    inputs: Box<[Signal]>,
+    outputs: Box<[Signal]>,
 }
 
 impl Debug for Processor {
@@ -100,85 +100,86 @@ impl Processor {
     /// Creates a new [`Processor`] from the given boxed [`Process`] object.
     pub fn new_from_boxed(processor: Box<dyn Process>) -> Self {
         let mut input_buffers = Vec::with_capacity(processor.num_inputs());
-        for rate in processor.input_rates() {
-            input_buffers.push(Buffer::zeros(0, rate));
+        for spec in processor.input_spec() {
+            input_buffers.push(Signal::default_for_spec(spec));
         }
         let mut output_buffers = Vec::with_capacity(processor.num_outputs());
-        for rate in processor.output_rates() {
-            output_buffers.push(Buffer::zeros(0, rate));
+        for spec in processor.output_spec() {
+            output_buffers.push(Signal::default_for_spec(spec));
         }
 
         Self {
-            input_buffers: input_buffers.into_boxed_slice(),
-            output_buffers: output_buffers.into_boxed_slice(),
+            inputs: input_buffers.into_boxed_slice(),
+            outputs: output_buffers.into_boxed_slice(),
             processor,
         }
     }
 
     /// Returns the expected [`SignalRate`]s of the inputs of this [`Processor`].
-    pub fn input_rates(&self) -> Vec<SignalRate> {
-        self.processor.input_rates()
+    pub fn input_rates(&self) -> Vec<SignalSpec> {
+        self.processor.input_spec()
     }
 
     /// Returns the [`SignalRate`]s of the outputs this [`Processor`] produces.
-    pub fn output_rates(&self) -> Vec<SignalRate> {
-        self.processor.output_rates()
+    pub fn output_rates(&self) -> Vec<SignalSpec> {
+        self.processor.output_spec()
     }
 
-    /// Reallocates the input and output buffers to match the given sample rates and block size.
-    pub fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
+    /// Resizes the input and output buffers to match the given sample rates and block size.
+    pub fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         let control_block_size = (block_size as f64 * control_rate / audio_rate).ceil() as usize;
 
-        for input in self.input_buffers.iter_mut() {
+        for input in self.inputs.iter_mut() {
             if input.rate() == SignalRate::Control {
-                input.resize(control_block_size);
+                input.resize_buffers(control_block_size);
             } else {
-                input.resize(block_size);
+                input.resize_buffers(block_size);
             }
         }
-        for output in self.output_buffers.iter_mut() {
+        for output in self.outputs.iter_mut() {
             if output.rate() == SignalRate::Control {
-                output.resize(control_block_size);
+                output.resize_buffers(control_block_size);
             } else {
-                output.resize(block_size);
+                output.resize_buffers(block_size);
             }
         }
-        self.processor.reset(audio_rate, control_rate, block_size);
+        self.processor
+            .resize_buffers(audio_rate, control_rate, block_size);
     }
 
-    /// Returns a slice of the input buffers.
+    /// Returns a slice of the input signals.
     #[inline]
-    pub fn inputs(&self) -> &[Buffer] {
-        &self.input_buffers[..]
+    pub fn inputs(&self) -> &[Signal] {
+        &self.inputs[..]
     }
 
-    /// Returns a mutable slice of the input buffers.
+    /// Returns a mutable slice of the input signals.
     #[inline]
-    pub fn inputs_mut(&mut self) -> &mut [Buffer] {
-        &mut self.input_buffers[..]
+    pub fn inputs_mut(&mut self) -> &mut [Signal] {
+        &mut self.inputs[..]
     }
 
-    /// Returns a reference to the input buffer at the given index.
+    /// Returns a reference to the input signal at the given index.
     #[inline]
-    pub fn input(&self, index: usize) -> &Buffer {
+    pub fn input(&self, index: usize) -> &Signal {
         &self.inputs()[index]
     }
 
-    /// Returns a mutable reference to the input buffer at the given index.
+    /// Returns a mutable reference to the input signal at the given index.
     #[inline]
-    pub fn input_mut(&mut self, index: usize) -> &mut Buffer {
+    pub fn input_mut(&mut self, index: usize) -> &mut Signal {
         &mut self.inputs_mut()[index]
     }
 
-    /// Returns a slice of the output buffers.
+    /// Returns a slice of the output signal.
     #[inline]
-    pub fn outputs(&self) -> &[Buffer] {
-        &self.output_buffers[..]
+    pub fn outputs(&self) -> &[Signal] {
+        &self.outputs[..]
     }
 
-    /// Returns a reference to the output buffer at the given index.
+    /// Returns a reference to the output signal at the given index.
     #[inline]
-    pub fn output(&self, index: usize) -> &Buffer {
+    pub fn output(&self, index: usize) -> &Signal {
         &self.outputs()[index]
     }
 
@@ -188,7 +189,7 @@ impl Processor {
         self.processor.prepare();
     }
 
-    /// Processes the input buffers and writes the results to the output buffers.
+    /// Processes the input signals and writes the results to the output signals.
     #[inline]
     pub fn process(&mut self) {
         assert_eq!(
@@ -201,8 +202,7 @@ impl Processor {
             self.processor.num_outputs(),
             "The number of outputs must match the number returned by Processor::num_outputs()"
         );
-        self.processor
-            .process(&self.input_buffers, &mut self.output_buffers);
+        self.processor.process(&self.inputs, &mut self.outputs);
     }
 }
 
@@ -210,7 +210,7 @@ impl Processor {
 #[derive(Clone)]
 pub enum GraphNode {
     /// A passthrough node that simply forwards its input to its output.
-    Passthrough(Buffer),
+    Passthrough(Signal),
     /// A processor node that processes its input buffers and writes the results to its output buffers.
     Processor(Processor),
 }
@@ -227,7 +227,11 @@ impl Debug for GraphNode {
 impl GraphNode {
     /// Creates a new input node.
     pub fn new_input() -> Self {
-        Self::Passthrough(Buffer::zeros(0, SignalRate::Audio))
+        Self::Passthrough(Signal::default_for_spec(SignalSpec {
+            name: None,
+            rate: SignalRate::Audio,
+            kind: SignalKind::Buffer,
+        }))
     }
 
     /// Creates a new processor node from the given [`Processor`] object.
@@ -242,21 +246,33 @@ impl GraphNode {
 
     /// Creates a new output node.
     pub fn new_output() -> Self {
-        Self::Passthrough(Buffer::zeros(0, SignalRate::Audio))
+        Self::Passthrough(Signal::default_for_spec(SignalSpec {
+            name: None,
+            rate: SignalRate::Audio,
+            kind: SignalKind::Buffer,
+        }))
     }
 
-    /// Returns the expected [`SignalRate`]s of the inputs of this [`GraphNode`].
-    pub fn input_rates(&self) -> Vec<SignalRate> {
+    /// Returns information about the inputs this [`GraphNode`] expects.
+    pub fn input_spec(&self) -> Vec<SignalSpec> {
         match self {
-            Self::Passthrough(_) => vec![SignalRate::Audio],
+            Self::Passthrough(_) => vec![SignalSpec {
+                name: None,
+                rate: SignalRate::Audio,
+                kind: SignalKind::Buffer,
+            }],
             Self::Processor(processor) => processor.input_rates(),
         }
     }
 
-    /// Returns the [`SignalRate`]s of the outputs this [`GraphNode`] produces.
-    pub fn output_rates(&self) -> Vec<SignalRate> {
+    /// Returns information about the outputs this [`GraphNode`] produces.
+    pub fn output_spec(&self) -> Vec<SignalSpec> {
         match self {
-            Self::Passthrough(_) => vec![SignalRate::Audio],
+            Self::Passthrough(_) => vec![SignalSpec {
+                name: None,
+                rate: SignalRate::Audio,
+                kind: SignalKind::Buffer,
+            }],
             Self::Processor(processor) => processor.output_rates(),
         }
     }
@@ -264,40 +280,42 @@ impl GraphNode {
     /// Returns the name of the processor in this [`GraphNode`].
     pub fn name(&self) -> &str {
         match self {
-            Self::Passthrough(_) => "Passthrough",
+            Self::Passthrough(signal) => signal.name().unwrap_or("Passthrough"),
             Self::Processor(processor) => processor.processor.name(),
         }
     }
 
     /// Returns a slice of the input buffers of this [`GraphNode`].
-    pub fn inputs(&self) -> &[Buffer] {
+    pub fn inputs(&self) -> &[Signal] {
         match self {
-            Self::Passthrough(buffer) => std::slice::from_ref(buffer),
+            Self::Passthrough(signal) => std::slice::from_ref(signal),
             Self::Processor(processor) => processor.inputs(),
         }
     }
 
     /// Returns a mutable slice of the input buffers of this [`GraphNode`].
-    pub fn inputs_mut(&mut self) -> &mut [Buffer] {
+    pub fn inputs_mut(&mut self) -> &mut [Signal] {
         match self {
-            Self::Passthrough(buffer) => std::slice::from_mut(buffer),
+            Self::Passthrough(signal) => std::slice::from_mut(signal),
             Self::Processor(processor) => processor.inputs_mut(),
         }
     }
 
     /// Returns a slice of the output buffers of this [`GraphNode`].
-    pub fn outputs(&self) -> &[Buffer] {
+    pub fn outputs(&self) -> &[Signal] {
         match self {
-            Self::Passthrough(buffer) => std::slice::from_ref(buffer),
+            Self::Passthrough(signal) => std::slice::from_ref(signal),
             Self::Processor(processor) => processor.outputs(),
         }
     }
 
     /// Reallocates the input and output buffers to match the given sample rates and block size.
-    pub fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
+    pub fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         match self {
-            Self::Passthrough(buffer) => buffer.resize(block_size),
-            Self::Processor(processor) => processor.reset(audio_rate, control_rate, block_size),
+            Self::Passthrough(signal) => signal.resize_buffers(block_size),
+            Self::Processor(processor) => {
+                processor.resize_buffers(audio_rate, control_rate, block_size)
+            }
         }
     }
 

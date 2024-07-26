@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-use super::resample;
+use super::lerp;
 
 /// Smooths a control signal at audio rate using a one-pole filter. This processor outputs an audio rate signal.
 #[derive(Default, Debug, Clone)]
@@ -14,12 +14,20 @@ impl Process for Smooth {
         "smooth"
     }
 
-    fn input_rates(&self) -> Vec<SignalRate> {
-        vec![SignalRate::Control]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("kr"),
+            rate: SignalRate::Control,
+            kind: SignalKind::Buffer,
+        }]
     }
 
-    fn output_rates(&self) -> Vec<SignalRate> {
-        vec![SignalRate::Audio]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("ar"),
+            rate: SignalRate::Audio,
+            kind: SignalKind::Buffer,
+        }]
     }
 
     fn num_inputs(&self) -> usize {
@@ -32,16 +40,16 @@ impl Process for Smooth {
 
     fn prepare(&mut self) {}
 
-    fn reset(&mut self, audio_rate: f64, control_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, _block_size: usize) {
         self.audio_rate = audio_rate;
         self.control_rate = control_rate;
     }
 
     #[inline]
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
-        let control = &inputs[0];
-        let output = &mut outputs[0];
-        resample(control, output);
+    fn process(&mut self, inputs: &[Signal], outputs: &mut [Signal]) {
+        let control = inputs[0].unwrap_buffer();
+        let output = outputs[0].unwrap_buffer_mut();
+        lerp(control, output);
     }
 }
 
@@ -57,12 +65,20 @@ impl Process for Quantize {
         "quantize"
     }
 
-    fn input_rates(&self) -> Vec<SignalRate> {
-        vec![SignalRate::Audio]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("ar"),
+            rate: SignalRate::Audio,
+            kind: SignalKind::Buffer,
+        }]
     }
 
-    fn output_rates(&self) -> Vec<SignalRate> {
-        vec![SignalRate::Control]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("kr"),
+            rate: SignalRate::Control,
+            kind: SignalKind::Buffer,
+        }]
     }
 
     fn num_inputs(&self) -> usize {
@@ -75,51 +91,59 @@ impl Process for Quantize {
 
     fn prepare(&mut self) {}
 
-    fn reset(&mut self, audio_rate: f64, control_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, _block_size: usize) {
         self.audio_rate = audio_rate;
         self.control_rate = control_rate;
     }
 
     #[inline]
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
-        let audio = &inputs[0];
-        let output = &mut outputs[0];
-        resample(audio, output);
+    fn process(&mut self, inputs: &[Signal], outputs: &mut [Signal]) {
+        let audio = inputs[0].unwrap_buffer();
+        let output = outputs[0].unwrap_buffer_mut();
+        lerp(audio, output);
     }
 }
 
-#[derive(Default, Debug, Clone)]
-pub struct DebugPrint<R: SignalRateMarker> {
-    _rate: std::marker::PhantomData<R>,
+#[derive(Debug, Clone)]
+pub struct DebugPrint {
+    rate: SignalRate,
 }
 
-impl DebugPrint<Audio> {
+impl DebugPrint {
     pub fn ar() -> Self {
         Self {
-            _rate: std::marker::PhantomData,
+            rate: SignalRate::Audio,
         }
     }
 }
 
-impl DebugPrint<Control> {
+impl DebugPrint {
     pub fn kr() -> Self {
         Self {
-            _rate: std::marker::PhantomData,
+            rate: SignalRate::Control,
         }
     }
 }
 
-impl<R: SignalRateMarker> Process for DebugPrint<R> {
+impl Process for DebugPrint {
     fn name(&self) -> &str {
         "debug_print"
     }
 
-    fn input_rates(&self) -> Vec<SignalRate> {
-        vec![R::RATE]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("input"),
+            rate: self.rate,
+            kind: SignalKind::Buffer,
+        }]
     }
 
-    fn output_rates(&self) -> Vec<SignalRate> {
-        vec![R::RATE]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("output"),
+            rate: self.rate,
+            kind: SignalKind::Buffer,
+        }]
     }
 
     fn num_inputs(&self) -> usize {
@@ -133,9 +157,9 @@ impl<R: SignalRateMarker> Process for DebugPrint<R> {
     fn prepare(&mut self) {}
 
     #[inline]
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
-        let input = &inputs[0];
+    fn process(&mut self, inputs: &[Signal], outputs: &mut [Signal]) {
+        let input = inputs[0].unwrap_buffer();
         println!("{:#?}", input);
-        outputs[0].copy_from_slice(input);
+        outputs[0].unwrap_buffer_mut().copy_from_slice(input);
     }
 }

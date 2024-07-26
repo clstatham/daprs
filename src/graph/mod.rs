@@ -6,7 +6,7 @@ use petgraph::{
     visit::{Bfs, DfsPostOrder, Visitable},
 };
 
-use crate::sample::{Buffer, Sample};
+use crate::sample::Signal;
 
 #[macro_use]
 pub mod builder;
@@ -183,14 +183,14 @@ impl Graph {
 
     /// Copies the given data into the input [`Buffer`] of the input [`GraphNode`] at the given index.
     #[inline]
-    pub fn copy_input(&mut self, input_index: usize, data: &[Sample]) {
+    pub fn copy_input(&mut self, input_index: usize, data: &Signal) {
         let input_index = self
             .input_nodes
             .get(input_index)
             .expect("Input index out of bounds");
         let input = &mut self.digraph[*input_index];
-        if let GraphNode::Passthrough(buffer) = input {
-            buffer.copy_from_slice(data);
+        if let GraphNode::Passthrough(input) = input {
+            input.copy_from(data);
         } else {
             panic!("Node at input index is not an input node");
         }
@@ -198,25 +198,36 @@ impl Graph {
 
     /// Returns a reference to the output [`Buffer`] of the output [`GraphNode`] at the given index.
     #[inline]
-    pub fn get_output(&self, output_index: usize) -> &[Sample] {
+    pub fn get_output(&self, output_index: usize) -> &Signal {
         let output_index = self
             .output_nodes
             .get(output_index)
             .expect("Output index out of bounds");
         let output = &self.digraph[*output_index];
-        if let GraphNode::Passthrough(buffer) = output {
-            buffer
+        if let GraphNode::Passthrough(output) = output {
+            output
         } else {
             panic!("Node at output index is not an output node");
         }
     }
 
+    #[inline]
+    pub fn inputs(&self) -> impl Iterator<Item = &Signal> {
+        self.input_nodes.iter().map(|&idx| {
+            if let GraphNode::Passthrough(input) = &self.digraph[idx] {
+                input
+            } else {
+                panic!("Node at input index is not an input node");
+            }
+        })
+    }
+
     /// Returns an iterator over the output [`Buffer`]s of the output [`GraphNode`]s in the graph.
     #[inline]
-    pub fn outputs(&self) -> impl Iterator<Item = &[Sample]> {
+    pub fn outputs(&self) -> impl Iterator<Item = &Signal> {
         self.output_nodes.iter().map(|&idx| {
-            if let GraphNode::Passthrough(buffer) = &self.digraph[idx] {
-                buffer.as_ref()
+            if let GraphNode::Passthrough(output) = &self.digraph[idx] {
+                output
             } else {
                 panic!("Node at output index is not an output node");
             }
@@ -264,7 +275,7 @@ impl Graph {
     /// Sets the block size of all [`GraphNode`]s in the graph. This will implicitly reallocate all internal buffers and resources.
     pub fn set_block_size(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         self.visit(|graph, node| {
-            graph.digraph[node].reset(audio_rate, control_rate, block_size);
+            graph.digraph[node].resize_buffers(audio_rate, control_rate, block_size);
         });
     }
 
@@ -277,7 +288,7 @@ impl Graph {
         self.allocate_visitor();
         self.visit(|graph, node| {
             // allocate the node's inputs and outputs
-            graph.digraph[node].reset(audio_rate, control_rate, block_size);
+            graph.digraph[node].resize_buffers(audio_rate, control_rate, block_size);
 
             let num_inputs = graph
                 .digraph
@@ -305,11 +316,11 @@ impl Graph {
 
     /// Returns a mutable reference to the input [`Buffer`] of the [`GraphNode`] at the given [`NodeIndex`] and input index.
     #[inline]
-    pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut Buffer {
+    pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut Signal {
         match &mut self.digraph[node] {
             GraphNode::Passthrough(buffer) => {
                 if input_index != 0 {
-                    panic!("Input node has only one input buffer");
+                    panic!("Input node has only one input signal");
                 }
                 buffer
             }
@@ -319,11 +330,11 @@ impl Graph {
 
     /// Returns a reference to the output [`Buffer`] of the [`GraphNode`] at the given [`NodeIndex`] and output index.
     #[inline]
-    pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &Buffer {
+    pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &Signal {
         match &self.digraph[node] {
             GraphNode::Passthrough(buffer) => {
                 if output_index != 0 {
-                    panic!("Output node has only one output buffer");
+                    panic!("Output node has only one output signal");
                 }
                 buffer
             }
@@ -366,16 +377,16 @@ impl Graph {
 
                 let (source, target) = graph.digraph.index_twice_mut(source_id, node_id);
 
-                let source_buffer = match source {
+                let source_signal = match source {
                     GraphNode::Processor(processor) => processor.output(source_output as usize),
                     GraphNode::Passthrough(buffer) => buffer,
                 };
 
-                let target_buffer = match target {
+                let target_signal = match target {
                     GraphNode::Processor(processor) => processor.input_mut(target_input as usize),
                     GraphNode::Passthrough(buffer) => buffer,
                 };
-                target_buffer.copy_from_slice(source_buffer);
+                target_signal.copy_from(source_signal);
             }
 
             // process the node

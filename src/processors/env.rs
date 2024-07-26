@@ -1,54 +1,74 @@
-use crate::{prelude::*, sample::SignalRateMarker};
+use crate::prelude::*;
 
-use super::resample;
+use super::lerp;
 
 #[derive(Debug, Clone)]
-pub struct DecayEnv<R: SignalRateMarker> {
+pub struct DecayEnv {
     audio_rate: f64,
     control_rate: f64,
     level: f64,
     decay_buf: Buffer,
     curve_buf: Buffer,
-    _rate: std::marker::PhantomData<R>,
+    rate: SignalRate,
 }
 
-impl DecayEnv<Audio> {
+impl DecayEnv {
     pub fn ar() -> Self {
         Self {
             audio_rate: 0.0,
             control_rate: 0.0,
             level: 0.0,
-            decay_buf: Buffer::zeros(0, SignalRate::Control),
-            curve_buf: Buffer::zeros(0, SignalRate::Control),
-            _rate: std::marker::PhantomData,
+            decay_buf: Buffer::zeros(0),
+            curve_buf: Buffer::zeros(0),
+            rate: SignalRate::Audio,
         }
     }
 }
 
-impl DecayEnv<Control> {
+impl DecayEnv {
     pub fn kr() -> Self {
         Self {
             audio_rate: 0.0,
             control_rate: 0.0,
             level: 0.0,
-            decay_buf: Buffer::zeros(0, SignalRate::Control),
-            curve_buf: Buffer::zeros(0, SignalRate::Control),
-            _rate: std::marker::PhantomData,
+            decay_buf: Buffer::zeros(0),
+            curve_buf: Buffer::zeros(0),
+            rate: SignalRate::Control,
         }
     }
 }
 
-impl<R: SignalRateMarker> Process for DecayEnv<R> {
+impl Process for DecayEnv {
     fn name(&self) -> &str {
         "decay_env"
     }
 
-    fn input_rates(&self) -> Vec<SignalRate> {
-        vec![R::RATE, SignalRate::Control, SignalRate::Control]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec {
+                name: Some("trigger"),
+                rate: SignalRate::Audio,
+                kind: SignalKind::Buffer,
+            },
+            SignalSpec {
+                name: Some("decay"),
+                rate: SignalRate::Control,
+                kind: SignalKind::Buffer,
+            },
+            SignalSpec {
+                name: Some("curve"),
+                rate: SignalRate::Control,
+                kind: SignalKind::Buffer,
+            },
+        ]
     }
 
-    fn output_rates(&self) -> Vec<SignalRate> {
-        vec![R::RATE]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("output"),
+            rate: self.rate,
+            kind: SignalKind::Buffer,
+        }]
     }
 
     fn num_inputs(&self) -> usize {
@@ -61,11 +81,11 @@ impl<R: SignalRateMarker> Process for DecayEnv<R> {
 
     fn prepare(&mut self) {}
 
-    fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
+    fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         self.audio_rate = audio_rate;
         self.control_rate = control_rate;
         let control_block_size = block_size / self.control_rate as usize;
-        match R::RATE {
+        match self.rate {
             SignalRate::Audio => {
                 self.decay_buf.resize(block_size);
                 self.curve_buf.resize(block_size);
@@ -78,17 +98,17 @@ impl<R: SignalRateMarker> Process for DecayEnv<R> {
     }
 
     #[inline]
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
-        let trigger = &inputs[0];
-        let decay = &inputs[1];
-        let curve = &inputs[2];
+    fn process(&mut self, inputs: &[Signal], outputs: &mut [Signal]) {
+        let trigger = inputs[0].unwrap_buffer();
+        let decay = inputs[1].unwrap_buffer();
+        let curve = inputs[2].unwrap_buffer();
 
-        resample(decay, &mut self.decay_buf);
-        resample(curve, &mut self.curve_buf);
+        lerp(decay, &mut self.decay_buf);
+        lerp(curve, &mut self.curve_buf);
 
-        let output = &mut outputs[0];
+        let output = outputs[0].unwrap_buffer_mut();
 
-        let rate = match R::RATE {
+        let rate = match self.rate {
             SignalRate::Audio => self.audio_rate,
             SignalRate::Control => self.control_rate,
         };

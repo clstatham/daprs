@@ -1,0 +1,10 @@
+[package]
+name = "papr-egui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+papr = { path = "../" }
+egui = { version = "0.28" }
+eframe = { version = "0.28" }
+rustc-hash = "2.0.0"

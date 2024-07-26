@@ -156,7 +156,6 @@ impl Display for Sample {
 #[derive(PartialEq, Clone)]
 pub struct Buffer {
     buf: Vec<Sample>,
-    rate: SignalRate,
 }
 
 impl Debug for Buffer {
@@ -168,17 +167,10 @@ impl Debug for Buffer {
 impl Buffer {
     /// Creates a new buffer filled with zeros.
     #[inline]
-    pub fn zeros(length: usize, rate: SignalRate) -> Self {
+    pub fn zeros(length: usize) -> Self {
         Buffer {
             buf: vec![Sample::new(0.0); length],
-            rate,
         }
-    }
-
-    /// Returns the buffer's signal rate.
-    #[inline]
-    pub fn rate(&self) -> SignalRate {
-        self.rate
     }
 
     /// Resizes the buffer to the given length, filling any new elements with zeros.
@@ -212,10 +204,9 @@ impl Buffer {
     }
 
     #[inline]
-    pub fn from_slice(value: &[Sample], rate: SignalRate) -> Self {
+    pub fn from_slice(value: &[Sample]) -> Self {
         Buffer {
             buf: value.to_vec(),
-            rate,
         }
     }
 }
@@ -285,18 +276,158 @@ impl SignalRate {
     }
 }
 
-pub trait SignalRateMarker: Copy + Send + Sync + 'static {
-    const RATE: SignalRate;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SignalKind {
+    Sample,
+    Buffer,
+    Bundle,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Audio;
-impl SignalRateMarker for Audio {
-    const RATE: SignalRate = SignalRate::Audio;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SignalSpec {
+    pub name: Option<&'static str>,
+    pub rate: SignalRate,
+    pub kind: SignalKind,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Control;
-impl SignalRateMarker for Control {
-    const RATE: SignalRate = SignalRate::Control;
+#[derive(Debug, Clone, PartialEq)]
+pub enum SignalData {
+    Sample(Sample),
+    Buffer(Buffer),
+    Bundle(Vec<SignalData>),
+}
+
+impl SignalData {
+    pub fn default_for_kind(kind: SignalKind) -> Self {
+        match kind {
+            SignalKind::Sample => Self::Sample(Sample::new(0.0)),
+            SignalKind::Buffer => Self::Buffer(Buffer::zeros(0)),
+            SignalKind::Bundle => Self::Bundle(Vec::new()),
+        }
+    }
+
+    #[inline]
+    pub fn kind(&self) -> SignalKind {
+        match self {
+            Self::Sample(_) => SignalKind::Sample,
+            Self::Buffer(_) => SignalKind::Buffer,
+            Self::Bundle(_) => SignalKind::Bundle,
+        }
+    }
+
+    pub fn resize_buffers(&mut self, length: usize) {
+        match self {
+            Self::Buffer(buffer) => buffer.resize(length),
+            Self::Bundle(bundles) => {
+                for bundle in bundles {
+                    bundle.resize_buffers(length);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    #[inline]
+    pub fn copy_from(&mut self, other: &Self) {
+        match (self, other) {
+            (Self::Sample(a), Self::Sample(b)) => *a = *b,
+            (Self::Buffer(a), Self::Sample(b)) => a.map_mut(|x| *x = *b),
+            (Self::Buffer(a), Self::Buffer(b)) => a.copy_map(b, |x| x),
+            (Self::Bundle(a), Self::Bundle(b)) => {
+                for (a, b) in a.iter_mut().zip(b.iter()) {
+                    a.copy_from(b);
+                }
+            }
+            (a, b) => {
+                panic!(
+                    "SignalData::copy_from: mismatched kinds {:?} and {:?}",
+                    a.kind(),
+                    b.kind()
+                );
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Signal {
+    pub spec: SignalSpec,
+    pub data: SignalData,
+}
+
+impl Signal {
+    pub fn new(name: Option<&'static str>, rate: SignalRate, data: SignalData) -> Self {
+        Self {
+            spec: SignalSpec {
+                name,
+                rate,
+                kind: data.kind(),
+            },
+            data,
+        }
+    }
+
+    pub fn default_for_spec(spec: SignalSpec) -> Self {
+        Self {
+            spec,
+            data: SignalData::default_for_kind(spec.kind),
+        }
+    }
+
+    pub fn with_spec_and_data(spec: SignalSpec, data: SignalData) -> Self {
+        Self { spec, data }
+    }
+
+    pub fn name(&self) -> Option<&'static str> {
+        self.spec.name
+    }
+
+    pub fn rate(&self) -> SignalRate {
+        self.spec.rate
+    }
+
+    pub fn kind(&self) -> SignalKind {
+        self.spec.kind
+    }
+
+    pub fn is_audio(&self) -> bool {
+        self.rate().is_audio()
+    }
+
+    pub fn is_control(&self) -> bool {
+        self.rate().is_control()
+    }
+
+    pub fn can_take_as_input(&self, other: Signal) -> bool {
+        self.rate().can_take_as_input(other.rate())
+    }
+
+    pub fn resize_buffers(&mut self, length: usize) {
+        self.data.resize_buffers(length);
+    }
+
+    #[inline]
+    pub fn copy_from(&mut self, other: &Self) {
+        self.data.copy_from(&other.data);
+    }
+
+    pub fn unwrap_buffer(&self) -> &Buffer {
+        match &self.data {
+            SignalData::Buffer(buffer) => buffer,
+            data => panic!(
+                "Signal::unwrap_buffer: expected Buffer, got {:?}",
+                data.kind()
+            ),
+        }
+    }
+
+    pub fn unwrap_buffer_mut(&mut self) -> &mut Buffer {
+        match &mut self.data {
+            SignalData::Buffer(buffer) => buffer,
+            data => panic!(
+                "Signal::unwrap_buffer_mut: expected Buffer, got {:?}",
+                data.kind()
+            ),
+        }
+    }
 }

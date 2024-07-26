@@ -3,43 +3,51 @@ use std::f64::consts::PI;
 use crate::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct BlSawOsc<R: SignalRateMarker> {
+pub struct BlSawOsc {
     sample_rate: f64,
     phase: f64,
-    _rate: std::marker::PhantomData<R>,
+    rate: SignalRate,
 }
 
-impl BlSawOsc<Audio> {
+impl BlSawOsc {
     pub fn ar() -> Self {
         Self {
             sample_rate: 0.0,
             phase: 0.0,
-            _rate: std::marker::PhantomData,
+            rate: SignalRate::Audio,
         }
     }
 }
 
-impl BlSawOsc<Control> {
+impl BlSawOsc {
     pub fn kr() -> Self {
         Self {
             sample_rate: 0.0,
             phase: 0.0,
-            _rate: std::marker::PhantomData,
+            rate: SignalRate::Control,
         }
     }
 }
 
-impl<R: SignalRateMarker> Process for BlSawOsc<R> {
+impl Process for BlSawOsc {
     fn name(&self) -> &str {
         "bl_saw_osc"
     }
 
-    fn input_rates(&self) -> Vec<SignalRate> {
-        vec![R::RATE]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("freq"),
+            rate: SignalRate::Control,
+            kind: SignalKind::Buffer,
+        }]
     }
 
-    fn output_rates(&self) -> Vec<SignalRate> {
-        vec![R::RATE]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("output"),
+            rate: self.rate,
+            kind: SignalKind::Buffer,
+        }]
     }
 
     fn num_inputs(&self) -> usize {
@@ -52,17 +60,17 @@ impl<R: SignalRateMarker> Process for BlSawOsc<R> {
 
     fn prepare(&mut self) {}
 
-    fn reset(&mut self, audio_rate: f64, control_rate: f64, _block_size: usize) {
-        match R::RATE {
+    fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, _block_size: usize) {
+        match self.rate {
             SignalRate::Audio => self.sample_rate = audio_rate,
             SignalRate::Control => self.sample_rate = control_rate,
         }
     }
 
     #[inline]
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
-        let freq = &inputs[0];
-        let output = &mut outputs[0];
+    fn process(&mut self, inputs: &[Signal], outputs: &mut [Signal]) {
+        let freq = inputs[0].unwrap_buffer();
+        let output = outputs[0].unwrap_buffer_mut();
 
         for (o, f) in itertools::izip!(output, freq) {
             if **f <= 0.0 {

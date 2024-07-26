@@ -2,7 +2,10 @@ use std::sync::mpsc;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use crate::{graph::Graph, sample::Sample};
+use crate::{
+    graph::Graph,
+    sample::{Sample, Signal, SignalData},
+};
 
 /// The audio backend to use for the runtime.
 #[derive(Default, Debug)]
@@ -70,14 +73,14 @@ impl Runtime {
     }
 
     /// Returns an iterator over the output channels of the runtime.
-    pub fn outputs(&mut self) -> impl Iterator<Item = &[Sample]> + '_ {
+    pub fn outputs(&mut self) -> impl Iterator<Item = &Signal> + '_ {
         let num_outputs = self.graph.num_outputs();
         (0..num_outputs).map(|i| self.graph.get_output(i))
     }
 
     /// Renders the next block of audio and returns the rendered output channels.
     #[inline]
-    pub fn next_buffer(&mut self) -> impl Iterator<Item = &[Sample]> + '_ {
+    pub fn next_buffer(&mut self) -> impl Iterator<Item = &Signal> + '_ {
         self.graph.process();
 
         self.graph.outputs()
@@ -112,8 +115,12 @@ impl Runtime {
             self.graph.process();
 
             for (i, output) in outputs.iter_mut().enumerate() {
-                let buffer = self.graph.get_output(i);
-                output[sample_count..sample_count + actual_block_size].copy_from_slice(buffer);
+                let signal = self.graph.get_output(i);
+                if let SignalData::Buffer(buffer) = &signal.data {
+                    output[sample_count..sample_count + actual_block_size].copy_from_slice(buffer);
+                } else {
+                    panic!("Expected graph output to be a buffer signal");
+                }
             }
 
             sample_count += actual_block_size;
@@ -145,7 +152,20 @@ impl Runtime {
             }
         }
 
-        wavers::write(file_path, &samples, audio_rate as i32, num_channels as u16).unwrap();
+        let spec = hound::WavSpec {
+            channels: num_channels as u16,
+            sample_rate: audio_rate as u32,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+
+        let mut writer = hound::WavWriter::create(file_path, spec).unwrap();
+
+        for sample in samples {
+            writer.write_sample(sample as f32).unwrap();
+        }
+
+        writer.finalize().unwrap();
     }
 
     pub fn run_for(
@@ -335,8 +355,12 @@ impl Runtime {
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
                             let buffer = graph.get_output(channel_idx);
-                            let value = buffer[frame_idx];
-                            *sample = T::from_sample(*value);
+                            if let SignalData::Buffer(buffer) = &buffer.data {
+                                let value = buffer[frame_idx];
+                                *sample = T::from_sample(*value);
+                            } else {
+                                panic!("Expected graph output to be a buffer signal");
+                            }
                         }
                     }
                 },

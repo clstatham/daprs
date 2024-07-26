@@ -6,19 +6,23 @@ edition = "2021"
 [lib]
 name = "papr"
 
+[features]
+default = []
+jack = ["cpal/jack"]
+
 [workspace]
-members = []
+members = ["papr-egui"]
 
 [dependencies]
-cpal = { version = "0.15.3", features = ["jack"] }
+cpal = { version = "0.15.3", features = [] }
 itertools = "0.13.0"
 log = "0.4.22"
 petgraph = "0.6.5"
-wavers = "1.4"
+hound = "3.5"
+
+[dev-dependencies]
+env_logger = "0.11"
 
 [[example]]
 name = "demo"
 path = "examples/demo.rs"
-
-[dev-dependencies]
-env_logger = "0.11"
