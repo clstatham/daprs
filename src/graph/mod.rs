@@ -3,10 +3,10 @@ use edge::Edge;
 use node::{GraphNode, Process};
 use petgraph::{
     prelude::{Direction, EdgeRef, StableDiGraph},
-    visit::{Bfs, DfsPostOrder, Visitable},
+    visit::DfsPostOrder,
 };
 
-use crate::signal::Signal;
+use crate::signal::{Signal, SignalKind, SignalRate};
 
 #[macro_use]
 pub mod builder;
@@ -19,7 +19,70 @@ pub type EdgeIndex = petgraph::graph::EdgeIndex<GraphIx>;
 
 pub type DiGraph = StableDiGraph<GraphNode, Edge, GraphIx>;
 
-pub type Visitor = Bfs<NodeIndex, <DiGraph as Visitable>::Map>;
+#[derive(Debug, thiserror::Error)]
+#[error("Graph run error at node {node_index:?} ({node_processor:?}): {kind:?}")]
+pub struct GraphRunError {
+    pub node_index: NodeIndex,
+    pub node_processor: String,
+    pub kind: GraphRunErrorKind,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum GraphRunErrorKind {
+    #[error("Invalid input rate for input {input_index}: expected {expected:?}, got {got:?}")]
+    InvalidInputRate {
+        input_index: usize,
+        expected: SignalRate,
+        got: SignalRate,
+    },
+    #[error("Invalid output rate for output {output_index}: expected {expected:?}, got {got:?}")]
+    InvalidOutputRate {
+        output_index: usize,
+        expected: SignalRate,
+        got: SignalRate,
+    },
+    #[error("Invalid input type for input {input_index}: expected {expected:?}, got {got:?}")]
+    InvalidInputKind {
+        input_index: usize,
+        expected: SignalKind,
+        got: SignalKind,
+    },
+    #[error("Invalid output type for output {output_index}: expected {expected:?}, got {got:?}")]
+    InvalidOutputKind {
+        output_index: usize,
+        expected: SignalKind,
+        got: SignalKind,
+    },
+    #[error("{0}")]
+    Other(&'static str),
+}
+
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum GraphConstructionError {
+    #[error("Cannot connect node to itself directly")]
+    FeedbackLoop,
+    #[error("Cannot connect output rate {source_rate:?} to input rate {target_rate:?}; use `Node::to_ar()` or `Node::to_kr()` to convert rates")]
+    MismatchedRates {
+        source_rate: SignalRate,
+        target_rate: SignalRate,
+    },
+    #[error("Cannot connect output type {source_kind:?} to input type {target_kind:?}")]
+    MismatchedKinds {
+        source_kind: SignalKind,
+        target_kind: SignalKind,
+    },
+    #[error("Graph has already been constructed and cannot be modified; use `Graph::into_builder()` to get a new builder")]
+    GraphAlreadyFinished,
+    #[error("Cannot connect nodes from different graphs")]
+    MismatchedGraphs,
+    #[error("Operation `{op}` invalid: Node type `{kind}` has multiple outputs")]
+    NodeHasMultipleOutputs { op: String, kind: String },
+}
+
+pub type GraphRunResult<T> = Result<T, GraphRunError>;
+pub type GraphConstructionResult<T> = Result<T, GraphConstructionError>;
 
 /// A directed graph of [`GraphNode`]s connected by [`Edge`]s.
 ///
@@ -43,6 +106,7 @@ pub struct Graph {
     // cached internal state to avoid allocations in `process()`
     edge_cache: Vec<(NodeIndex, Edge)>,
 
+    // cached visitor state for graph traversal
     visit_path: Vec<NodeIndex>,
 }
 
@@ -96,7 +160,7 @@ impl Graph {
         idx
     }
 
-    /// Adds a new [`GraphNode`] with the given [`node::Processor`] to the graph.
+    /// Adds a new [`GraphNode`] with the given [`Processor`](node::Processor) to the graph.
     pub fn add_processor_object(&mut self, processor: node::Processor) -> NodeIndex {
         self.needs_reset = true;
         self.needs_prepare = true;
@@ -112,6 +176,13 @@ impl Graph {
         self.digraph.add_node(GraphNode::new_processor(processor))
     }
 
+    /// Replaces the [`GraphNode`] at the given [`NodeIndex`] in-place with a new [`Processor`](node::Processor).
+    pub fn replace_processor(&mut self, node: NodeIndex, processor: impl Process) -> GraphNode {
+        self.needs_reset = true;
+        self.needs_prepare = true;
+        std::mem::replace(&mut self.digraph[node], GraphNode::new_processor(processor))
+    }
+
     /// Connects two [`GraphNode`]s with a new [`Edge`].
     /// The signal will flow from the `source` [`GraphNode`]'s `source_output`-th output to the `target` [`GraphNode`]'s `target_input`-th input.
     ///
@@ -122,8 +193,10 @@ impl Graph {
         source_output: u32,
         target: NodeIndex,
         target_input: u32,
-    ) -> EdgeIndex {
-        assert_ne!(source, target, "Cannot connect node to itself directly");
+    ) -> Result<EdgeIndex, GraphConstructionError> {
+        if source == target {
+            return Err(GraphConstructionError::FeedbackLoop);
+        }
 
         // check if the edge already exists
         for edge in self.digraph.edges_directed(target, Direction::Incoming) {
@@ -133,7 +206,7 @@ impl Graph {
                 && weight.target_input == target_input
             {
                 // edge already exists
-                return edge.id();
+                return Ok(edge.id());
             }
         }
 
@@ -141,8 +214,10 @@ impl Graph {
         self.needs_prepare = true;
         self.needs_visitor_alloc = true;
 
-        self.digraph
-            .add_edge(source, target, Edge::new(source_output, target_input))
+        let edge = self
+            .digraph
+            .add_edge(source, target, Edge::new(source_output, target_input));
+        Ok(edge)
     }
 
     /// Returns the number of input [`GraphNode`]s in the graph.
@@ -273,7 +348,7 @@ impl Graph {
     }
 
     /// Sets the block size of all [`GraphNode`]s in the graph. This will implicitly reallocate all internal buffers and resources.
-    pub fn set_block_size(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
+    pub fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
         self.visit(|graph, node| {
             graph.digraph[node].resize_buffers(audio_rate, control_rate, block_size);
         });

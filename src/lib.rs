@@ -28,7 +28,7 @@ pub fn available_backends() -> Vec<Backend> {
     let mut backends = vec![Backend::Default];
     for host in cpal::available_hosts() {
         match host {
-            #[cfg(target_os = "linux")]
+            #[cfg(all(target_os = "linux", feature = "jack"))]
             cpal::HostId::Jack => {
                 backends.push(Backend::Jack);
             }
@@ -63,7 +63,7 @@ pub fn list_devices(backend: Backend) {
     println!("Listing devices for backend: {:?}", backend);
     let host = match backend {
         Backend::Default => cpal::default_host(),
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", feature = "jack"))]
         Backend::Jack => cpal::host_from_id(cpal::HostId::Jack).unwrap(),
         #[cfg(target_os = "linux")]
         Backend::Alsa => cpal::host_from_id(cpal::HostId::Alsa).unwrap(),
@@ -91,9 +91,11 @@ mod tests {
         let out = graph.output();
         out.connect_inputs([(sine_wave, 0)]);
 
-        let mut runtime = Runtime::new(graph.build());
+        let mut runtime = Runtime::new(graph.build().unwrap());
 
-        let bufs = runtime.run_offline(std::time::Duration::from_secs(2), 32.0, 32.0, 4);
+        let bufs = runtime
+            .run_offline(std::time::Duration::from_secs(2), 32.0, 32.0, 4)
+            .unwrap();
         assert_eq!(bufs.len(), 1);
         let buf = &bufs[0];
         assert_eq!(buf.len(), 64);

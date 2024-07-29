@@ -163,3 +163,57 @@ impl Process for DebugPrint {
         outputs[0].unwrap_buffer_mut().copy_from_slice(input);
     }
 }
+
+#[derive(Debug, Default, Clone)]
+pub struct Bang {
+    last: bool,
+}
+
+impl Process for Bang {
+    fn name(&self) -> &str {
+        "bang"
+    }
+
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("trigger"),
+            rate: SignalRate::Control,
+            kind: SignalKind::Buffer,
+        }]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec {
+            name: Some("bang"),
+            rate: SignalRate::Control,
+            kind: SignalKind::Buffer,
+        }]
+    }
+
+    fn num_inputs(&self) -> usize {
+        1
+    }
+
+    fn num_outputs(&self) -> usize {
+        1
+    }
+
+    fn prepare(&mut self) {
+        self.last = false;
+    }
+
+    fn process(&mut self, inputs: &[Signal], outputs: &mut [Signal]) {
+        let trigger = inputs[0].unwrap_buffer();
+        let bang = outputs[0].unwrap_buffer_mut();
+
+        for (bang, &trigger) in bang.iter_mut().zip(trigger.iter()) {
+            *bang = if trigger.is_truthy() && !self.last {
+                self.last = true;
+                Sample::new(1.0)
+            } else {
+                self.last = false;
+                Sample::new(0.0)
+            };
+        }
+    }
+}

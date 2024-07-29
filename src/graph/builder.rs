@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     node::{Process, Processor},
-    Graph, NodeIndex,
+    Graph, GraphConstructionError, GraphConstructionResult, NodeIndex,
 };
 
 #[macro_export]
@@ -115,31 +115,36 @@ impl GraphBuilder {
     }
 
     /// Connects an output of one node to an input of another node.
-    pub fn connect(&self, source: Node, source_output: u32, target: Node, target_input: u32) {
-        assert!(
-            Arc::ptr_eq(&source.builder.graph, &self.graph),
-            "Cannot connect nodes from different graphs"
-        );
-        assert!(
-            Arc::ptr_eq(&target.builder.graph, &self.graph),
-            "Cannot connect nodes from different graphs"
-        );
+    pub fn connect(
+        &self,
+        source: Node,
+        source_output: u32,
+        target: Node,
+        target_input: u32,
+    ) -> Result<(), GraphConstructionError> {
+        if !Arc::ptr_eq(&source.builder.graph, &target.builder.graph) {
+            return Err(GraphConstructionError::MismatchedGraphs);
+        }
+        if !Arc::ptr_eq(&source.builder.graph, &self.graph) {
+            return Err(GraphConstructionError::MismatchedGraphs);
+        }
 
         let mut graph = self.graph.lock().unwrap();
         let graph = graph
             .as_mut()
-            .expect("GraphBuilder has already been finished");
+            .ok_or(GraphConstructionError::GraphAlreadyFinished)?;
 
-        graph.connect(source.index, source_output, target.index, target_input);
+        graph.connect(source.index, source_output, target.index, target_input)?;
+        Ok(())
     }
 
     /// Finishes building the graph and returns the constructed [`Graph`].
-    pub fn build(&self) -> Graph {
+    pub fn build(&self) -> Result<Graph, GraphConstructionError> {
         self.graph
             .lock()
             .unwrap()
             .take()
-            .expect("GraphBuilder has already been finished")
+            .ok_or(GraphConstructionError::GraphAlreadyFinished)
     }
 }
 
@@ -169,28 +174,24 @@ pub struct Node<'g> {
 }
 
 impl<'g> Node<'g> {
-    pub fn num_inputs(&self) -> usize {
+    pub fn num_inputs(&self) -> GraphConstructionResult<usize> {
         let graph = self.builder.graph.lock().unwrap();
         let graph = graph
             .as_ref()
-            .expect("GraphBuilder has already been finished");
+            .ok_or(GraphConstructionError::GraphAlreadyFinished)?;
 
         let node = &graph.digraph[self.index];
-        node.inputs().len()
+        Ok(node.inputs().len())
     }
 
-    pub fn num_outputs(&self) -> usize {
+    pub fn num_outputs(&self) -> GraphConstructionResult<usize> {
         let graph = self.builder.graph.lock().unwrap();
         let graph = graph
             .as_ref()
-            .expect("GraphBuilder has already been finished");
+            .ok_or(GraphConstructionError::GraphAlreadyFinished)?;
 
         let node = &graph.digraph[self.index];
-        node.outputs().len()
-    }
-
-    pub fn build(&self) -> Graph {
-        self.builder.build()
+        Ok(node.outputs().len())
     }
 
     pub fn graph(&self) -> &'g GraphBuilder {
@@ -215,12 +216,31 @@ impl<'g> Node<'g> {
         graph.digraph[self.index].output_spec()
     }
 
+    pub fn procesor_name(&self) -> String {
+        let graph = self.builder.graph.lock().unwrap();
+        let graph = graph
+            .as_ref()
+            .expect("GraphBuilder has already been finished");
+
+        graph.digraph[self.index].name().to_string()
+    }
+
+    pub fn check_single_output(&self, op: &str) -> GraphConstructionResult<()> {
+        if self.num_outputs()? != 1 {
+            return Err(GraphConstructionError::NodeHasMultipleOutputs {
+                op: op.to_string(),
+                kind: self.procesor_name().to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    pub fn assert_single_output(&self, op: &str) {
+        self.check_single_output(op).unwrap();
+    }
+
     pub fn to_rate(&self, rate: SignalRate) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot convert a node with multiple outputs to a different rate"
-        );
+        self.check_single_output("to_rate").unwrap();
         match (self.output_spec()[0].rate, rate) {
             (SignalRate::Audio, SignalRate::Control) => self.to_kr(),
             (SignalRate::Control, SignalRate::Audio) => self.to_ar(),
@@ -235,16 +255,15 @@ impl<'g> Node<'g> {
     /// - If the node has multiple outputs
     /// - If the graph has already been built
     pub fn to_ar(&self) -> Node<'g> {
+        self.assert_single_output("to_ar");
         {
             let graph = self.builder.graph.lock().unwrap();
             let graph = graph
                 .as_ref()
-                .expect("GraphBuilder has already been finished");
+                .ok_or(GraphConstructionError::GraphAlreadyFinished)
+                .unwrap();
 
             let spec = graph.digraph[self.index].output_spec();
-            if spec.len() != 1 {
-                panic!("Cannot convert a node with multiple outputs to audio rate");
-            };
             if spec[0].rate == SignalRate::Audio {
                 return *self;
             }
@@ -262,16 +281,15 @@ impl<'g> Node<'g> {
     /// - If the node has multiple outputs
     /// - If the graph has already been built
     pub fn to_kr(&self) -> Node<'g> {
+        self.assert_single_output("to_kr");
         {
             let graph = self.builder.graph.lock().unwrap();
             let graph = graph
                 .as_ref()
-                .expect("GraphBuilder has already been finished");
+                .ok_or(GraphConstructionError::GraphAlreadyFinished)
+                .unwrap();
 
             let spec = graph.digraph[self.index].output_spec();
-            if spec.len() != 1 {
-                panic!("Cannot convert a node with multiple outputs to control rate");
-            };
             if spec[0].rate == SignalRate::Control {
                 return *self;
             }
@@ -286,7 +304,8 @@ impl<'g> Node<'g> {
     pub fn connect_input(&self, input_index: u32, source: impl IntoNode<'g>, source_output: u32) {
         let source = source.into_node(self.graph(), self.input_spec()[input_index as usize].rate);
         self.builder
-            .connect(source, source_output, *self, input_index);
+            .connect(source, source_output, *self, input_index)
+            .unwrap();
     }
 
     /// Connects multiple inputs of this node to outputs of other nodes.
@@ -309,257 +328,57 @@ impl<'g> Node<'g> {
             );
 
             self.builder
-                .connect(source, source_output, *self, target_input as u32);
+                .connect(source, source_output, *self, target_input as u32)
+                .unwrap();
         }
     }
-
-    pub fn sin(&self) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot take sin of a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Sin::ar()),
-            SignalRate::Control => self.builder.processor(math::Sin::kr()),
-        };
-        processor.connect_inputs([(*self, 0)]);
-        processor
-    }
-
-    pub fn cos(&self) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot take cos of a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Cos::ar()),
-            SignalRate::Control => self.builder.processor(math::Cos::kr()),
-        };
-        processor.connect_inputs([(*self, 0)]);
-        processor
-    }
-
-    pub fn abs(&self) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot take abs of a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Abs::ar()),
-            SignalRate::Control => self.builder.processor(math::Abs::kr()),
-        };
-        processor.connect_inputs([(*self, 0)]);
-        processor
-    }
-
-    pub fn sqrt(&self) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot take sqrt of a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Sqrt::ar()),
-            SignalRate::Control => self.builder.processor(math::Sqrt::kr()),
-        };
-        processor.connect_inputs([(*self, 0)]);
-        processor
-    }
-
-    pub fn exp(&self) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot take exp of a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Exp::ar()),
-            SignalRate::Control => self.builder.processor(math::Exp::kr()),
-        };
-        processor.connect_inputs([(*self, 0)]);
-        processor
-    }
-
-    pub fn ln(&self) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot take ln of a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Ln::ar()),
-            SignalRate::Control => self.builder.processor(math::Ln::kr()),
-        };
-        processor.connect_inputs([(*self, 0)]);
-        processor
-    }
-
-    pub fn clip(&self, min: impl IntoNode<'g>, max: impl IntoNode<'g>) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot clip a node with multiple outputs"
-        );
-        let min = min.into_node(self.graph(), self.output_spec()[0].rate);
-        let max = max.into_node(self.graph(), self.output_spec()[0].rate);
-        assert_eq!(
-            min.num_outputs(),
-            1,
-            "Cannot clip a node with multiple outputs"
-        );
-        assert_eq!(
-            max.num_outputs(),
-            1,
-            "Cannot clip a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Clip::ar()),
-            SignalRate::Control => self.builder.processor(math::Clip::kr()),
-        };
-        processor.connect_inputs([(*self, 0), (min, 0), (max, 0)]);
-        processor
-    }
-
-    pub fn if_else(&self, if_true: impl IntoNode<'g>, if_false: impl IntoNode<'g>) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot use if_else with a node with multiple outputs"
-        );
-        let if_true = if_true.into_node(self.graph(), self.output_spec()[0].rate);
-        let if_false = if_false.into_node(self.graph(), self.output_spec()[0].rate);
-        assert_eq!(
-            if_true.num_outputs(),
-            1,
-            "Cannot use if_else with a node with multiple outputs"
-        );
-        assert_eq!(
-            if_false.num_outputs(),
-            1,
-            "Cannot use if_else with a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(control::IfElse::ar()),
-            SignalRate::Control => self.builder.processor(control::IfElse::kr()),
-        };
-        processor.connect_inputs([(*self, 0), (if_true, 0), (if_false, 0)]);
-        processor
-    }
-
-    pub fn debug_print(&self) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot debug_print a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(io::DebugPrint::ar()),
-            SignalRate::Control => self.builder.processor(io::DebugPrint::kr()),
-        };
-        processor.connect_inputs([(*self, 0)]);
-        processor
-    }
-
-    pub fn gt(&self, rhs: impl IntoNode<'g>) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot compare a node with multiple outputs"
-        );
-
-        let rhs = rhs.into_node(self.graph(), self.output_spec()[0].rate);
-        assert_eq!(
-            rhs.num_outputs(),
-            1,
-            "Cannot compare a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Gt::ar()),
-            SignalRate::Control => self.builder.processor(math::Gt::kr()),
-        };
-        processor.connect_inputs([(*self, 0), (rhs, 0)]);
-        processor
-    }
-
-    pub fn lt(&self, rhs: impl IntoNode<'g>) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot compare a node with multiple outputs"
-        );
-
-        let rhs = rhs.into_node(self.graph(), self.output_spec()[0].rate);
-        assert_eq!(
-            rhs.num_outputs(),
-            1,
-            "Cannot compare a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Lt::ar()),
-            SignalRate::Control => self.builder.processor(math::Lt::kr()),
-        };
-        processor.connect_inputs([(*self, 0), (rhs, 0)]);
-        processor
-    }
-
-    pub fn eq(&self, rhs: impl IntoNode<'g>) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot compare a node with multiple outputs"
-        );
-
-        let rhs = rhs.into_node(self.graph(), self.output_spec()[0].rate);
-        assert_eq!(
-            rhs.num_outputs(),
-            1,
-            "Cannot compare a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Eq::ar()),
-            SignalRate::Control => self.builder.processor(math::Eq::kr()),
-        };
-        processor.connect_inputs([(*self, 0), (rhs, 0)]);
-        processor
-    }
-
-    pub fn pow(&self, rhs: impl IntoNode<'g>) -> Node<'g> {
-        assert_eq!(
-            self.num_outputs(),
-            1,
-            "Cannot powf a node with multiple outputs"
-        );
-
-        let rhs = rhs.into_node(self.graph(), self.output_spec()[0].rate);
-        assert_eq!(
-            rhs.num_outputs(),
-            1,
-            "Cannot powf a node with multiple outputs"
-        );
-
-        let processor = match self.output_spec()[0].rate {
-            SignalRate::Audio => self.builder.processor(math::Pow::ar()),
-            SignalRate::Control => self.builder.processor(math::Pow::kr()),
-        };
-        processor.connect_inputs([(*self, 0), (rhs, 0)]);
-        processor
-    }
 }
+
+macro_rules! impl_node_ops_unary {
+    ($($op:ident $func:ident)*) => {
+        $(impl<'g> Node<'g> {
+            pub fn $func(&self) -> Node<'g> {
+                self.assert_single_output(stringify!($func));
+                let processor = match self.output_spec()[0].rate {
+                    SignalRate::Audio => self.builder.processor(math::$op::ar()),
+                    SignalRate::Control => self.builder.processor(math::$op::kr()),
+                };
+                processor.connect_inputs([(*self, 0)]);
+                processor
+            }
+        })*
+    };
+}
+
+impl_node_ops_unary!(
+    Abs abs
+    Neg neg
+    Recip recip
+    Sqrt sqrt
+    Sin sin
+    Cos cos
+);
+
+macro_rules! impl_node_ops_binary {
+    ($($op:ident $func:ident)*) => {
+        $(impl<'g> Node<'g> {
+            pub fn $func(&self, rhs: Node<'g>) -> Node<'g> {
+                self.assert_single_output(stringify!($func));
+                rhs.assert_single_output(stringify!($func));
+
+                let processor = match self.output_spec()[0].rate {
+                    SignalRate::Audio => self.builder.processor(math::$op::ar()),
+                    SignalRate::Control => self.builder.processor(math::$op::kr()),
+                };
+
+                processor.connect_inputs([(*self, 0), (rhs, 0)]);
+                processor
+            }
+        })*
+    };
+}
+
+impl_node_ops_binary!(Pow pow Gt gt Lt lt Eq eq);
 
 impl Debug for Node<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -575,12 +394,12 @@ macro_rules! node_ops_binary {
 
             fn $func(self, rhs: Node<'g>) -> Node<'g> {
                 assert_eq!(
-                    self.num_outputs(),
+                    self.num_outputs().unwrap(),
                     1,
                     concat!("Cannot ", stringify!($op), " a node with multiple outputs")
                 );
                 assert_eq!(
-                    rhs.num_outputs(),
+                    rhs.num_outputs().unwrap(),
                     1,
                     concat!("Cannot ", stringify!($op), " a node with multiple outputs")
                 );
@@ -600,7 +419,7 @@ macro_rules! node_ops_binary {
 
             fn $func(self, rhs: f64) -> Node<'g> {
                 assert_eq!(
-                    self.num_outputs(),
+                    self.num_outputs().unwrap(),
                     1,
                     concat!("Cannot ", stringify!($op), " a node with multiple outputs")
                 );
@@ -658,7 +477,7 @@ impl<'g> std::ops::Neg for Node<'g> {
 
     fn neg(self) -> Node<'g> {
         assert_eq!(
-            self.num_outputs(),
+            self.num_outputs().unwrap(),
             1,
             "Cannot negate a node with multiple outputs"
         );

@@ -11,17 +11,91 @@ use std::{
 #[repr(transparent)]
 pub struct Sample(f64);
 
+impl Sample {
+    pub const MAX: Self = Sample(f64::MAX);
+    pub const MIN: Self = Sample(f64::MIN);
+    pub const ONE: Self = Sample(1.0);
+    pub const ZERO: Self = Sample(0.0);
+    pub const NEG_ONE: Self = Sample(-1.0);
+    pub const E: Self = Sample(std::f64::consts::E);
+    pub const PI: Self = Sample(std::f64::consts::PI);
+    pub const TAU: Self = Sample(std::f64::consts::TAU);
+    pub const TWO_PI: Self = Sample(std::f64::consts::TAU);
+
+    #[inline]
+    pub const fn new(value: f64) -> Self {
+        Sample(value)
+    }
+
+    #[inline]
+    pub fn is_truthy(self) -> bool {
+        self.0 > 0.0
+    }
+
+    #[inline]
+    pub fn is_falsy(self) -> bool {
+        self.0 <= 0.0
+    }
+
+    #[inline]
+    pub fn abs(self) -> Self {
+        Sample(self.0.abs())
+    }
+
+    #[inline]
+    pub fn sin(self) -> Self {
+        Sample(self.0.sin())
+    }
+
+    #[inline]
+    pub fn cos(self) -> Self {
+        Sample(self.0.cos())
+    }
+
+    #[inline]
+    pub fn tan(self) -> Self {
+        Sample(self.0.tan())
+    }
+
+    #[inline]
+    pub fn asin(self) -> Self {
+        Sample(self.0.asin())
+    }
+
+    #[inline]
+    pub fn acos(self) -> Self {
+        Sample(self.0.acos())
+    }
+
+    #[inline]
+    pub fn atan(self) -> Self {
+        Sample(self.0.atan())
+    }
+
+    #[inline]
+    pub fn atan2(self, other: Self) -> Self {
+        Sample(self.0.atan2(other.0))
+    }
+
+    #[inline]
+    pub fn amp_to_db(self) -> Self {
+        if self.0 <= 0.0 {
+            Self::MIN
+        } else {
+            Self(20.0 * self.0.log10())
+        }
+    }
+
+    #[inline]
+    pub fn db_to_amp(self) -> Self {
+        Self(10.0f64.powf(self.0 / 20.0))
+    }
+}
+
 impl Debug for Sample {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
-    }
-}
-
-impl Sample {
-    #[inline]
-    pub const fn new(value: f64) -> Self {
-        Sample(value)
     }
 }
 
@@ -347,6 +421,63 @@ impl SignalData {
             }
         }
     }
+
+    #[inline]
+    pub fn unwrap_sample(&self) -> Sample {
+        match self {
+            Self::Sample(sample) => *sample,
+            data => panic!("SignalData::unwrap_sample: expected Sample, got {:?}", data),
+        }
+    }
+
+    #[inline]
+    pub fn unwrap_sample_mut(&mut self) -> &mut Sample {
+        match self {
+            Self::Sample(sample) => sample,
+            data => panic!(
+                "SignalData::unwrap_sample_mut: expected Sample, got {:?}",
+                data
+            ),
+        }
+    }
+
+    #[inline]
+    pub fn unwrap_buffer(&self) -> &Buffer {
+        match self {
+            Self::Buffer(buffer) => buffer,
+            data => panic!("SignalData::unwrap_buffer: expected Buffer, got {:?}", data),
+        }
+    }
+
+    #[inline]
+    pub fn unwrap_buffer_mut(&mut self) -> &mut Buffer {
+        match self {
+            Self::Buffer(buffer) => buffer,
+            data => panic!(
+                "SignalData::unwrap_buffer_mut: expected Buffer, got {:?}",
+                data
+            ),
+        }
+    }
+
+    #[inline]
+    pub fn unwrap_bundle(&self) -> &[SignalData] {
+        match self {
+            Self::Bundle(bundle) => bundle,
+            data => panic!("SignalData::unwrap_bundle: expected Bundle, got {:?}", data),
+        }
+    }
+
+    #[inline]
+    pub fn unwrap_bundle_mut(&mut self) -> &mut Vec<SignalData> {
+        match self {
+            Self::Bundle(bundle) => bundle,
+            data => panic!(
+                "SignalData::unwrap_bundle_mut: expected Bundle, got {:?}",
+                data
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -411,23 +542,33 @@ impl Signal {
         self.data.copy_from(&other.data);
     }
 
-    pub fn unwrap_buffer(&self) -> &Buffer {
-        match &self.data {
-            SignalData::Buffer(buffer) => buffer,
-            data => panic!(
-                "Signal::unwrap_buffer: expected Buffer, got {:?}",
-                data.kind()
-            ),
-        }
+    #[inline]
+    pub fn unwrap_sample(&self) -> Sample {
+        self.data.unwrap_sample()
     }
 
+    #[inline]
+    pub fn unwrap_sample_mut(&mut self) -> &mut Sample {
+        self.data.unwrap_sample_mut()
+    }
+
+    #[inline]
+    pub fn unwrap_buffer(&self) -> &Buffer {
+        self.data.unwrap_buffer()
+    }
+
+    #[inline]
     pub fn unwrap_buffer_mut(&mut self) -> &mut Buffer {
-        match &mut self.data {
-            SignalData::Buffer(buffer) => buffer,
-            data => panic!(
-                "Signal::unwrap_buffer_mut: expected Buffer, got {:?}",
-                data.kind()
-            ),
-        }
+        self.data.unwrap_buffer_mut()
+    }
+
+    #[inline]
+    pub fn unwrap_bundle(&self) -> &[SignalData] {
+        self.data.unwrap_bundle()
+    }
+
+    #[inline]
+    pub fn unwrap_bundle_mut(&mut self) -> &mut Vec<SignalData> {
+        self.data.unwrap_bundle_mut()
     }
 }

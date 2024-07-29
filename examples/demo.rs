@@ -45,7 +45,7 @@ fn main() {
     out2.connect_inputs([(master, 0)]);
 
     // create a runtime and run it for 8 seconds
-    let graph = graph.build();
+    let graph = graph.build().unwrap();
     {
         let mut dot = std::fs::File::create("target/demo.dot").unwrap();
         graph.write_dot(&mut dot).unwrap();
@@ -53,11 +53,13 @@ fn main() {
 
     let mut runtime = Runtime::new(graph);
 
-    runtime.run_offline_to_file(
-        "target/output.wav",
-        Duration::from_secs(8),
-        48_000.0,
-        48_000.0,
-        512,
-    );
+    runtime
+        .run_offline_to_file(
+            "target/output.wav",
+            Duration::from_secs(8),
+            48_000.0,
+            48_000.0,
+            512,
+        )
+        .unwrap();
 }

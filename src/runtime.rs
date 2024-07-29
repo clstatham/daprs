@@ -4,15 +4,51 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::{
     graph::Graph,
-    signal::{Sample, Signal, SignalData},
+    signal::{Sample, Signal, SignalData, SignalKind},
 };
+
+#[derive(Debug, thiserror::Error)]
+#[error("Unexpected signal type on output channel {index}: expected {expected:?}, got {actual:?}")]
+pub struct UnexpectedOutputType {
+    pub index: usize,
+    pub expected: SignalKind,
+    pub actual: SignalKind,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Unexpected signal type on input channel {index}: expected {expected:?}, got {actual:?}")]
+pub struct UnexpectedInputType {
+    pub index: usize,
+    pub expected: SignalKind,
+    pub actual: SignalKind,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+#[error("Runtime error: {0}")]
+pub enum RuntimeError {
+    StreamError(#[from] cpal::StreamError),
+    DevicesError(#[from] cpal::DevicesError),
+    Hound(#[from] hound::Error),
+    UnexpectedOutputType(UnexpectedOutputType),
+    UnexpectedInputType(UnexpectedInputType),
+    HostUnavailable(#[from] cpal::HostUnavailable),
+    #[error("Requested device is unavailable: {0:?}")]
+    DeviceUnavailable(Device),
+    DeviceNameError(#[from] cpal::DeviceNameError),
+    DefaultStreamConfigError(#[from] cpal::DefaultStreamConfigError),
+    #[error("Unsupported sample format: {0}")]
+    UnsupportedSampleFormat(cpal::SampleFormat),
+}
+
+pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
 /// The audio backend to use for the runtime.
 #[derive(Default, Debug)]
 pub enum Backend {
     #[default]
     Default,
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "jack"))]
     Jack,
     #[cfg(target_os = "linux")]
     Alsa,
@@ -93,7 +129,7 @@ impl Runtime {
         audio_rate: f64,
         control_rate: f64,
         block_size: usize,
-    ) -> Box<[Box<[Sample]>]> {
+    ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
         let secs = duration.as_secs_f64();
         let samples = (audio_rate * secs) as usize;
 
@@ -111,7 +147,7 @@ impl Runtime {
         while sample_count < samples {
             let actual_block_size = (samples - sample_count).min(block_size);
             self.graph
-                .set_block_size(audio_rate, control_rate, actual_block_size);
+                .resize_buffers(audio_rate, control_rate, actual_block_size);
             self.graph.process();
 
             for (i, output) in outputs.iter_mut().enumerate() {
@@ -119,14 +155,18 @@ impl Runtime {
                 if let SignalData::Buffer(buffer) = &signal.data {
                     output[sample_count..sample_count + actual_block_size].copy_from_slice(buffer);
                 } else {
-                    panic!("Expected graph output to be a buffer signal");
+                    return Err(RuntimeError::UnexpectedOutputType(UnexpectedOutputType {
+                        index: i,
+                        expected: SignalKind::Buffer,
+                        actual: signal.data.kind(),
+                    }));
                 }
             }
 
             sample_count += actual_block_size;
         }
 
-        outputs
+        Ok(outputs)
     }
 
     pub fn run_offline_to_file(
@@ -136,8 +176,8 @@ impl Runtime {
         audio_rate: f64,
         control_rate: f64,
         block_size: usize,
-    ) {
-        let outputs = self.run_offline(duration, audio_rate, control_rate, block_size);
+    ) -> RuntimeResult<()> {
+        let outputs = self.run_offline(duration, audio_rate, control_rate, block_size)?;
 
         let num_channels = outputs.len();
 
@@ -159,13 +199,15 @@ impl Runtime {
             sample_format: hound::SampleFormat::Float,
         };
 
-        let mut writer = hound::WavWriter::create(file_path, spec).unwrap();
+        let mut writer = hound::WavWriter::create(file_path, spec)?;
 
         for sample in samples {
-            writer.write_sample(sample as f32).unwrap();
+            writer.write_sample(sample as f32)?;
         }
 
-        writer.finalize().unwrap();
+        writer.finalize()?;
+
+        Ok(())
     }
 
     pub fn run_for(
@@ -174,14 +216,20 @@ impl Runtime {
         backend: Backend,
         device: Device,
         control_rate: f64,
-    ) {
+    ) -> RuntimeResult<()> {
         let runtime = std::mem::take(self);
-        let handle = runtime.run(backend, device, control_rate);
+        let handle = runtime.run(backend, device, control_rate)?;
         std::thread::sleep(duration);
         *self = handle.stop();
+        Ok(())
     }
 
-    pub fn run(mut self, backend: Backend, device: Device, control_rate: f64) -> RuntimeHandle {
+    pub fn run(
+        mut self,
+        backend: Backend,
+        device: Device,
+        control_rate: f64,
+    ) -> RuntimeResult<RuntimeHandle> {
         let (kill_tx, kill_rx) = mpsc::channel();
         let (runtime_tx, runtime_rx) = mpsc::channel();
 
@@ -190,46 +238,47 @@ impl Runtime {
             runtime_rx,
         };
 
-        std::thread::spawn(move || {
+        std::thread::spawn(move || -> RuntimeResult<()> {
             let host_id = match backend {
                 Backend::Default => cpal::default_host().id(),
                 #[cfg(target_os = "linux")]
                 Backend::Alsa => cpal::available_hosts()
                     .into_iter()
                     .find(|h| *h == cpal::HostId::Alsa)
-                    .expect("ALSA host was requested but not found"),
-                #[cfg(target_os = "linux")]
+                    .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
+                #[cfg(all(target_os = "linux", feature = "jack"))]
                 Backend::Jack => cpal::available_hosts()
                     .into_iter()
                     .find(|h| *h == cpal::HostId::Jack)
-                    .expect("Jack host was requested but not found"),
+                    .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
                 #[cfg(target_os = "windows")]
                 Backend::Wasapi => cpal::available_hosts()
                     .into_iter()
                     .find(|h| *h == cpal::HostId::Wasapi)
-                    .expect("WASAPI host was requested but not found"),
+                    .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
             };
-            let host = cpal::host_from_id(host_id).unwrap();
+            let host = cpal::host_from_id(host_id)?;
 
             log::info!("Using host: {:?}", host.id());
 
-            let device = match device {
-                Device::Default => host.default_output_device().unwrap(),
-                Device::Index(index) => host.output_devices().unwrap().nth(index).unwrap(),
+            let cpal_device = match &device {
+                Device::Default => host.default_output_device(),
+                Device::Index(index) => host.output_devices().unwrap().nth(*index),
                 Device::Name(name) => host
                     .output_devices()
                     .unwrap()
-                    .find(|d| d.name().unwrap().contains(&name))
-                    .unwrap(),
+                    .find(|d| d.name().unwrap().contains(name)),
             };
+
+            let device = cpal_device.ok_or_else(|| RuntimeError::DeviceUnavailable(device))?;
 
             // let device = host
             //     .default_output_device()
             //     .expect("No default output device found.");
 
-            log::info!("Using device: {}", device.name().unwrap());
+            log::info!("Using device: {}", device.name()?);
 
-            let config = device.default_output_config().unwrap();
+            let config = device.default_output_config()?;
 
             let channels = config.channels();
             if self.graph.num_outputs() != channels as usize {
@@ -257,78 +306,80 @@ impl Runtime {
                     control_rate,
                     kill_rx,
                     runtime_tx,
-                ),
+                )?,
                 cpal::SampleFormat::I16 => self.run_inner::<i16>(
                     &device,
                     &config.config(),
                     control_rate,
                     kill_rx,
                     runtime_tx,
-                ),
+                )?,
                 cpal::SampleFormat::I32 => self.run_inner::<i32>(
                     &device,
                     &config.config(),
                     control_rate,
                     kill_rx,
                     runtime_tx,
-                ),
+                )?,
                 cpal::SampleFormat::I64 => self.run_inner::<i64>(
                     &device,
                     &config.config(),
                     control_rate,
                     kill_rx,
                     runtime_tx,
-                ),
+                )?,
                 cpal::SampleFormat::U8 => self.run_inner::<u8>(
                     &device,
                     &config.config(),
                     control_rate,
                     kill_rx,
                     runtime_tx,
-                ),
+                )?,
                 cpal::SampleFormat::U16 => self.run_inner::<u16>(
                     &device,
                     &config.config(),
                     control_rate,
                     kill_rx,
                     runtime_tx,
-                ),
+                )?,
                 cpal::SampleFormat::U32 => self.run_inner::<u32>(
                     &device,
                     &config.config(),
                     control_rate,
                     kill_rx,
                     runtime_tx,
-                ),
+                )?,
                 cpal::SampleFormat::U64 => self.run_inner::<u64>(
                     &device,
                     &config.config(),
                     control_rate,
                     kill_rx,
                     runtime_tx,
-                ),
+                )?,
                 cpal::SampleFormat::F32 => self.run_inner::<f32>(
                     &device,
                     &config.config(),
                     control_rate,
                     kill_rx,
                     runtime_tx,
-                ),
+                )?,
                 cpal::SampleFormat::F64 => self.run_inner::<f64>(
                     &device,
                     &config.config(),
                     control_rate,
                     kill_rx,
                     runtime_tx,
-                ),
+                )?,
 
                 sample_format => {
-                    panic!("Unsupported sample format {:?}", sample_format);
+                    return Err(RuntimeError::UnsupportedSampleFormat(sample_format));
                 }
             }
+
+            Ok(())
         });
 
-        handle
+        Ok(handle)
     }
 
     fn run_inner<T>(
@@ -338,7 +389,8 @@ impl Runtime {
         control_rate: f64,
         kill_rx: mpsc::Receiver<()>,
         runtime_tx: mpsc::Sender<Runtime>,
-    ) where
+    ) -> RuntimeResult<()>
+    where
         T: cpal::SizedSample + cpal::FromSample<f64>,
     {
         let channels = config.channels as usize;
@@ -350,7 +402,7 @@ impl Runtime {
             .build_output_stream(
                 config,
                 move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
-                    graph.set_block_size(audio_rate, control_rate, data.len() / channels);
+                    graph.resize_buffers(audio_rate, control_rate, data.len() / channels);
                     graph.process();
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
@@ -359,7 +411,7 @@ impl Runtime {
                                 let value = buffer[frame_idx];
                                 *sample = T::from_sample(*value);
                             } else {
-                                panic!("Expected graph output to be a buffer signal");
+                                // todo: warn?
                             }
                         }
                     }
@@ -380,6 +432,8 @@ impl Runtime {
         }
 
         runtime_tx.send(self).unwrap();
+
+        Ok(())
     }
 }
 

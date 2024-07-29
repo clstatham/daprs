@@ -19,6 +19,7 @@ itertools = "0.13.0"
 log = "0.4.22"
 petgraph = "0.6.5"
 hound = "3.5"
+thiserror = "1.0.63"
 
 [dev-dependencies]
 env_logger = "0.11"
