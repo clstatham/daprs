@@ -240,7 +240,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dapr"
+name = "daprs"
 version = "0.1.0"
 dependencies = [
  "cpal",

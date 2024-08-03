@@ -1,10 +1,10 @@
 [package]
-name = "dapr"
+name = "daprs"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "dapr"
+name = "daprs"
 
 [features]
 default = []

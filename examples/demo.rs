@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use dapr::prelude::*;
+use daprs::prelude::*;
 
 fn main() {
     // initialize logging

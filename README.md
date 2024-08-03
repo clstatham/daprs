@@ -1,6 +1,6 @@
-# DAPR
+# daprs
 
-**DAPR** is a WIP crate for writing **D**igital **A**udio **P**rocessors in **R**ust.
+**daprs** is a WIP library for writing digital audio processors in Rust.
 
 ## Design Goals
 
