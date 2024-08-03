@@ -1,6 +1,6 @@
-# PAPR
+# DAPR
 
-**PAPR** is a WIP realtime digital audio processing runtime for Rust.
+**DAPR** is a WIP crate for writing **D**igital **A**udio **P**rocessors in **R**ust.
 
 ## Design Goals
 
@@ -8,6 +8,7 @@
 - Stack memory >>> Heap memory
 - No allocations on the realtime audio thread
 - Do as much work ahead of time as possible
+- Type safety and type-checked graph construction
 
 ## License
 

@@ -1,17 +1,17 @@
 [package]
-name = "papr"
+name = "dapr"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "papr"
+name = "dapr"
 
 [features]
 default = []
 jack = ["cpal/jack"]
 
 [workspace]
-members = ["papr-egui"]
+members = []
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }

@@ -1,18 +1,6 @@
 use std::time::Duration;
 
-use papr::prelude::*;
-
-pub fn mix<'g>(inputs: &[Node<'g>]) -> Node<'g> {
-    if inputs.len() == 1 {
-        inputs[0]
-    } else {
-        let mut sum = inputs[0];
-        for input in &inputs[1..] {
-            sum += *input;
-        }
-        sum
-    }
-}
+use dapr::prelude::*;
 
 fn main() {
     // initialize logging
