@@ -1,15 +1,15 @@
-use builder::GraphBuilder;
 use edge::Edge;
-use node::{GraphNode, Process};
+use node::GraphNode;
 use petgraph::{
     prelude::{Direction, EdgeRef, StableDiGraph},
     visit::DfsPostOrder,
 };
 
-use crate::signal::{Signal, SignalKind, SignalRate};
+use crate::{
+    processor::{Process, Processor},
+    signal::{Signal, SignalKind, SignalRate},
+};
 
-#[macro_use]
-pub mod builder;
 pub mod edge;
 pub mod node;
 
@@ -116,16 +116,6 @@ impl Graph {
         Self::default()
     }
 
-    /// Creates a new [`GraphBuilder`] to construct a new [`Graph`].
-    pub fn new_builder() -> GraphBuilder {
-        GraphBuilder::default()
-    }
-
-    /// Creates a [`GraphBuilder`] with this [`Graph`] as a starting point.
-    pub fn into_builder(self) -> GraphBuilder {
-        GraphBuilder::new(self)
-    }
-
     #[inline]
     /// Returns the inner [`StableDiGraph`] of the graph.
     pub fn digraph(&self) -> &DiGraph {
@@ -161,7 +151,7 @@ impl Graph {
     }
 
     /// Adds a new [`GraphNode`] with the given [`Processor`](node::Processor) to the graph.
-    pub fn add_processor_object(&mut self, processor: node::Processor) -> NodeIndex {
+    pub fn add_processor_object(&mut self, processor: Processor) -> NodeIndex {
         self.needs_reset = true;
         self.needs_prepare = true;
         self.needs_visitor_alloc = true;

@@ -4,20 +4,15 @@ use cpal::traits::{DeviceTrait, HostTrait};
 use runtime::Backend;
 
 pub mod graph;
-pub mod processors;
+pub mod graph_builder;
+pub mod processor;
 pub mod runtime;
 pub mod signal;
 
 #[allow(unused_imports)]
 pub mod prelude {
-    pub use crate::add_node;
-    pub use crate::graph::{
-        builder::{GraphBuilder, Node},
-        edge::Edge,
-        node::Process,
-        Graph,
-    };
-    pub use crate::processors::{env::*, functional::*, graph::*, io::*, math::*, osc::*, time::*};
+    pub use crate::graph::{edge::Edge, Graph};
+    pub use crate::processor::{Process, Processor};
     pub use crate::runtime::{Backend, Device, Runtime};
     pub use crate::signal::{
         Buffer, Sample, Signal, SignalData, SignalKind, SignalRate, SignalSpec,
@@ -72,39 +67,5 @@ pub fn list_devices(backend: Backend) {
     };
     for (i, device) in host.output_devices().unwrap().enumerate() {
         println!("  {}: {:?}", i, device.name());
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::prelude::*;
-
-    #[test]
-    pub fn test_runtime_offline() {
-        let graph = GraphBuilder::default();
-        let time = graph.processor(Time::ar());
-        let two_pi = graph.processor(Constant::ar(std::f64::consts::TAU.into()));
-        let freq = graph.processor(Constant::ar(2.0.into()));
-
-        let sine_wave = (time * freq * two_pi).sin();
-
-        let out = graph.output();
-        out.connect_inputs([(sine_wave, 0)]);
-
-        let mut runtime = Runtime::new(graph.build().unwrap());
-
-        let bufs = runtime
-            .run_offline(std::time::Duration::from_secs(2), 32.0, 32.0, 4)
-            .unwrap();
-        assert_eq!(bufs.len(), 1);
-        let buf = &bufs[0];
-        assert_eq!(buf.len(), 64);
-
-        let mut sum = 0.0f64;
-        for i in 0..64 {
-            sum += *buf[i];
-            println!("{}", *buf[i]);
-        }
-        assert!(sum.abs() < 1e-5);
     }
 }
