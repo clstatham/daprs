@@ -212,7 +212,7 @@ impl Processor {
         self.processor.prepare();
     }
 
-    /// Processes the input signals and writes the results to the output signals.
+    /// Processes the input buffers and writes the results to the output buffers.
     #[inline]
     pub fn process(&mut self) {
         assert_eq!(

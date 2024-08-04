@@ -237,10 +237,6 @@ impl Runtime {
 
             let device = cpal_device.ok_or_else(|| RuntimeError::DeviceUnavailable(device))?;
 
-            // let device = host
-            //     .default_output_device()
-            //     .expect("No default output device found.");
-
             log::info!("Using device: {}", device.name()?);
 
             let config = device.default_output_config()?;

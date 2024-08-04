@@ -408,16 +408,16 @@ impl Graph {
 
                 let (source, target) = graph.digraph.index_twice_mut(source_id, node_id);
 
-                let source_signal = match source {
+                let source_buffer = match source {
                     GraphNode::Processor(processor) => processor.output(source_output as usize),
                     GraphNode::Passthrough(buffer) => buffer,
                 };
 
-                let target_signal = match target {
+                let target_buffer = match target {
                     GraphNode::Processor(processor) => processor.input_mut(target_input as usize),
                     GraphNode::Passthrough(buffer) => buffer,
                 };
-                target_signal.copy_from_slice(source_signal);
+                target_buffer.copy_from_slice(source_buffer);
             }
 
             // process the node
