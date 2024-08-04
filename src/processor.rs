@@ -1,6 +1,36 @@
 use std::fmt::Debug;
 
-use crate::signal::{Signal, SignalRate, SignalSpec};
+use crate::signal::Buffer;
+
+pub struct Param {
+    pub name: &'static str,
+    pub min: f64,
+    pub max: f64,
+}
+
+impl Default for Param {
+    fn default() -> Self {
+        Self {
+            name: "",
+            min: f64::MIN,
+            max: f64::MAX,
+        }
+    }
+}
+
+impl Param {
+    pub fn new(name: &'static str, min: f64, max: f64) -> Self {
+        Self { name, min, max }
+    }
+
+    pub fn default_with_name(name: &'static str) -> Self {
+        Self {
+            name,
+            min: f64::MIN,
+            max: f64::MAX,
+        }
+    }
+}
 
 /// A trait for processing audio or control signals.
 ///
@@ -11,19 +41,19 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
     }
 
     /// Returns information about the inputs this [`Process`] expects.
-    fn input_spec(&self) -> Vec<SignalSpec>;
+    fn input_params(&self) -> Vec<Param>;
 
     /// Returns information about the outputs this [`Process`] produces.
-    fn output_spec(&self) -> Vec<SignalSpec>;
+    fn output_params(&self) -> Vec<Param>;
 
     /// Returns the number of input buffers/channels this [`Process`] expects.
     fn num_inputs(&self) -> usize {
-        self.input_spec().len()
+        self.input_params().len()
     }
 
     /// Returns the number of output buffers/channels this [`Process`] produces.
     fn num_outputs(&self) -> usize {
-        self.output_spec().len()
+        self.output_params().len()
     }
 
     /// Called before the first [`Process::process`] call, and anytime the graph changes.
@@ -31,12 +61,12 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
 
     /// Called whenever the runtime's sample rates or block size change.
     #[allow(unused)]
-    fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {}
+    fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {}
 
     /// Processes the given input buffers and writes the results to the given output buffers.
     ///
     /// The number of input and output buffers must match the numbers returned by [`Process::num_inputs`] and [`Process::num_outputs`].
-    fn process(&mut self, inputs: &[Signal], outputs: &mut [Signal]);
+    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]);
 
     /// Clones this [`Process`] into a [`Processor`] object that can be used in the audio graph.
     fn processor(&self) -> Processor {
@@ -81,8 +111,8 @@ impl Debug for dyn Process {
 #[derive(Clone)]
 pub struct Processor {
     processor: Box<dyn Process>,
-    inputs: Box<[Signal]>,
-    outputs: Box<[Signal]>,
+    inputs: Box<[Buffer]>,
+    outputs: Box<[Buffer]>,
 }
 
 impl Debug for Processor {
@@ -100,12 +130,12 @@ impl Processor {
     /// Creates a new [`Processor`] from the given boxed [`Process`] object.
     pub fn new_from_boxed(processor: Box<dyn Process>) -> Self {
         let mut input_buffers = Vec::with_capacity(processor.num_inputs());
-        for spec in processor.input_spec() {
-            input_buffers.push(Signal::default_for_spec(spec));
+        for _param in processor.input_params() {
+            input_buffers.push(Buffer::zeros(0));
         }
         let mut output_buffers = Vec::with_capacity(processor.num_outputs());
-        for spec in processor.output_spec() {
-            output_buffers.push(Signal::default_for_spec(spec));
+        for _param in processor.output_params() {
+            output_buffers.push(Buffer::zeros(0));
         }
 
         Self {
@@ -120,70 +150,59 @@ impl Processor {
     }
 
     /// Returns information about the inputs this [`Processor`] expects.
-    pub fn input_spec(&self) -> Vec<SignalSpec> {
-        self.processor.input_spec()
+    pub fn input_params(&self) -> Vec<Param> {
+        self.processor.input_params()
     }
 
     /// Returns information about the outputs this [`Processor`] produces.
-    pub fn output_spec(&self) -> Vec<SignalSpec> {
-        self.processor.output_spec()
+    pub fn output_params(&self) -> Vec<Param> {
+        self.processor.output_params()
     }
 
     /// Resizes the input and output buffers to match the given sample rates and block size.
-    pub fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
-        let control_block_size = (block_size as f64 * control_rate / audio_rate).ceil() as usize;
-
+    pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
         for input in self.inputs.iter_mut() {
-            if input.rate() == SignalRate::Control {
-                input.resize_buffers(control_block_size);
-            } else {
-                input.resize_buffers(block_size);
-            }
+            input.resize(block_size);
         }
         for output in self.outputs.iter_mut() {
-            if output.rate() == SignalRate::Control {
-                output.resize_buffers(control_block_size);
-            } else {
-                output.resize_buffers(block_size);
-            }
+            output.resize(block_size);
         }
-        self.processor
-            .resize_buffers(audio_rate, control_rate, block_size);
+        self.processor.resize_buffers(sample_rate, block_size);
     }
 
-    /// Returns a slice of the input signals.
+    /// Returns a slice of the input buffers.
     #[inline]
-    pub fn inputs(&self) -> &[Signal] {
+    pub fn inputs(&self) -> &[Buffer] {
         &self.inputs[..]
     }
 
-    /// Returns a mutable slice of the input signals.
+    /// Returns a mutable slice of the input buffers.
     #[inline]
-    pub fn inputs_mut(&mut self) -> &mut [Signal] {
+    pub fn inputs_mut(&mut self) -> &mut [Buffer] {
         &mut self.inputs[..]
     }
 
-    /// Returns a reference to the input signal at the given index.
+    /// Returns a reference to the input buffer at the given index.
     #[inline]
-    pub fn input(&self, index: usize) -> &Signal {
+    pub fn input(&self, index: usize) -> &Buffer {
         &self.inputs()[index]
     }
 
-    /// Returns a mutable reference to the input signal at the given index.
+    /// Returns a mutable reference to the input buffer at the given index.
     #[inline]
-    pub fn input_mut(&mut self, index: usize) -> &mut Signal {
+    pub fn input_mut(&mut self, index: usize) -> &mut Buffer {
         &mut self.inputs_mut()[index]
     }
 
-    /// Returns a slice of the output signal.
+    /// Returns a slice of the output buffers.
     #[inline]
-    pub fn outputs(&self) -> &[Signal] {
+    pub fn outputs(&self) -> &[Buffer] {
         &self.outputs[..]
     }
 
-    /// Returns a reference to the output signal at the given index.
+    /// Returns a reference to the output buffer at the given index.
     #[inline]
-    pub fn output(&self, index: usize) -> &Signal {
+    pub fn output(&self, index: usize) -> &Buffer {
         &self.outputs()[index]
     }
 

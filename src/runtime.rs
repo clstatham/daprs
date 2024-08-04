@@ -4,24 +4,8 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::{
     graph::Graph,
-    signal::{Sample, Signal, SignalData, SignalKind},
+    signal::{Buffer, Sample},
 };
-
-#[derive(Debug, thiserror::Error)]
-#[error("Unexpected signal type on output channel {index}: expected {expected:?}, got {actual:?}")]
-pub struct UnexpectedOutputType {
-    pub index: usize,
-    pub expected: SignalKind,
-    pub actual: SignalKind,
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error("Unexpected signal type on input channel {index}: expected {expected:?}, got {actual:?}")]
-pub struct UnexpectedInputType {
-    pub index: usize,
-    pub expected: SignalKind,
-    pub actual: SignalKind,
-}
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -30,8 +14,6 @@ pub enum RuntimeError {
     StreamError(#[from] cpal::StreamError),
     DevicesError(#[from] cpal::DevicesError),
     Hound(#[from] hound::Error),
-    UnexpectedOutputType(UnexpectedOutputType),
-    UnexpectedInputType(UnexpectedInputType),
     HostUnavailable(#[from] cpal::HostUnavailable),
     #[error("Requested device is unavailable: {0:?}")]
     DeviceUnavailable(Device),
@@ -89,8 +71,8 @@ impl Runtime {
 
     /// Resets the runtime with the given sample rate and block size.
     /// This will reset the state of all nodes in the graph and potentially reallocate internal buffers.
-    pub fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
-        self.graph.reset(audio_rate, control_rate, block_size);
+    pub fn reset(&mut self, sample_rate: f64, block_size: usize) {
+        self.graph.reset(sample_rate, block_size);
     }
 
     /// Runs the preparation phase for every node in the graph.
@@ -109,14 +91,14 @@ impl Runtime {
     }
 
     /// Returns an iterator over the output channels of the runtime.
-    pub fn outputs(&mut self) -> impl Iterator<Item = &Signal> + '_ {
+    pub fn outputs(&mut self) -> impl Iterator<Item = &Buffer> + '_ {
         let num_outputs = self.graph.num_outputs();
         (0..num_outputs).map(|i| self.graph.get_output(i))
     }
 
     /// Renders the next block of audio and returns the rendered output channels.
     #[inline]
-    pub fn next_buffer(&mut self) -> impl Iterator<Item = &Signal> + '_ {
+    pub fn next_buffer(&mut self) -> impl Iterator<Item = &Buffer> + '_ {
         self.graph.process();
 
         self.graph.outputs()
@@ -126,14 +108,13 @@ impl Runtime {
     pub fn run_offline(
         &mut self,
         duration: std::time::Duration,
-        audio_rate: f64,
-        control_rate: f64,
+        sample_rate: f64,
         block_size: usize,
     ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
         let secs = duration.as_secs_f64();
-        let samples = (audio_rate * secs) as usize;
+        let samples = (sample_rate * secs) as usize;
 
-        self.reset(audio_rate, control_rate, block_size);
+        self.reset(sample_rate, block_size);
         self.prepare();
 
         let num_outputs: usize = self.graph.num_outputs();
@@ -146,21 +127,12 @@ impl Runtime {
 
         while sample_count < samples {
             let actual_block_size = (samples - sample_count).min(block_size);
-            self.graph
-                .resize_buffers(audio_rate, control_rate, actual_block_size);
+            self.graph.resize_buffers(sample_rate, actual_block_size);
             self.graph.process();
 
             for (i, output) in outputs.iter_mut().enumerate() {
-                let signal = self.graph.get_output(i);
-                if let SignalData::Buffer(buffer) = &signal.data {
-                    output[sample_count..sample_count + actual_block_size].copy_from_slice(buffer);
-                } else {
-                    return Err(RuntimeError::UnexpectedOutputType(UnexpectedOutputType {
-                        index: i,
-                        expected: SignalKind::Buffer,
-                        actual: signal.data.kind(),
-                    }));
-                }
+                let buffer = self.graph.get_output(i);
+                output[sample_count..sample_count + actual_block_size].copy_from_slice(buffer);
             }
 
             sample_count += actual_block_size;
@@ -173,11 +145,10 @@ impl Runtime {
         &mut self,
         file_path: impl AsRef<std::path::Path>,
         duration: std::time::Duration,
-        audio_rate: f64,
-        control_rate: f64,
+        sample_rate: f64,
         block_size: usize,
     ) -> RuntimeResult<()> {
-        let outputs = self.run_offline(duration, audio_rate, control_rate, block_size)?;
+        let outputs = self.run_offline(duration, sample_rate, block_size)?;
 
         let num_channels = outputs.len();
 
@@ -194,7 +165,7 @@ impl Runtime {
 
         let spec = hound::WavSpec {
             channels: num_channels as u16,
-            sample_rate: audio_rate as u32,
+            sample_rate: sample_rate as u32,
             bits_per_sample: 32,
             sample_format: hound::SampleFormat::Float,
         };
@@ -215,21 +186,15 @@ impl Runtime {
         duration: std::time::Duration,
         backend: Backend,
         device: Device,
-        control_rate: f64,
     ) -> RuntimeResult<()> {
         let runtime = std::mem::take(self);
-        let handle = runtime.run(backend, device, control_rate)?;
+        let handle = runtime.run(backend, device)?;
         std::thread::sleep(duration);
         *self = handle.stop();
         Ok(())
     }
 
-    pub fn run(
-        mut self,
-        backend: Backend,
-        device: Device,
-        control_rate: f64,
-    ) -> RuntimeResult<RuntimeHandle> {
+    pub fn run(mut self, backend: Backend, device: Device) -> RuntimeResult<RuntimeHandle> {
         let (kill_tx, kill_rx) = mpsc::channel();
         let (runtime_tx, runtime_rx) = mpsc::channel();
 
@@ -294,82 +259,41 @@ impl Runtime {
             let audio_rate = config.sample_rate().0 as f64;
             let initial_block_size = audio_rate as usize / 100;
 
-            self.graph
-                .reset(audio_rate, control_rate, initial_block_size);
+            self.graph.reset(audio_rate, initial_block_size);
 
             self.prepare();
 
             match config.sample_format() {
-                cpal::SampleFormat::I8 => self.run_inner::<i8>(
-                    &device,
-                    &config.config(),
-                    control_rate,
-                    kill_rx,
-                    runtime_tx,
-                )?,
-                cpal::SampleFormat::I16 => self.run_inner::<i16>(
-                    &device,
-                    &config.config(),
-                    control_rate,
-                    kill_rx,
-                    runtime_tx,
-                )?,
-                cpal::SampleFormat::I32 => self.run_inner::<i32>(
-                    &device,
-                    &config.config(),
-                    control_rate,
-                    kill_rx,
-                    runtime_tx,
-                )?,
-                cpal::SampleFormat::I64 => self.run_inner::<i64>(
-                    &device,
-                    &config.config(),
-                    control_rate,
-                    kill_rx,
-                    runtime_tx,
-                )?,
-                cpal::SampleFormat::U8 => self.run_inner::<u8>(
-                    &device,
-                    &config.config(),
-                    control_rate,
-                    kill_rx,
-                    runtime_tx,
-                )?,
-                cpal::SampleFormat::U16 => self.run_inner::<u16>(
-                    &device,
-                    &config.config(),
-                    control_rate,
-                    kill_rx,
-                    runtime_tx,
-                )?,
-                cpal::SampleFormat::U32 => self.run_inner::<u32>(
-                    &device,
-                    &config.config(),
-                    control_rate,
-                    kill_rx,
-                    runtime_tx,
-                )?,
-                cpal::SampleFormat::U64 => self.run_inner::<u64>(
-                    &device,
-                    &config.config(),
-                    control_rate,
-                    kill_rx,
-                    runtime_tx,
-                )?,
-                cpal::SampleFormat::F32 => self.run_inner::<f32>(
-                    &device,
-                    &config.config(),
-                    control_rate,
-                    kill_rx,
-                    runtime_tx,
-                )?,
-                cpal::SampleFormat::F64 => self.run_inner::<f64>(
-                    &device,
-                    &config.config(),
-                    control_rate,
-                    kill_rx,
-                    runtime_tx,
-                )?,
+                cpal::SampleFormat::I8 => {
+                    self.run_inner::<i8>(&device, &config.config(), kill_rx, runtime_tx)?
+                }
+                cpal::SampleFormat::I16 => {
+                    self.run_inner::<i16>(&device, &config.config(), kill_rx, runtime_tx)?
+                }
+                cpal::SampleFormat::I32 => {
+                    self.run_inner::<i32>(&device, &config.config(), kill_rx, runtime_tx)?
+                }
+                cpal::SampleFormat::I64 => {
+                    self.run_inner::<i64>(&device, &config.config(), kill_rx, runtime_tx)?
+                }
+                cpal::SampleFormat::U8 => {
+                    self.run_inner::<u8>(&device, &config.config(), kill_rx, runtime_tx)?
+                }
+                cpal::SampleFormat::U16 => {
+                    self.run_inner::<u16>(&device, &config.config(), kill_rx, runtime_tx)?
+                }
+                cpal::SampleFormat::U32 => {
+                    self.run_inner::<u32>(&device, &config.config(), kill_rx, runtime_tx)?
+                }
+                cpal::SampleFormat::U64 => {
+                    self.run_inner::<u64>(&device, &config.config(), kill_rx, runtime_tx)?
+                }
+                cpal::SampleFormat::F32 => {
+                    self.run_inner::<f32>(&device, &config.config(), kill_rx, runtime_tx)?
+                }
+                cpal::SampleFormat::F64 => {
+                    self.run_inner::<f64>(&device, &config.config(), kill_rx, runtime_tx)?
+                }
 
                 sample_format => {
                     return Err(RuntimeError::UnsupportedSampleFormat(sample_format));
@@ -386,7 +310,6 @@ impl Runtime {
         self,
         device: &cpal::Device,
         config: &cpal::StreamConfig,
-        control_rate: f64,
         kill_rx: mpsc::Receiver<()>,
         runtime_tx: mpsc::Sender<Runtime>,
     ) -> RuntimeResult<()>
@@ -402,17 +325,13 @@ impl Runtime {
             .build_output_stream(
                 config,
                 move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
-                    graph.resize_buffers(audio_rate, control_rate, data.len() / channels);
+                    graph.resize_buffers(audio_rate, data.len() / channels);
                     graph.process();
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
                             let buffer = graph.get_output(channel_idx);
-                            if let SignalData::Buffer(buffer) = &buffer.data {
-                                let value = buffer[frame_idx];
-                                *sample = T::from_sample(*value);
-                            } else {
-                                // todo: warn?
-                            }
+                            let value = buffer[frame_idx];
+                            *sample = T::from_sample(*value);
                         }
                     }
                 },

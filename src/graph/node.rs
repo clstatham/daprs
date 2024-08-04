@@ -1,15 +1,15 @@
 use std::fmt::Debug;
 
 use crate::{
-    processor::{Process, Processor},
-    signal::{Signal, SignalKind, SignalRate, SignalSpec},
+    processor::{Param, Process, Processor},
+    signal::Buffer,
 };
 
 /// A node in the audio graph.
 #[derive(Clone)]
 pub enum GraphNode {
     /// A passthrough node that simply forwards its input to its output.
-    Passthrough(Signal),
+    Passthrough(Buffer),
     /// A processor node that processes its input buffers and writes the results to its output buffers.
     Processor(Processor),
 }
@@ -26,11 +26,7 @@ impl Debug for GraphNode {
 impl GraphNode {
     /// Creates a new input node.
     pub fn new_input() -> Self {
-        Self::Passthrough(Signal::default_for_spec(SignalSpec {
-            name: Some("input"),
-            rate: SignalRate::Audio,
-            kind: SignalKind::Buffer,
-        }))
+        Self::Passthrough(Buffer::zeros(0))
     }
 
     /// Creates a new processor node from the given [`Processor`] object.
@@ -45,68 +41,62 @@ impl GraphNode {
 
     /// Creates a new output node.
     pub fn new_output() -> Self {
-        Self::Passthrough(Signal::default_for_spec(SignalSpec {
-            name: Some("output"),
-            rate: SignalRate::Audio,
-            kind: SignalKind::Buffer,
-        }))
+        Self::Passthrough(Buffer::zeros(0))
     }
 
     /// Returns information about the inputs this [`GraphNode`] expects.
-    pub fn input_spec(&self) -> Vec<SignalSpec> {
+    pub fn input_spec(&self) -> Vec<Param> {
         match self {
-            Self::Passthrough(sig) => vec![sig.spec],
-            Self::Processor(processor) => processor.input_spec(),
+            Self::Passthrough(_) => vec![Param::default_with_name("in")],
+            Self::Processor(processor) => processor.input_params(),
         }
     }
 
     /// Returns information about the outputs this [`GraphNode`] produces.
-    pub fn output_spec(&self) -> Vec<SignalSpec> {
+    pub fn output_spec(&self) -> Vec<Param> {
         match self {
-            Self::Passthrough(sig) => vec![sig.spec],
-            Self::Processor(processor) => processor.output_spec(),
+            Self::Passthrough(_) => vec![Param::default_with_name("out")],
+            Self::Processor(processor) => processor.output_params(),
         }
     }
 
     /// Returns the name of the processor in this [`GraphNode`].
     pub fn name(&self) -> &str {
         match self {
-            Self::Passthrough(signal) => signal.name().unwrap_or("passthrough"),
+            Self::Passthrough(_) => "Passthrough",
             Self::Processor(processor) => processor.name(),
         }
     }
 
     /// Returns a slice of the input buffers of this [`GraphNode`].
-    pub fn inputs(&self) -> &[Signal] {
+    pub fn inputs(&self) -> &[Buffer] {
         match self {
-            Self::Passthrough(signal) => std::slice::from_ref(signal),
+            Self::Passthrough(buffer) => std::slice::from_ref(buffer),
             Self::Processor(processor) => processor.inputs(),
         }
     }
 
     /// Returns a mutable slice of the input buffers of this [`GraphNode`].
-    pub fn inputs_mut(&mut self) -> &mut [Signal] {
+    pub fn inputs_mut(&mut self) -> &mut [Buffer] {
         match self {
-            Self::Passthrough(signal) => std::slice::from_mut(signal),
+            Self::Passthrough(buffer) => std::slice::from_mut(buffer),
             Self::Processor(processor) => processor.inputs_mut(),
         }
     }
 
     /// Returns a slice of the output buffers of this [`GraphNode`].
-    pub fn outputs(&self) -> &[Signal] {
+    pub fn outputs(&self) -> &[Buffer] {
         match self {
-            Self::Passthrough(signal) => std::slice::from_ref(signal),
+            Self::Passthrough(buffer) => std::slice::from_ref(buffer),
             Self::Processor(processor) => processor.outputs(),
         }
     }
 
-    /// Resizes the input and output buffers to match the given sample rates and block size.
-    pub fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
+    /// Resizes the input and output buffers to match the given sample rate and block size.
+    pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
         match self {
-            Self::Passthrough(signal) => signal.resize_buffers(block_size),
-            Self::Processor(processor) => {
-                processor.resize_buffers(audio_rate, control_rate, block_size)
-            }
+            Self::Passthrough(buffer) => buffer.resize(block_size),
+            Self::Processor(processor) => processor.resize_buffers(sample_rate, block_size),
         }
     }
 

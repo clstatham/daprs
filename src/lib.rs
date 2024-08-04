@@ -14,9 +14,7 @@ pub mod prelude {
     pub use crate::graph::{edge::Edge, Graph};
     pub use crate::processor::{Process, Processor};
     pub use crate::runtime::{Backend, Device, Runtime};
-    pub use crate::signal::{
-        Buffer, Sample, Signal, SignalData, SignalKind, SignalRate, SignalSpec,
-    };
+    pub use crate::signal::{Buffer, Sample};
 }
 
 pub fn available_backends() -> Vec<Backend> {

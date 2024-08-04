@@ -7,7 +7,7 @@ use petgraph::{
 
 use crate::{
     processor::{Process, Processor},
-    signal::{Signal, SignalKind, SignalRate},
+    signal::Buffer,
 };
 
 pub mod edge;
@@ -30,30 +30,6 @@ pub struct GraphRunError {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum GraphRunErrorKind {
-    #[error("Invalid input rate for input {input_index}: expected {expected:?}, got {got:?}")]
-    InvalidInputRate {
-        input_index: usize,
-        expected: SignalRate,
-        got: SignalRate,
-    },
-    #[error("Invalid output rate for output {output_index}: expected {expected:?}, got {got:?}")]
-    InvalidOutputRate {
-        output_index: usize,
-        expected: SignalRate,
-        got: SignalRate,
-    },
-    #[error("Invalid input type for input {input_index}: expected {expected:?}, got {got:?}")]
-    InvalidInputKind {
-        input_index: usize,
-        expected: SignalKind,
-        got: SignalKind,
-    },
-    #[error("Invalid output type for output {output_index}: expected {expected:?}, got {got:?}")]
-    InvalidOutputKind {
-        output_index: usize,
-        expected: SignalKind,
-        got: SignalKind,
-    },
     #[error("{0}")]
     Other(&'static str),
 }
@@ -63,16 +39,6 @@ pub enum GraphRunErrorKind {
 pub enum GraphConstructionError {
     #[error("Cannot connect node to itself directly")]
     FeedbackLoop,
-    #[error("Cannot connect output rate {source_rate:?} to input rate {target_rate:?}; use `Node::to_ar()` or `Node::to_kr()` to convert rates")]
-    MismatchedRates {
-        source_rate: SignalRate,
-        target_rate: SignalRate,
-    },
-    #[error("Cannot connect output type {source_kind:?} to input type {target_kind:?}")]
-    MismatchedKinds {
-        source_kind: SignalKind,
-        target_kind: SignalKind,
-    },
     #[error("Graph has already been constructed and cannot be modified; use `Graph::into_builder()` to get a new builder")]
     GraphAlreadyFinished,
     #[error("Cannot connect nodes from different graphs")]
@@ -248,14 +214,14 @@ impl Graph {
 
     /// Copies the given data into the input [`Buffer`] of the input [`GraphNode`] at the given index.
     #[inline]
-    pub fn copy_input(&mut self, input_index: usize, data: &Signal) {
+    pub fn copy_input(&mut self, input_index: usize, data: &Buffer) {
         let input_index = self
             .input_nodes
             .get(input_index)
             .expect("Input index out of bounds");
         let input = &mut self.digraph[*input_index];
         if let GraphNode::Passthrough(input) = input {
-            input.copy_from(data);
+            input.copy_from_slice(data);
         } else {
             panic!("Node at input index is not an input node");
         }
@@ -263,7 +229,7 @@ impl Graph {
 
     /// Returns a reference to the output [`Buffer`] of the output [`GraphNode`] at the given index.
     #[inline]
-    pub fn get_output(&self, output_index: usize) -> &Signal {
+    pub fn get_output(&self, output_index: usize) -> &Buffer {
         let output_index = self
             .output_nodes
             .get(output_index)
@@ -277,7 +243,7 @@ impl Graph {
     }
 
     #[inline]
-    pub fn inputs(&self) -> impl Iterator<Item = &Signal> {
+    pub fn inputs(&self) -> impl Iterator<Item = &Buffer> {
         self.input_nodes.iter().map(|&idx| {
             if let GraphNode::Passthrough(input) = &self.digraph[idx] {
                 input
@@ -289,7 +255,7 @@ impl Graph {
 
     /// Returns an iterator over the output [`Buffer`]s of the output [`GraphNode`]s in the graph.
     #[inline]
-    pub fn outputs(&self) -> impl Iterator<Item = &Signal> {
+    pub fn outputs(&self) -> impl Iterator<Item = &Buffer> {
         self.output_nodes.iter().map(|&idx| {
             if let GraphNode::Passthrough(output) = &self.digraph[idx] {
                 output
@@ -338,22 +304,22 @@ impl Graph {
     }
 
     /// Sets the block size of all [`GraphNode`]s in the graph. This will implicitly reallocate all internal buffers and resources.
-    pub fn resize_buffers(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
+    pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
         self.visit(|graph, node| {
-            graph.digraph[node].resize_buffers(audio_rate, control_rate, block_size);
+            graph.digraph[node].resize_buffers(sample_rate, block_size);
         });
     }
 
     /// Allocates all [`GraphNode`]s' internal input and output buffers, along with various internal resources to the graph.
     ///
     /// This should be run at least once before the audio thread starts running, and again anytime the buffer size or sample rate change or the graph structure is modified.
-    pub fn reset(&mut self, audio_rate: f64, control_rate: f64, block_size: usize) {
+    pub fn reset(&mut self, sample_rate: f64, block_size: usize) {
         let mut max_edges = 0;
 
         self.allocate_visitor();
         self.visit(|graph, node| {
             // allocate the node's inputs and outputs
-            graph.digraph[node].resize_buffers(audio_rate, control_rate, block_size);
+            graph.digraph[node].resize_buffers(sample_rate, block_size);
 
             let num_inputs = graph
                 .digraph
@@ -381,11 +347,11 @@ impl Graph {
 
     /// Returns a mutable reference to the input [`Buffer`] of the [`GraphNode`] at the given [`NodeIndex`] and input index.
     #[inline]
-    pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut Signal {
+    pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut Buffer {
         match &mut self.digraph[node] {
             GraphNode::Passthrough(buffer) => {
                 if input_index != 0 {
-                    panic!("Input node has only one input signal");
+                    panic!("Input node has only one input buffer");
                 }
                 buffer
             }
@@ -395,11 +361,11 @@ impl Graph {
 
     /// Returns a reference to the output [`Buffer`] of the [`GraphNode`] at the given [`NodeIndex`] and output index.
     #[inline]
-    pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &Signal {
+    pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &Buffer {
         match &self.digraph[node] {
             GraphNode::Passthrough(buffer) => {
                 if output_index != 0 {
-                    panic!("Output node has only one output signal");
+                    panic!("Output node has only one output buffer");
                 }
                 buffer
             }
@@ -451,7 +417,7 @@ impl Graph {
                     GraphNode::Processor(processor) => processor.input_mut(target_input as usize),
                     GraphNode::Passthrough(buffer) => buffer,
                 };
-                target_signal.copy_from(source_signal);
+                target_signal.copy_from_slice(source_signal);
             }
 
             // process the node
