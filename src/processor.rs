@@ -2,33 +2,44 @@ use std::fmt::Debug;
 
 use crate::signal::Buffer;
 
+/// Information about an input/output of a [`Process`] implementor.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Param {
+pub struct SignalSpec {
     pub name: &'static str,
     pub min: f64,
     pub max: f64,
+    pub default_value: f64,
 }
 
-impl Default for Param {
+impl Default for SignalSpec {
+    /// Creates a new unnamed and unbounded [`SignalSpec`] (min = [`f64::MIN`], max = [`f64::MAX`]).
     fn default() -> Self {
         Self {
             name: "",
             min: f64::MIN,
             max: f64::MAX,
+            default_value: 0.0,
         }
     }
 }
 
-impl Param {
-    pub fn new(name: &'static str, min: f64, max: f64) -> Self {
-        Self { name, min, max }
-    }
-
-    pub fn default_with_name(name: &'static str) -> Self {
+impl SignalSpec {
+    /// Creates a new bounded [`SignalSpec`] with the given name, minimum and maximum values.
+    pub fn new(name: &'static str, min: f64, max: f64, default_value: f64) -> Self {
         Self {
             name,
-            min: f64::MIN,
-            max: f64::MAX,
+            min,
+            max,
+            default_value,
+        }
+    }
+
+    /// Creates a new unbounded [`SignalSpec`] with the given name.
+    pub fn unbounded(name: &'static str, default_value: f64) -> Self {
+        Self {
+            name,
+            default_value,
+            ..Default::default()
         }
     }
 }
@@ -42,19 +53,19 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
     }
 
     /// Returns information about the inputs this [`Process`] expects.
-    fn input_params(&self) -> Vec<Param>;
+    fn input_spec(&self) -> Vec<SignalSpec>;
 
     /// Returns information about the outputs this [`Process`] produces.
-    fn output_params(&self) -> Vec<Param>;
+    fn output_spec(&self) -> Vec<SignalSpec>;
 
     /// Returns the number of input buffers/channels this [`Process`] expects.
     fn num_inputs(&self) -> usize {
-        self.input_params().len()
+        self.input_spec().len()
     }
 
     /// Returns the number of output buffers/channels this [`Process`] produces.
     fn num_outputs(&self) -> usize {
-        self.output_params().len()
+        self.output_spec().len()
     }
 
     /// Called before the first [`Process::process`] call, and anytime the graph changes.
@@ -106,7 +117,7 @@ impl Debug for dyn Process {
     }
 }
 
-/// A node in the audio graph that processes audio or control signals.
+/// A node in the audio graph that processes signals.
 ///
 /// This is a wrapper around a [`Box<dyn Process>`](Process) that provides input and output buffers for the processor to use.
 #[derive(Clone)]
@@ -131,11 +142,11 @@ impl Processor {
     /// Creates a new [`Processor`] from the given boxed [`Process`] object.
     pub fn new_from_boxed(processor: Box<dyn Process>) -> Self {
         let mut input_buffers = Vec::with_capacity(processor.num_inputs());
-        for _param in processor.input_params() {
+        for _spec in processor.input_spec() {
             input_buffers.push(Buffer::zeros(0));
         }
         let mut output_buffers = Vec::with_capacity(processor.num_outputs());
-        for _param in processor.output_params() {
+        for _spec in processor.output_spec() {
             output_buffers.push(Buffer::zeros(0));
         }
 
@@ -151,22 +162,24 @@ impl Processor {
     }
 
     /// Returns information about the inputs this [`Processor`] expects.
-    pub fn input_params(&self) -> Vec<Param> {
-        self.processor.input_params()
+    pub fn input_spec(&self) -> Vec<SignalSpec> {
+        self.processor.input_spec()
     }
 
     /// Returns information about the outputs this [`Processor`] produces.
-    pub fn output_params(&self) -> Vec<Param> {
-        self.processor.output_params()
+    pub fn output_spec(&self) -> Vec<SignalSpec> {
+        self.processor.output_spec()
     }
 
     /// Resizes the input and output buffers to match the given sample rates and block size.
     pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
-        for input in self.inputs.iter_mut() {
-            input.resize(block_size);
+        let input_spec = self.input_spec();
+        for (input, spec) in self.inputs.iter_mut().zip(input_spec) {
+            input.resize(block_size, spec.default_value.into());
         }
-        for output in self.outputs.iter_mut() {
-            output.resize(block_size);
+        let output_spec = self.output_spec();
+        for (output, spec) in self.outputs.iter_mut().zip(output_spec) {
+            output.resize(block_size, spec.default_value.into());
         }
         self.processor.resize_buffers(sample_rate, block_size);
     }

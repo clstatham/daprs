@@ -48,23 +48,27 @@ impl<'a> Node<'a> {
     pub fn connect_input(
         self,
         source: impl IntoNode<'a>,
-        source_output: u32,
-        input_index: u32,
+        source_output: impl IntoOutputIdx,
+        input: impl IntoInputIdx,
     ) -> Self {
         let source = source.into_node(self.graph_builder);
+        let source_output = source_output.into_output_idx(source);
+        let target_input = input.into_input_idx(self);
         self.graph_builder
-            .connect(source.id(), source_output, self.id(), input_index);
+            .connect(source.id(), source_output, self.id(), target_input);
         self
     }
 
     #[inline]
     pub fn connect_output(
         self,
-        output_index: u32,
+        output: impl IntoOutputIdx,
         target: impl IntoNode<'a>,
-        target_input: u32,
+        target_input: impl IntoInputIdx,
     ) -> Self {
         let target = target.into_node(self.graph_builder);
+        let output_index = output.into_output_idx(self);
+        let target_input = target_input.into_input_idx(target);
         self.graph_builder
             .connect(self.id(), output_index, target.id(), target_input);
         self
@@ -77,6 +81,8 @@ mod sealed {
     impl Sealed for crate::graph::NodeIndex {}
     impl<'a> Sealed for super::Node<'a> {}
     impl Sealed for f64 {}
+    impl Sealed for u32 {}
+    impl Sealed for &str {}
 }
 
 pub trait IntoNode<'a>: sealed::Sealed {
@@ -101,6 +107,54 @@ impl<'a> IntoNode<'a> for Node<'a> {
 impl<'a> IntoNode<'a> for f64 {
     fn into_node(self, graph_builder: &'a GraphBuilder) -> Node<'a> {
         graph_builder.add_constant(self)
+    }
+}
+
+pub trait IntoInputIdx: sealed::Sealed {
+    fn into_input_idx(self, node: Node) -> u32;
+}
+
+impl IntoInputIdx for u32 {
+    #[inline]
+    fn into_input_idx(self, _node: Node) -> u32 {
+        self
+    }
+}
+
+impl IntoInputIdx for &str {
+    #[inline]
+    fn into_input_idx(self, node: Node) -> u32 {
+        node.graph().with_graph(|graph| {
+            graph.digraph()[node.id()]
+                .input_spec()
+                .iter()
+                .position(|s| s.name == self)
+                .unwrap_or_else(|| panic!("no input with name {self}")) as u32
+        })
+    }
+}
+
+pub trait IntoOutputIdx: sealed::Sealed {
+    fn into_output_idx(self, node: Node) -> u32;
+}
+
+impl IntoOutputIdx for u32 {
+    #[inline]
+    fn into_output_idx(self, _node: Node) -> u32 {
+        self
+    }
+}
+
+impl IntoOutputIdx for &str {
+    #[inline]
+    fn into_output_idx(self, node: Node) -> u32 {
+        node.graph().with_graph(|graph| {
+            graph.digraph()[node.id()]
+                .output_spec()
+                .iter()
+                .position(|s| s.name == self)
+                .unwrap_or_else(|| panic!("no output with name {self}")) as u32
+        })
     }
 }
 

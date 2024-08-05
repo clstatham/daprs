@@ -15,7 +15,7 @@ pub mod prelude {
     pub use crate::builder::{graph_builder::GraphBuilder, node_builder::Node};
     pub use crate::builtins::{math::*, oscillators::*};
     pub use crate::graph::{edge::Edge, Graph};
-    pub use crate::processor::{Param, Process, Processor};
+    pub use crate::processor::{Process, Processor, SignalSpec};
     pub use crate::runtime::{Backend, Device, Runtime};
     pub use crate::signal::{Buffer, Sample};
 }

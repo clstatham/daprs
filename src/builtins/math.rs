@@ -4,7 +4,7 @@ use std::ops::*;
 #[derive(Clone, Debug)]
 pub struct ConstantProc {
     value: f64,
-    out: Param,
+    out: SignalSpec,
 }
 
 impl ConstantProc {
@@ -20,26 +20,24 @@ impl Default for ConstantProc {
     fn default() -> Self {
         Self {
             value: 0.0,
-            out: Param::default_with_name("out"),
+            out: SignalSpec::unbounded("out", 0.0),
         }
     }
 }
 
 impl Process for ConstantProc {
-    fn input_params(&self) -> Vec<Param> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
 
-    fn output_params(&self) -> Vec<Param> {
+    fn output_spec(&self) -> Vec<SignalSpec> {
         vec![self.out]
     }
 
     fn process(&mut self, _inputs: &[Buffer], outputs: &mut [Buffer]) {
         let out = &mut outputs[0];
 
-        for sample in out {
-            *sample = self.value.into();
-        }
+        out.fill(Sample::from(self.value));
     }
 }
 
@@ -48,27 +46,27 @@ macro_rules! impl_binary_proc {
         #[doc = $doc]
         #[derive(Clone, Debug)]
         pub struct $name {
-            in1: Param,
-            in2: Param,
-            out: Param,
+            in1: SignalSpec,
+            in2: SignalSpec,
+            out: SignalSpec,
         }
 
         impl Default for $name {
             fn default() -> Self {
                 Self {
-                    in1: Param::default_with_name("in1"),
-                    in2: Param::default_with_name("in2"),
-                    out: Param::default_with_name("out"),
+                    in1: SignalSpec::unbounded("in1", 0.0),
+                    in2: SignalSpec::unbounded("in2", 0.0),
+                    out: SignalSpec::unbounded("out", 0.0),
                 }
             }
         }
 
         impl Process for $name {
-            fn input_params(&self) -> Vec<Param> {
+            fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![self.in1, self.in2]
             }
 
-            fn output_params(&self) -> Vec<Param> {
+            fn output_spec(&self) -> Vec<SignalSpec> {
                 vec![self.out]
             }
 
@@ -137,25 +135,25 @@ macro_rules! impl_unary_proc {
         #[doc = $doc]
         #[derive(Clone, Debug)]
         pub struct $name {
-            in1: Param,
-            out: Param,
+            in1: SignalSpec,
+            out: SignalSpec,
         }
 
         impl Default for $name {
             fn default() -> Self {
                 Self {
-                    in1: Param::default_with_name("in"),
-                    out: Param::default_with_name("out"),
+                    in1: SignalSpec::unbounded("in", 0.0),
+                    out: SignalSpec::unbounded("out", 0.0),
                 }
             }
         }
 
         impl Process for $name {
-            fn input_params(&self) -> Vec<Param> {
+            fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![self.in1]
             }
 
-            fn output_params(&self) -> Vec<Param> {
+            fn output_spec(&self) -> Vec<SignalSpec> {
                 vec![self.out]
             }
 

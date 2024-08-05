@@ -21,7 +21,7 @@ fn main() {
     let sine = graph.add(SineOscillator::default());
 
     // set the frequency of the sine oscillator
-    sine.connect_input(440.0, 0, 0);
+    sine.connect_input(440.0, 0, "frequency");
 
     // connect the processor to the outputs
     sine.connect_output(0, out1, 0);

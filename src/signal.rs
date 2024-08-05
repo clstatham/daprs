@@ -254,9 +254,9 @@ impl Buffer {
 
     /// Resizes the buffer to the given length, filling any new elements with zeros.
     #[inline]
-    pub fn resize(&mut self, length: usize) {
+    pub fn resize(&mut self, length: usize, value: Sample) {
         if self.len() != length {
-            self.buf.resize(length, Sample::new(0.0));
+            self.buf.resize(length, value);
         }
     }
 

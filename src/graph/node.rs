@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    processor::{Param, Process, Processor},
+    processor::{Process, Processor, SignalSpec},
     signal::Buffer,
 };
 
@@ -45,18 +45,18 @@ impl GraphNode {
     }
 
     /// Returns information about the inputs this [`GraphNode`] expects.
-    pub fn input_spec(&self) -> Vec<Param> {
+    pub fn input_spec(&self) -> Vec<SignalSpec> {
         match self {
-            Self::Passthrough(_) => vec![Param::default_with_name("in")],
-            Self::Processor(processor) => processor.input_params(),
+            Self::Passthrough(_) => vec![SignalSpec::unbounded("in", 0.0)],
+            Self::Processor(processor) => processor.input_spec(),
         }
     }
 
     /// Returns information about the outputs this [`GraphNode`] produces.
-    pub fn output_spec(&self) -> Vec<Param> {
+    pub fn output_spec(&self) -> Vec<SignalSpec> {
         match self {
-            Self::Passthrough(_) => vec![Param::default_with_name("out")],
-            Self::Processor(processor) => processor.output_params(),
+            Self::Passthrough(_) => vec![SignalSpec::unbounded("out", 0.0)],
+            Self::Processor(processor) => processor.output_spec(),
         }
     }
 
@@ -95,7 +95,7 @@ impl GraphNode {
     /// Resizes the input and output buffers to match the given sample rate and block size.
     pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
         match self {
-            Self::Passthrough(buffer) => buffer.resize(block_size),
+            Self::Passthrough(buffer) => buffer.resize(block_size, 0.0.into()),
             Self::Processor(processor) => processor.resize_buffers(sample_rate, block_size),
         }
     }

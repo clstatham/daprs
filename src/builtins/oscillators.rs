@@ -1,18 +1,31 @@
 use crate::prelude::*;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct SineOscillator {
     t: f64,
     t_step: f64,
+    frequency: SignalSpec,
+    out: SignalSpec,
+}
+
+impl Default for SineOscillator {
+    fn default() -> Self {
+        Self {
+            t: 0.0,
+            t_step: 0.0,
+            frequency: SignalSpec::unbounded("frequency", 440.0),
+            out: SignalSpec::unbounded("out", 0.0),
+        }
+    }
 }
 
 impl Process for SineOscillator {
-    fn input_params(&self) -> Vec<Param> {
-        vec![Param::default_with_name("frequency")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![self.frequency]
     }
 
-    fn output_params(&self) -> Vec<Param> {
-        vec![Param::default_with_name("out")]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![self.out]
     }
 
     fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
