@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use crate::signal::Buffer;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Param {
     pub name: &'static str,
     pub min: f64,

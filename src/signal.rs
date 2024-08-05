@@ -28,6 +28,11 @@ impl Sample {
     }
 
     #[inline]
+    pub const fn value(self) -> f64 {
+        self.0
+    }
+
+    #[inline]
     pub fn is_truthy(self) -> bool {
         self.0 > 0.0
     }

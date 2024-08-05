@@ -3,16 +3,19 @@
 use cpal::traits::{DeviceTrait, HostTrait};
 use runtime::Backend;
 
+pub mod builder;
+pub mod builtins;
 pub mod graph;
-pub mod graph_builder;
 pub mod processor;
 pub mod runtime;
 pub mod signal;
 
 #[allow(unused_imports)]
 pub mod prelude {
+    pub use crate::builder::{graph_builder::GraphBuilder, node_builder::Node};
+    pub use crate::builtins::{math::*, oscillators::*};
     pub use crate::graph::{edge::Edge, Graph};
-    pub use crate::processor::{Process, Processor};
+    pub use crate::processor::{Param, Process, Processor};
     pub use crate::runtime::{Backend, Device, Runtime};
     pub use crate::signal::{Buffer, Sample};
 }
