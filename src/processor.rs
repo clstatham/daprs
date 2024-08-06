@@ -232,12 +232,12 @@ impl Processor {
         assert_eq!(
             self.inputs().len(),
             self.processor.num_inputs(),
-            "The number of inputs must match the number returned by Processor::num_inputs()"
+            "The number of inputs must match the number returned by Process::num_inputs()"
         );
         assert_eq!(
             self.outputs().len(),
             self.processor.num_outputs(),
-            "The number of outputs must match the number returned by Processor::num_outputs()"
+            "The number of outputs must match the number returned by Process::num_outputs()"
         );
         self.processor.process(&self.inputs, &mut self.outputs);
     }

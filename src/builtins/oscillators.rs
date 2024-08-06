@@ -1,11 +1,22 @@
 use crate::prelude::*;
 
+/// A free-running sine wave oscillator.
+///
+/// # Inputs
+///
+/// | Index | Name | Default | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `frequency` | `440.0` | The frequency of the sine wave in Hz. |
+///
+/// # Outputs
+///
+/// | Index | Name | Description |
+/// | --- | --- | --- |
+/// | `0` | `out` | The output sine wave signal. |
 #[derive(Clone, Debug)]
 pub struct SineOscillator {
     t: f64,
     t_step: f64,
-    frequency: SignalSpec,
-    out: SignalSpec,
 }
 
 impl Default for SineOscillator {
@@ -13,19 +24,17 @@ impl Default for SineOscillator {
         Self {
             t: 0.0,
             t_step: 0.0,
-            frequency: SignalSpec::unbounded("frequency", 440.0),
-            out: SignalSpec::unbounded("out", 0.0),
         }
     }
 }
 
 impl Process for SineOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![self.frequency]
+        vec![SignalSpec::unbounded("frequency", 440.0)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![self.out]
+        vec![SignalSpec::unbounded("out", 0.0)]
     }
 
     fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
