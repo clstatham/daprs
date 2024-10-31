@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use crate::{
-    buffer::Buffer,
     processor::{Process, Processor, SignalSpec},
+    signal::Buffer,
 };
 
 /// A node in the audio graph.

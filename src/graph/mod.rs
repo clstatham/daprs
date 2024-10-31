@@ -6,8 +6,8 @@ use petgraph::{
 };
 
 use crate::{
-    buffer::Buffer,
     processor::{Process, Processor},
+    signal::Buffer,
 };
 
 pub mod edge;
