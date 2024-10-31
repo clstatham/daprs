@@ -133,6 +133,13 @@ impl Deref for Sample {
     }
 }
 
+impl DerefMut for Sample {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl Add for Sample {
     type Output = Self;
 
