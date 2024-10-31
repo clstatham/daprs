@@ -96,7 +96,7 @@ pub trait ProcessClone: sealed::Sealed {
     fn clone_boxed(&self) -> Box<dyn Process>;
 }
 
-impl<T: ?Sized> ProcessClone for T
+impl<T> ProcessClone for T
 where
     T: Clone + Process,
 {
