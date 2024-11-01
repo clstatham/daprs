@@ -1,6 +1,6 @@
 use crate::{
     message::Bang,
-    prelude::{Process, SignalSpec},
+    prelude::{GraphBuilder, Node, Process, SignalSpec},
     processor::ProcessorError,
     signal::Signal,
 };
@@ -42,7 +42,7 @@ impl MetroProc {
 
 impl Process for MetroProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![]
+        vec![SignalSpec::unbounded("period", Signal::new_message_none())]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -55,14 +55,24 @@ impl Process for MetroProc {
 
     fn process(
         &mut self,
-        _inputs: &[crate::signal::SignalBuffer],
+        inputs: &[crate::signal::SignalBuffer],
         outputs: &mut [crate::signal::SignalBuffer],
     ) -> Result<(), ProcessorError> {
+        let period = inputs[0]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
         let out = outputs[0]
             .as_message_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
-        for out in out {
+        for (period, out) in itertools::izip!(period, out) {
+            if let Some(period) = period {
+                if let Some(period) = (**period).downcast_ref::<f64>() {
+                    self.period = *period;
+                }
+            }
+
             if self.next_sample() {
                 *out = Some(Box::new(Bang));
             } else {
@@ -71,5 +81,24 @@ impl Process for MetroProc {
         }
 
         Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A metronome that emits a bang at the given period.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `period` | `Message(f64)` | | The period of the metronome in seconds. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Bang` | Emits a bang at the given period. |
+    pub fn metro(&self, period: f64) -> Node {
+        self.add_processor(MetroProc::new(period))
     }
 }

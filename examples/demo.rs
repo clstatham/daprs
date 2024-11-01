@@ -10,11 +10,11 @@ fn main() {
     let graph = GraphBuilder::new();
 
     // add some outputs
-    let out1 = graph.add_output();
-    let out2 = graph.add_output();
+    let out1 = graph.output();
+    let out2 = graph.output();
 
     // add a processor
-    let sine = graph.add(SineOscillator::default());
+    let sine = graph.add_processor(SineOscillator::default());
 
     // set the frequency of the sine oscillator
     sine.connect_input(440.0, 0, "frequency");

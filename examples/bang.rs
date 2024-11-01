@@ -9,23 +9,30 @@ fn main() {
     // create a new graph
     let graph = GraphBuilder::new();
 
-    // add a metronome node with a period of 0.5 seconds
+    // add a metronome node with an initial period of 0.5 seconds
     let bang = graph.metro(0.5);
 
-    // add a print node with a its own initial message
-    let print1 = graph.print(Some("print1"), Some("Goodbye, world!"));
+    // add a sine oscillator node with a frequency of 1 Hz
+    let sine = graph.sine_osc();
+    graph.constant(1.0).connect_output(0, sine, "frequency");
 
-    // add a message node with a new message
-    let new_message = graph.message("Hello, world!".to_string());
+    // make the sine only output positive values
+    let sine = sine.abs();
 
-    // connect the metronome to trigger the new message
-    bang.connect_output(0, new_message, 0);
+    // convert the sine oscillator to output a message
+    let sine = sine.s2m();
+
+    // connect the sine oscillator to the metronome
+    sine.connect_output(0, bang, 0);
+
+    // add a print node
+    let print1 = graph.print(Some("freq"), None);
 
     // connect the metronome to trigger the print
     bang.connect_output(0, print1, 0);
 
-    // connect the new message to the print's "message" input (comment this line out to see it print its own message)
-    new_message.connect_output(0, print1, "message");
+    // connect the sine oscillator to the print
+    sine.connect_output(0, print1, "message");
 
     // build the graph
     let graph = graph.build();

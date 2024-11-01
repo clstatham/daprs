@@ -244,6 +244,7 @@ name = "daprs"
 version = "0.1.0"
 dependencies = [
  "cpal",
+ "daprs-macros",
  "downcast-rs",
  "env_logger",
  "hound",
@@ -251,6 +252,15 @@ dependencies = [
  "log",
  "petgraph",
  "thiserror",
+]
+
+[[package]]
+name = "daprs-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

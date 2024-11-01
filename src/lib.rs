@@ -13,7 +13,10 @@ pub mod signal;
 
 #[allow(unused_imports)]
 pub mod prelude {
-    pub use crate::builder::{graph_builder::GraphBuilder, node_builder::Node};
+    pub use crate::builder::{
+        graph_builder::GraphBuilder,
+        node_builder::{IntoNode, Node},
+    };
     pub use crate::builtins::*;
     pub use crate::graph::{edge::Edge, Graph};
     pub use crate::message::*;

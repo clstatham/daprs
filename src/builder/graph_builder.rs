@@ -2,8 +2,7 @@ use std::sync::Mutex;
 
 use crate::{
     graph::{Graph, NodeIndex},
-    message::{Bang, Message},
-    prelude::{ConstantProc, MessageProc, MetroProc, PrintProc, Process},
+    prelude::Process,
 };
 
 use super::node_builder::Node;
@@ -66,7 +65,7 @@ impl GraphBuilder {
         self
     }
 
-    pub fn add_input(&self) -> Node<'_> {
+    pub fn input(&self) -> Node<'_> {
         let index = self.graph.lock().unwrap().as_mut().unwrap().add_input();
         Node {
             graph_builder: self,
@@ -74,7 +73,7 @@ impl GraphBuilder {
         }
     }
 
-    pub fn add_output(&self) -> Node<'_> {
+    pub fn output(&self) -> Node<'_> {
         let index = self.graph.lock().unwrap().as_mut().unwrap().add_output();
         Node {
             graph_builder: self,
@@ -82,21 +81,7 @@ impl GraphBuilder {
         }
     }
 
-    pub fn add_constant(&self, value: f64) -> Node<'_> {
-        let index = self
-            .graph
-            .lock()
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .add_processor(ConstantProc::new(value));
-        Node {
-            graph_builder: self,
-            node_id: index,
-        }
-    }
-
-    pub fn add(&self, processor: impl Process) -> Node<'_> {
+    pub fn add_processor(&self, processor: impl Process) -> Node<'_> {
         let index = self
             .graph
             .lock()
@@ -108,21 +93,5 @@ impl GraphBuilder {
             graph_builder: self,
             node_id: index,
         }
-    }
-
-    pub fn message(&self, message: impl Message) -> Node<'_> {
-        self.add(MessageProc::new(message))
-    }
-
-    pub fn bang(&self) -> Node<'_> {
-        self.message(Bang)
-    }
-
-    pub fn print(&self, name: Option<&str>, msg: Option<&str>) -> Node<'_> {
-        self.add(PrintProc::new(name, msg))
-    }
-
-    pub fn metro(&self, period: f64) -> Node<'_> {
-        self.add(MetroProc::new(period))
     }
 }

@@ -11,7 +11,7 @@ default = []
 jack = ["cpal/jack"]
 
 [workspace]
-members = []
+members = ["daprs-macros"]
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }
@@ -21,6 +21,9 @@ petgraph = "0.6.5"
 hound = "3.5"
 thiserror = "1.0.63"
 downcast-rs = "1.2.1"
+
+[dependencies.daprs-macros]
+path = "daprs-macros"
 
 [dev-dependencies]
 env_logger = "0.11"

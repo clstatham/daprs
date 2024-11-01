@@ -63,3 +63,22 @@ impl Process for SineOscillator {
         Ok(())
     }
 }
+
+impl GraphBuilder {
+    /// A free-running sine wave oscillator.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `frequency` | `Sample` | `440.0` | The frequency of the sine wave in Hz. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Sample` | The output sine wave signal. |
+    pub fn sine_osc(&self) -> Node {
+        self.add_processor(SineOscillator::default())
+    }
+}

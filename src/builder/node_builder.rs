@@ -75,6 +75,32 @@ impl<'a> Node<'a> {
             .connect(self.id(), output_index, target.id(), target_input);
         self
     }
+
+    /// Converts the node's output from a message to a sample.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    pub fn m2s(self) -> Node<'a> {
+        self.assert_single_output();
+        let m2s = self.graph().m2s();
+        m2s.connect_input(self, 0, 0);
+        m2s
+    }
+
+    /// Converts the node's output from a sample to a message.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    pub fn s2m(self) -> Node<'a> {
+        self.assert_single_output();
+        let s2m = self.graph().s2m();
+        s2m.connect_input(self, 0, 0);
+        s2m
+    }
 }
 
 #[doc(hidden)]
@@ -108,7 +134,7 @@ impl<'a> IntoNode<'a> for Node<'a> {
 
 impl<'a> IntoNode<'a> for f64 {
     fn into_node(self, graph_builder: &'a GraphBuilder) -> Node<'a> {
-        graph_builder.add_constant(self)
+        graph_builder.constant(self)
     }
 }
 
@@ -176,7 +202,7 @@ macro_rules! impl_binary_node_ops {
                 other.assert_single_output();
 
                 let processor = <$proc>::default();
-                let node = self.graph().add(processor);
+                let node = self.graph().add_processor(processor);
                 node.connect_input(self, 0, 0);
                 node.connect_input(other, 0, 1);
 
@@ -193,7 +219,7 @@ macro_rules! impl_binary_node_ops {
                 other.assert_single_output();
 
                 let processor = <$proc>::default();
-                let node = self.graph().add(processor);
+                let node = self.graph().add_processor(processor);
                 node.connect_input(self, 0, 0);
                 node.connect_input(other, 0, 1);
 
@@ -255,7 +281,7 @@ macro_rules! impl_unary_node_ops {
                 self.assert_single_output();
 
                 let processor = <$proc>::default();
-                let node = self.graph().add(processor);
+                let node = self.graph().add_processor(processor);
                 node.connect_input(self, 0, 0);
 
                 node
