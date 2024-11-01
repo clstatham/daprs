@@ -23,16 +23,16 @@ fn main() {
     let sine = sine.s2m();
 
     // connect the sine oscillator to the metronome
-    sine.connect_output(0, bang, 0);
+    sine.connect_output(0, bang, "period");
 
     // add a print node
-    let print1 = graph.print(Some("freq"), None);
+    let print = graph.print(Some("freq"), None);
 
     // connect the metronome to trigger the print
-    bang.connect_output(0, print1, 0);
+    bang.connect_output(0, print, "trig");
 
     // connect the sine oscillator to the print
-    sine.connect_output(0, print1, "message");
+    sine.connect_output(0, print, "message");
 
     // build the graph
     let graph = graph.build();
@@ -41,7 +41,6 @@ fn main() {
     let mut runtime = Runtime::new(graph);
 
     // run the runtime for 5 seconds
-    // this will print a message every 0.5 seconds!
     runtime
         .simulate(Duration::from_secs(5), 44_100.0, 512)
         .unwrap();
