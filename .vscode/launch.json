@@ -7,8 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Launch demo",
+            "name": "Launch `demo example`",
             "program": "${workspaceFolder}/target/debug/examples/demo.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Launch `bang` example",
+            "program": "${workspaceFolder}/target/debug/examples/bang.exe",
             "args": [],
             "cwd": "${workspaceFolder}"
         },

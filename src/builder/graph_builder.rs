@@ -2,7 +2,8 @@ use std::sync::Mutex;
 
 use crate::{
     graph::{Graph, NodeIndex},
-    prelude::{ConstantProc, Process},
+    message::{BangMessage, Message},
+    prelude::{ConstantProc, MessageProc, MetroProc, PrintProc, Process},
 };
 
 use super::node_builder::Node;
@@ -107,5 +108,21 @@ impl GraphBuilder {
             graph_builder: self,
             node_id: index,
         }
+    }
+
+    pub fn message(&self, message: impl Message) -> Node<'_> {
+        self.add(MessageProc::new(message))
+    }
+
+    pub fn bang(&self) -> Node<'_> {
+        self.message(BangMessage)
+    }
+
+    pub fn print(&self, name: Option<&str>, msg: Option<&str>) -> Node<'_> {
+        self.add(PrintProc::new(name, msg))
+    }
+
+    pub fn metro(&self, period: f64) -> Node<'_> {
+        self.add(MetroProc::new(period))
     }
 }

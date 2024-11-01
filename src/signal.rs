@@ -365,49 +365,46 @@ impl<'a, T> IntoIterator for &'a mut Buffer<T> {
     }
 }
 
-impl Buffer<BoxedMessage> {
+impl Buffer<Option<BoxedMessage>> {
     /// Returns `true` if all messages in the buffer are of the same type.
     pub fn is_homogeneous(&self) -> bool {
         if self.buf.len() > 1 {
-            let type_id = (*self.buf[0]).type_id();
-            self.buf
-                .iter()
-                .all(|message| (*message).type_id() == type_id)
+            let first_some = self.buf.iter().find(|message| message.is_some());
+            if let Some(first_some) = first_some {
+                let type_id = (**first_some.as_ref().unwrap()).type_id();
+                self.buf.iter().all(|message| match message {
+                    Some(message) => (**message).type_id() == type_id,
+                    None => true,
+                })
+            } else {
+                true
+            }
         } else {
             true
         }
     }
 
+    /// Panics on debug builds if the buffer is not homogeneous.
+    #[track_caller]
+    #[inline]
     pub fn debug_assert_homogeneous(&self) {
         debug_assert!(self.is_homogeneous(), "Buffer is not homogeneous");
     }
 
-    pub fn downcast_ref<T: Message>(&self) -> Option<&Buffer<Box<T>>> {
-        self.debug_assert_homogeneous();
-        if self.buf.iter().all(|message| (**message).is::<T>()) {
-            // SAFETY: All messages in the buffer are of type `T`, `T` is a `Message`, and `Box<T>` is the same size and layout as `BoxedMessage` (which is a type alias for Box<dyn Message>).
-            Some(unsafe { &*(self as *const Buffer<BoxedMessage> as *const Buffer<Box<T>>) })
-        } else {
-            None
-        }
-    }
-
-    pub fn downcast_mut<T: Message>(&mut self) -> Option<&mut Buffer<Box<T>>> {
-        self.debug_assert_homogeneous();
-        if self.buf.iter().all(|message| (**message).is::<T>()) {
-            // SAFETY: All messages in the buffer are of type `T`, `T` is a `Message`, and `Box<T>` is the same size and layout as `BoxedMessage` (which is a type alias for Box<dyn Message>).
-            Some(unsafe { &mut *(self as *mut Buffer<BoxedMessage> as *mut Buffer<Box<T>>) })
-        } else {
-            None
-        }
+    /// Returns `true` if all messages in the buffer are of the same type as `T`.
+    pub fn is_all<T: Message>(&self) -> bool {
+        self.buf.iter().all(|message| match message {
+            Some(message) => (**message).is::<T>(),
+            None => true,
+        })
     }
 }
 
 /// A signal that can be either a single sample or a message.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Signal {
     Sample(Sample),
-    Message(BoxedMessage),
+    Message(Option<BoxedMessage>),
 }
 
 impl Signal {
@@ -415,8 +412,12 @@ impl Signal {
         Self::Sample(Sample(value))
     }
 
-    pub fn new_message(message: impl Message) -> Self {
-        Self::Message(Box::new(message))
+    pub fn new_message_some(message: impl Message) -> Self {
+        Self::Message(Some(Box::new(message)))
+    }
+
+    pub fn new_message_none() -> Self {
+        Self::Message(None)
     }
 
     pub const fn is_sample(&self) -> bool {
@@ -444,14 +445,14 @@ impl Into<Signal> for f64 {
 
 impl<T: Message> From<T> for Signal {
     fn from(message: T) -> Self {
-        Signal::Message(Box::new(message))
+        Signal::Message(Some(Box::new(message)))
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum SignalBuffer {
     Sample(Buffer<Sample>),
-    Message(Buffer<BoxedMessage>),
+    Message(Buffer<Option<BoxedMessage>>),
 }
 
 impl SignalBuffer {
@@ -459,13 +460,9 @@ impl SignalBuffer {
         Self::Sample(Buffer::zeros(length))
     }
 
-    pub fn new_message<T: Message + Default>(length: usize) -> Self {
-        let mut buffer = Vec::with_capacity(length);
-        for _ in 0..length {
-            buffer.push(Box::new(T::default()) as BoxedMessage);
-        }
+    pub fn new_message(length: usize) -> Self {
         Self::Message(Buffer {
-            buf: buffer.into_boxed_slice(),
+            buf: vec![None; length].into_boxed_slice(),
         })
     }
 
@@ -475,7 +472,7 @@ impl SignalBuffer {
                 buf: vec![*default_value; length].into_boxed_slice(),
             }),
             Signal::Message(mess) => Self::Message(Buffer {
-                buf: vec![mess.clone_boxed(); length].into_boxed_slice(),
+                buf: vec![mess.clone(); length].into_boxed_slice(),
             }),
         }
     }
@@ -495,7 +492,7 @@ impl SignalBuffer {
         }
     }
 
-    pub fn as_message(&self) -> Option<&Buffer<BoxedMessage>> {
+    pub fn as_message(&self) -> Option<&Buffer<Option<BoxedMessage>>> {
         match self {
             Self::Sample(_) => None,
             Self::Message(buffer) => Some(buffer),
@@ -509,7 +506,7 @@ impl SignalBuffer {
         }
     }
 
-    pub fn as_message_mut(&mut self) -> Option<&mut Buffer<BoxedMessage>> {
+    pub fn as_message_mut(&mut self) -> Option<&mut Buffer<Option<BoxedMessage>>> {
         match self {
             Self::Sample(_) => None,
             Self::Message(buffer) => Some(buffer),
@@ -561,7 +558,7 @@ impl SignalBuffer {
             }
             Self::Message(buffer) => {
                 if let Signal::Message(value) = value {
-                    buffer.map_mut(|message| *message = value.clone_boxed());
+                    buffer.map_mut(|message| *message = value.clone());
                 } else {
                     panic!("Cannot fill message buffer with sample");
                 }
@@ -575,7 +572,7 @@ impl SignalBuffer {
                 this.copy_map(other, |sample| *sample);
             }
             (Self::Message(this), Self::Message(other)) => {
-                this.copy_map(other, |message| message.clone_boxed());
+                this.copy_map(other, |message| message.clone());
             }
             _ => panic!("Cannot copy between sample and message buffers"),
         }
@@ -628,40 +625,5 @@ impl TryFrom<Buffer<Signal>> for SignalBuffer {
                 buf: message_buffer.into_boxed_slice(),
             }))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_buffer_message_downcast() {
-        use super::Buffer;
-        use crate::message::{BoxedMessage, Message};
-
-        #[derive(Debug, Clone)]
-        struct FooMessage;
-        impl Message for FooMessage {}
-
-        #[derive(Debug, Clone)]
-        struct BarMessage;
-        impl Message for BarMessage {}
-
-        let mut buffer: Buffer<BoxedMessage> = Buffer {
-            buf: vec![Box::new(FooMessage) as BoxedMessage; 3].into_boxed_slice(),
-        };
-
-        assert!(buffer.downcast_ref::<FooMessage>().is_some());
-        assert!(buffer.downcast_ref::<BarMessage>().is_none());
-
-        assert!(buffer.downcast_mut::<FooMessage>().is_some());
-        assert!(buffer.downcast_mut::<BarMessage>().is_none());
-
-        buffer.buf[1] = Box::new(BarMessage) as BoxedMessage;
-
-        assert!(buffer.downcast_ref::<FooMessage>().is_none());
-        assert!(buffer.downcast_ref::<BarMessage>().is_none());
-
-        assert!(buffer.downcast_mut::<FooMessage>().is_none());
-        assert!(buffer.downcast_mut::<BarMessage>().is_none());
     }
 }

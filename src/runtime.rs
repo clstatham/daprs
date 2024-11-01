@@ -129,10 +129,14 @@ impl Runtime {
                 .into_boxed_slice();
 
         let mut sample_count = 0;
+        let mut last_block_size = 0;
 
         while sample_count < samples {
             let actual_block_size = (samples - sample_count).min(block_size);
-            self.graph.resize_buffers(sample_rate, actual_block_size)?;
+            if actual_block_size != last_block_size {
+                self.graph.resize_buffers(sample_rate, actual_block_size)?;
+                last_block_size = actual_block_size;
+            }
             self.graph.process()?;
 
             for (i, output) in outputs.iter_mut().enumerate() {
@@ -161,6 +165,11 @@ impl Runtime {
         let outputs = self.run_offline(duration, sample_rate, block_size)?;
 
         let num_channels = outputs.len();
+
+        if num_channels == 0 {
+            log::warn!("No output channels to write to file");
+            return Ok(());
+        }
 
         let num_samples = outputs[0].len();
 

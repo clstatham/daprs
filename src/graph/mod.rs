@@ -308,11 +308,7 @@ impl Graph {
     }
 
     /// Sets the block size of all [`GraphNode`]s in the graph. This will implicitly reallocate all internal buffers and resources.
-    pub fn resize_buffers(
-        &mut self,
-        sample_rate: f64,
-        block_size: usize,
-    ) -> Result<(), GraphRunError> {
+    pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) -> GraphRunResult<()> {
         self.visit(|graph, node| {
             graph.digraph[node].resize_buffers(sample_rate, block_size);
             Ok(())

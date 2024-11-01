@@ -208,11 +208,11 @@ impl Processor {
     pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
         let input_spec = self.input_spec();
         for (input, spec) in self.inputs.iter_mut().zip(input_spec) {
-            input.resize(block_size, spec.default_value);
+            *input = SignalBuffer::from_spec_default(&spec, block_size);
         }
         let output_spec = self.output_spec();
         for (output, spec) in self.outputs.iter_mut().zip(output_spec) {
-            output.resize(block_size, spec.default_value);
+            *output = SignalBuffer::from_spec_default(&spec, block_size);
         }
         self.processor.resize_buffers(sample_rate, block_size);
     }
