@@ -443,12 +443,6 @@ impl Into<Signal> for f64 {
     }
 }
 
-impl<T: Message> From<T> for Signal {
-    fn from(message: T) -> Self {
-        Signal::Message(Some(Box::new(message)))
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum SignalBuffer {
     Sample(Buffer<Sample>),

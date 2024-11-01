@@ -1,5 +1,5 @@
 use crate::{
-    message::BangMessage,
+    message::Bang,
     prelude::{Process, SignalSpec},
     processor::ProcessorError,
     signal::Signal,
@@ -64,7 +64,7 @@ impl Process for MetroProc {
 
         for out in out {
             if self.next_sample() {
-                *out = Some(Box::new(BangMessage));
+                *out = Some(Box::new(Bang));
             } else {
                 *out = None;
             }

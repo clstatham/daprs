@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use crate::{
     graph::{Graph, NodeIndex},
-    message::{BangMessage, Message},
+    message::{Bang, Message},
     prelude::{ConstantProc, MessageProc, MetroProc, PrintProc, Process},
 };
 
@@ -115,7 +115,7 @@ impl GraphBuilder {
     }
 
     pub fn bang(&self) -> Node<'_> {
-        self.message(BangMessage)
+        self.message(Bang)
     }
 
     pub fn print(&self, name: Option<&str>, msg: Option<&str>) -> Node<'_> {

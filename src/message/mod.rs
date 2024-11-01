@@ -32,122 +32,35 @@ impl Clone for Box<dyn Message> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct StringMessage(pub String);
-impl Message for StringMessage {}
-
-impl StringMessage {
-    pub fn new<S: Into<String>>(s: S) -> Self {
-        Self(s.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl Display for StringMessage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<&str> for StringMessage {
-    fn from(s: &str) -> Self {
-        Self(s.to_string())
-    }
-}
-
-impl From<String> for StringMessage {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
+impl Message for String {}
+impl Message for f64 {}
+impl Message for i64 {}
+impl Message for bool {}
 
 #[derive(Debug, Clone)]
-pub struct NumberMessage(pub f64);
-impl Message for NumberMessage {}
+pub struct Nil;
+impl Message for Nil {}
 
-impl NumberMessage {
-    pub fn new(n: f64) -> Self {
-        Self(n)
-    }
-
-    pub fn as_f64(&self) -> f64 {
-        self.0
-    }
-}
-
-impl Display for NumberMessage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<f64> for NumberMessage {
-    fn from(n: f64) -> Self {
-        Self(n)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct BoolMessage(pub bool);
-impl Message for BoolMessage {}
-
-impl BoolMessage {
-    pub fn new(b: bool) -> Self {
-        Self(b)
-    }
-
-    pub fn as_bool(&self) -> bool {
-        self.0
-    }
-}
-
-impl Display for BoolMessage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<bool> for BoolMessage {
-    fn from(b: bool) -> Self {
-        Self(b)
-    }
-}
-
-pub fn true_() -> BoxedMessage {
-    Box::new(BoolMessage::new(true))
-}
-
-pub fn false_() -> BoxedMessage {
-    Box::new(BoolMessage::new(false))
-}
-
-#[derive(Debug, Clone)]
-pub struct NilMessage;
-impl Message for NilMessage {}
-
-impl Display for NilMessage {
+impl Display for Nil {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "nil")
     }
 }
 
 pub fn nil() -> BoxedMessage {
-    Box::new(NilMessage)
+    Box::new(Nil)
 }
 
 #[derive(Debug, Clone)]
-pub struct BangMessage;
-impl Message for BangMessage {}
+pub struct Bang;
+impl Message for Bang {}
 
-impl Display for BangMessage {
+impl Display for Bang {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "bang")
     }
 }
 
 pub fn bang() -> BoxedMessage {
-    Box::new(BangMessage)
+    Box::new(Bang)
 }

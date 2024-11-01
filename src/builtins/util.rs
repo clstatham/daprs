@@ -1,5 +1,5 @@
 use crate::{
-    message::{BangMessage, BoxedMessage, Message},
+    message::{Bang, BoxedMessage, Message},
     prelude::{Process, SignalSpec},
     processor::ProcessorError,
     signal::{Signal, SignalBuffer},
@@ -110,7 +110,7 @@ impl Process for PrintProc {
             .as_message()
             .ok_or(ProcessorError::InputSpecMismatch(1))?;
 
-        if !print.is_all::<BangMessage>() {
+        if !print.is_all::<Bang>() {
             return Err(ProcessorError::InputSpecMismatch(0));
         }
 
