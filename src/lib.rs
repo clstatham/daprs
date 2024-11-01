@@ -6,6 +6,7 @@ use runtime::Backend;
 pub mod builder;
 pub mod builtins;
 pub mod graph;
+pub mod message;
 pub mod processor;
 pub mod runtime;
 pub mod signal;

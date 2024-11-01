@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{prelude::*, processor::ProcessorError, signal::SignalBuffer};
 
 /// A free-running sine wave oscillator.
 ///
@@ -41,15 +41,25 @@ impl Process for SineOscillator {
         self.t_step = sample_rate.recip();
     }
 
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
-        let frequency = &inputs[0];
-        let out = &mut outputs[0];
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let frequency = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+        let out = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
         for (out, frequency) in itertools::izip!(out, frequency) {
-            *out = (self.t * frequency.value() * 2.0 * std::f64::consts::PI)
+            *out = (self.t * **frequency * 2.0 * std::f64::consts::PI)
                 .sin()
                 .into();
             self.t += self.t_step;
         }
+
+        Ok(())
     }
 }

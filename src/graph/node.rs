@@ -2,14 +2,14 @@ use std::fmt::Debug;
 
 use crate::{
     processor::{Process, Processor, SignalSpec},
-    signal::Buffer,
+    signal::SignalBuffer,
 };
 
 /// A node in the audio graph.
 #[derive(Clone)]
 pub enum GraphNode {
     /// A passthrough node that simply forwards its input to its output.
-    Passthrough(Buffer),
+    Passthrough(SignalBuffer),
     /// A processor node that processes its input buffers and writes the results to its output buffers.
     Processor(Processor),
 }
@@ -26,7 +26,7 @@ impl Debug for GraphNode {
 impl GraphNode {
     /// Creates a new input node.
     pub fn new_input() -> Self {
-        Self::Passthrough(Buffer::zeros(0))
+        Self::Passthrough(SignalBuffer::new_sample(0))
     }
 
     /// Creates a new processor node from the given [`Processor`] object.
@@ -41,7 +41,7 @@ impl GraphNode {
 
     /// Creates a new output node.
     pub fn new_output() -> Self {
-        Self::Passthrough(Buffer::zeros(0))
+        Self::Passthrough(SignalBuffer::new_sample(0))
     }
 
     /// Returns information about the inputs this [`GraphNode`] expects.
@@ -69,7 +69,7 @@ impl GraphNode {
     }
 
     /// Returns a slice of the input buffers of this [`GraphNode`].
-    pub fn inputs(&self) -> &[Buffer] {
+    pub fn inputs(&self) -> &[SignalBuffer] {
         match self {
             Self::Passthrough(buffer) => std::slice::from_ref(buffer),
             Self::Processor(processor) => processor.inputs(),
@@ -77,7 +77,7 @@ impl GraphNode {
     }
 
     /// Returns a mutable slice of the input buffers of this [`GraphNode`].
-    pub fn inputs_mut(&mut self) -> &mut [Buffer] {
+    pub fn inputs_mut(&mut self) -> &mut [SignalBuffer] {
         match self {
             Self::Passthrough(buffer) => std::slice::from_mut(buffer),
             Self::Processor(processor) => processor.inputs_mut(),
@@ -85,7 +85,7 @@ impl GraphNode {
     }
 
     /// Returns a slice of the output buffers of this [`GraphNode`].
-    pub fn outputs(&self) -> &[Buffer] {
+    pub fn outputs(&self) -> &[SignalBuffer] {
         match self {
             Self::Passthrough(buffer) => std::slice::from_ref(buffer),
             Self::Processor(processor) => processor.outputs(),
@@ -109,9 +109,11 @@ impl GraphNode {
 
     /// Processes the node's input buffers and writes the results to the node's output buffers.
     /// This is a no-op for passthrough nodes.
-    pub fn process(&mut self) {
+    pub fn process(&mut self) -> Result<(), crate::processor::ProcessorError> {
         if let Self::Processor(processor) = self {
-            processor.process();
+            processor.process()?;
         }
+
+        Ok(())
     }
 }

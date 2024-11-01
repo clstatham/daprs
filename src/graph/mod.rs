@@ -6,8 +6,8 @@ use petgraph::{
 };
 
 use crate::{
-    processor::{Process, Processor},
-    signal::Buffer,
+    processor::{Process, Processor, ProcessorError},
+    signal::SignalBuffer,
 };
 
 pub mod edge;
@@ -32,6 +32,8 @@ pub struct GraphRunError {
 pub enum GraphRunErrorKind {
     #[error("{0}")]
     Other(&'static str),
+    #[error("Processor error: {0}")]
+    ProcessorError(#[from] ProcessorError),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -212,24 +214,24 @@ impl Graph {
         &self.output_nodes
     }
 
-    /// Copies the given data into the input [`Buffer`] of the input [`GraphNode`] at the given index.
+    /// Copies the given data into the input [`SignalBuffer`] of the input [`GraphNode`] at the given index.
     #[inline]
-    pub fn copy_input(&mut self, input_index: usize, data: &Buffer) {
+    pub fn copy_input(&mut self, input_index: usize, data: &SignalBuffer) {
         let input_index = self
             .input_nodes
             .get(input_index)
             .expect("Input index out of bounds");
         let input = &mut self.digraph[*input_index];
         if let GraphNode::Passthrough(input) = input {
-            input.copy_from_slice(data);
+            input.copy_from(data);
         } else {
             panic!("Node at input index is not an input node");
         }
     }
 
-    /// Returns a reference to the output [`Buffer`] of the output [`GraphNode`] at the given index.
+    /// Returns a reference to the output [`SignalBuffer`] of the output [`GraphNode`] at the given index.
     #[inline]
-    pub fn get_output(&self, output_index: usize) -> &Buffer {
+    pub fn get_output(&self, output_index: usize) -> &SignalBuffer {
         let output_index = self
             .output_nodes
             .get(output_index)
@@ -243,7 +245,7 @@ impl Graph {
     }
 
     #[inline]
-    pub fn inputs(&self) -> impl Iterator<Item = &Buffer> {
+    pub fn inputs(&self) -> impl Iterator<Item = &SignalBuffer> {
         self.input_nodes.iter().map(|&idx| {
             if let GraphNode::Passthrough(input) = &self.digraph[idx] {
                 input
@@ -253,9 +255,9 @@ impl Graph {
         })
     }
 
-    /// Returns an iterator over the output [`Buffer`]s of the output [`GraphNode`]s in the graph.
+    /// Returns an iterator over the output [`SignalBuffer`]s of the output [`GraphNode`]s in the graph.
     #[inline]
-    pub fn outputs(&self) -> impl Iterator<Item = &Buffer> {
+    pub fn outputs(&self) -> impl Iterator<Item = &SignalBuffer> {
         self.output_nodes.iter().map(|&idx| {
             if let GraphNode::Passthrough(output) = &self.digraph[idx] {
                 output
@@ -287,9 +289,9 @@ impl Graph {
 
     /// Visits each [`GraphNode`] in the graph in breadth-first order, calling the given closuure with a mutable reference to the graph alongside each [`NodeIndex`].
     #[inline]
-    pub fn visit<F>(&mut self, mut f: F)
+    pub fn visit<F, E>(&mut self, mut f: F) -> Result<(), E>
     where
-        F: FnMut(&mut Graph, NodeIndex),
+        F: FnMut(&mut Graph, NodeIndex) -> Result<(), E>,
     {
         assert!(
             !self.needs_visitor_alloc,
@@ -299,25 +301,32 @@ impl Graph {
         self.reset_visitor();
 
         for i in 0..self.visit_path.len() {
-            f(self, self.visit_path[i]);
+            f(self, self.visit_path[i])?;
         }
+
+        Ok(())
     }
 
     /// Sets the block size of all [`GraphNode`]s in the graph. This will implicitly reallocate all internal buffers and resources.
-    pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
+    pub fn resize_buffers(
+        &mut self,
+        sample_rate: f64,
+        block_size: usize,
+    ) -> Result<(), GraphRunError> {
         self.visit(|graph, node| {
             graph.digraph[node].resize_buffers(sample_rate, block_size);
-        });
+            Ok(())
+        })
     }
 
     /// Allocates all [`GraphNode`]s' internal input and output buffers, along with various internal resources to the graph.
     ///
     /// This should be run at least once before the audio thread starts running, and again anytime the buffer size or sample rate change or the graph structure is modified.
-    pub fn reset(&mut self, sample_rate: f64, block_size: usize) {
+    pub fn reset(&mut self, sample_rate: f64, block_size: usize) -> GraphRunResult<()> {
         let mut max_edges = 0;
 
         self.allocate_visitor();
-        self.visit(|graph, node| {
+        self.visit(|graph, node| -> GraphRunResult<()> {
             // allocate the node's inputs and outputs
             graph.digraph[node].resize_buffers(sample_rate, block_size);
 
@@ -326,28 +335,37 @@ impl Graph {
                 .edges_directed(node, Direction::Incoming)
                 .count();
             max_edges = max_edges.max(num_inputs);
-        });
+
+            Ok(())
+        })?;
 
         // preallocate the edge cache used in `process()`
         // the number of edges per node is likely relatively small, so we round up the cache size just to be sure that no allocations happen in `process()`
         self.edge_cache = Vec::with_capacity((max_edges * 2).next_power_of_two());
 
         self.needs_reset = false;
+
+        Ok(())
     }
 
     /// Prepares all [`GraphNode`]s in the graph for processing.
     ///
     /// This should be run at least once before the audio thread starts running, and again anytime the graph structure is modified.
-    pub fn prepare_nodes(&mut self) {
+    pub fn prepare_nodes(&mut self) -> GraphRunResult<()> {
         self.allocate_visitor();
-        self.visit(|graph, node| graph.digraph[node].prepare());
+        self.visit(|graph, node| {
+            graph.digraph[node].prepare();
+            Ok(())
+        })?;
 
         self.needs_prepare = false;
+
+        Ok(())
     }
 
-    /// Returns a mutable reference to the input [`Buffer`] of the [`GraphNode`] at the given [`NodeIndex`] and input index.
+    /// Returns a mutable reference to the input [`SignalBuffer`] of the [`GraphNode`] at the given [`NodeIndex`] and input index.
     #[inline]
-    pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut Buffer {
+    pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut SignalBuffer {
         match &mut self.digraph[node] {
             GraphNode::Passthrough(buffer) => {
                 if input_index != 0 {
@@ -359,9 +377,9 @@ impl Graph {
         }
     }
 
-    /// Returns a reference to the output [`Buffer`] of the [`GraphNode`] at the given [`NodeIndex`] and output index.
+    /// Returns a reference to the output [`SignalBuffer`] of the [`GraphNode`] at the given [`NodeIndex`] and output index.
     #[inline]
-    pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &Buffer {
+    pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &SignalBuffer {
         match &self.digraph[node] {
             GraphNode::Passthrough(buffer) => {
                 if output_index != 0 {
@@ -376,9 +394,9 @@ impl Graph {
     /// Processes all [`GraphNode`]s in the graph.
     /// This should be called once per audio block.
     ///
-    /// The results of the processing can be read from the output [`Buffer`]s of the output [`GraphNode`]s via [`Graph::get_output`] or [`Graph::outputs`].
+    /// The results of the processing can be read from the output [`SignalBuffer`]s of the output [`GraphNode`]s via [`Graph::get_output`] or [`Graph::outputs`].
     #[inline]
-    pub fn process(&mut self) {
+    pub fn process(&mut self) -> GraphRunResult<()> {
         assert!(
             !self.needs_reset,
             "Graph nodes need reset; call `reset()` first"
@@ -392,7 +410,7 @@ impl Graph {
             "Graph's cached visitor needs allocation; call `allocate_visitor()` first"
         );
 
-        self.visit(|graph: &mut Graph, node_id| {
+        self.visit(|graph: &mut Graph, node_id| -> GraphRunResult<()> {
             // copy the inputs from the source nodes to the target node
             graph.edge_cache.extend(
                 graph
@@ -417,12 +435,22 @@ impl Graph {
                     GraphNode::Processor(processor) => processor.input_mut(target_input as usize),
                     GraphNode::Passthrough(buffer) => buffer,
                 };
-                target_buffer.copy_from_slice(source_buffer);
+                target_buffer.copy_from(source_buffer);
             }
 
             // process the node
-            graph.digraph[node_id].process();
-        });
+            graph.digraph[node_id]
+                .process()
+                .map_err(|err| GraphRunError {
+                    node_index: node_id,
+                    node_processor: graph.digraph[node_id].name().to_string(),
+                    kind: GraphRunErrorKind::ProcessorError(err),
+                })?;
+
+            Ok(())
+        })?;
+
+        Ok(())
     }
 
     /// Writes a DOT representation of the graph to the given writer, suitable for rendering with Graphviz.

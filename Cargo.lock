@@ -244,6 +244,7 @@ name = "daprs"
 version = "0.1.0"
 dependencies = [
  "cpal",
+ "downcast-rs",
  "env_logger",
  "hound",
  "itertools 0.13.0",
@@ -257,6 +258,12 @@ name = "dasp_sample"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
+
+[[package]]
+name = "downcast-rs"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 
 [[package]]
 name = "either"

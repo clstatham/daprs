@@ -3,13 +3,14 @@ use std::sync::mpsc;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use crate::{
-    graph::Graph,
-    signal::{Buffer, Sample},
+    graph::{Graph, GraphRunError},
+    processor::ProcessorError,
+    signal::{Sample, SignalBuffer},
 };
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-#[error("Runtime error: {0}")]
+#[error("Runtime error")]
 pub enum RuntimeError {
     StreamError(#[from] cpal::StreamError),
     DevicesError(#[from] cpal::DevicesError),
@@ -21,6 +22,8 @@ pub enum RuntimeError {
     DefaultStreamConfigError(#[from] cpal::DefaultStreamConfigError),
     #[error("Unsupported sample format: {0}")]
     UnsupportedSampleFormat(cpal::SampleFormat),
+    GraphRunError(#[from] GraphRunError),
+    ProcessorError(#[from] ProcessorError),
 }
 
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
@@ -71,13 +74,15 @@ impl Runtime {
 
     /// Resets the runtime with the given sample rate and block size.
     /// This will reset the state of all nodes in the graph and potentially reallocate internal buffers.
-    pub fn reset(&mut self, sample_rate: f64, block_size: usize) {
-        self.graph.reset(sample_rate, block_size);
+    pub fn reset(&mut self, sample_rate: f64, block_size: usize) -> RuntimeResult<()> {
+        self.graph.reset(sample_rate, block_size)?;
+        Ok(())
     }
 
     /// Runs the preparation phase for every node in the graph.
-    pub fn prepare(&mut self) {
-        self.graph.prepare_nodes();
+    pub fn prepare(&mut self) -> RuntimeResult<()> {
+        self.graph.prepare_nodes()?;
+        Ok(())
     }
 
     /// Returns a reference to the audio graph.
@@ -91,17 +96,17 @@ impl Runtime {
     }
 
     /// Returns an iterator over the output channels of the runtime.
-    pub fn outputs(&mut self) -> impl Iterator<Item = &Buffer> + '_ {
+    pub fn outputs(&mut self) -> impl Iterator<Item = &SignalBuffer> + '_ {
         let num_outputs = self.graph.num_outputs();
         (0..num_outputs).map(|i| self.graph.get_output(i))
     }
 
     /// Renders the next block of audio and returns the rendered output channels.
     #[inline]
-    pub fn next_buffer(&mut self) -> impl Iterator<Item = &Buffer> + '_ {
-        self.graph.process();
+    pub fn next_buffer(&mut self) -> RuntimeResult<impl Iterator<Item = &SignalBuffer> + '_> {
+        self.graph.process()?;
 
-        self.graph.outputs()
+        Ok(self.graph.outputs())
     }
 
     /// Runs the audio graph repeatedly for the given duration's worth of samples, and returns the rendered output channels.
@@ -114,8 +119,8 @@ impl Runtime {
         let secs = duration.as_secs_f64();
         let samples = (sample_rate * secs) as usize;
 
-        self.reset(sample_rate, block_size);
-        self.prepare();
+        self.reset(sample_rate, block_size)?;
+        self.prepare()?;
 
         let num_outputs: usize = self.graph.num_outputs();
 
@@ -127,11 +132,16 @@ impl Runtime {
 
         while sample_count < samples {
             let actual_block_size = (samples - sample_count).min(block_size);
-            self.graph.resize_buffers(sample_rate, actual_block_size);
-            self.graph.process();
+            self.graph.resize_buffers(sample_rate, actual_block_size)?;
+            self.graph.process()?;
 
             for (i, output) in outputs.iter_mut().enumerate() {
                 let buffer = self.graph.get_output(i);
+                let SignalBuffer::Sample(buffer) = buffer else {
+                    return Err(RuntimeError::ProcessorError(
+                        ProcessorError::OutputSpecMismatch(i),
+                    ));
+                };
                 output[sample_count..sample_count + actual_block_size].copy_from_slice(buffer);
             }
 
@@ -255,9 +265,9 @@ impl Runtime {
             let audio_rate = config.sample_rate().0 as f64;
             let initial_block_size = audio_rate as usize / 100;
 
-            self.graph.reset(audio_rate, initial_block_size);
+            self.graph.reset(audio_rate, initial_block_size)?;
 
-            self.prepare();
+            self.prepare()?;
 
             match config.sample_format() {
                 cpal::SampleFormat::I8 => {
@@ -321,11 +331,16 @@ impl Runtime {
             .build_output_stream(
                 config,
                 move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
-                    graph.resize_buffers(audio_rate, data.len() / channels);
-                    graph.process();
+                    graph
+                        .resize_buffers(audio_rate, data.len() / channels)
+                        .unwrap();
+                    graph.process().unwrap();
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
                             let buffer = graph.get_output(channel_idx);
+                            let SignalBuffer::Sample(buffer) = buffer else {
+                                panic!("output {channel_idx} signal type mismatch");
+                            };
                             let value = buffer[frame_idx];
                             *sample = T::from_sample(*value);
                         }

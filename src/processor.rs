@@ -1,14 +1,28 @@
 use std::fmt::Debug;
 
-use crate::signal::Buffer;
+use thiserror::Error;
+
+use crate::signal::{Signal, SignalBuffer};
+
+#[derive(Debug, Clone, Error)]
+pub enum ProcessorError {
+    #[error("The number of inputs must match the number returned by Process::num_inputs()")]
+    NumInputsMismatch,
+    #[error("The number of outputs must match the number returned by Process::num_outputs()")]
+    NumOutputsMismatch,
+    #[error("Input {0} signal type mismatch")]
+    InputSpecMismatch(usize),
+    #[error("Output {0} signal type mismatch")]
+    OutputSpecMismatch(usize),
+}
 
 /// Information about an input/output of a [`Process`] implementor.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug)]
 pub struct SignalSpec {
     pub name: &'static str,
-    pub min: f64,
-    pub max: f64,
-    pub default_value: f64,
+    pub min: Option<Signal>,
+    pub max: Option<Signal>,
+    pub default_value: Signal,
 }
 
 impl Default for SignalSpec {
@@ -16,16 +30,21 @@ impl Default for SignalSpec {
     fn default() -> Self {
         Self {
             name: "",
-            min: f64::MIN,
-            max: f64::MAX,
-            default_value: 0.0,
+            min: None,
+            max: None,
+            default_value: Signal::Sample(0.0.into()),
         }
     }
 }
 
 impl SignalSpec {
     /// Creates a new bounded [`SignalSpec`] with the given name, minimum and maximum values.
-    pub fn new(name: &'static str, min: f64, max: f64, default_value: f64) -> Self {
+    pub fn new(
+        name: &'static str,
+        min: Option<Signal>,
+        max: Option<Signal>,
+        default_value: Signal,
+    ) -> Self {
         Self {
             name,
             min,
@@ -35,11 +54,12 @@ impl SignalSpec {
     }
 
     /// Creates a new unbounded [`SignalSpec`] with the given name.
-    pub fn unbounded(name: &'static str, default_value: f64) -> Self {
+    pub fn unbounded(name: &'static str, default_value: impl Into<Signal>) -> Self {
         Self {
             name,
-            default_value,
-            ..Default::default()
+            min: None,
+            max: None,
+            default_value: default_value.into(),
         }
     }
 }
@@ -57,6 +77,24 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
 
     /// Returns information about the outputs this [`Process`] produces.
     fn output_spec(&self) -> Vec<SignalSpec>;
+
+    fn make_default_input_buffers(&self, length: usize) -> Vec<SignalBuffer> {
+        let input_spec = self.input_spec();
+        let mut buffers = Vec::with_capacity(input_spec.len());
+        for spec in input_spec {
+            buffers.push(SignalBuffer::from_spec_default(&spec, length));
+        }
+        buffers
+    }
+
+    fn make_default_output_buffers(&self, length: usize) -> Vec<SignalBuffer> {
+        let output_spec = self.output_spec();
+        let mut buffers = Vec::with_capacity(output_spec.len());
+        for spec in output_spec {
+            buffers.push(SignalBuffer::from_spec_default(&spec, length));
+        }
+        buffers
+    }
 
     /// Returns the number of input buffers/channels this [`Process`] expects.
     fn num_inputs(&self) -> usize {
@@ -78,7 +116,11 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
     /// Processes the given input buffers and writes the results to the given output buffers.
     ///
     /// The number of input and output buffers must match the numbers returned by [`Process::num_inputs`] and [`Process::num_outputs`].
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]);
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError>;
 
     /// Clones this [`Process`] into a [`Processor`] object that can be used in the audio graph.
     fn processor(&self) -> Processor {
@@ -123,8 +165,8 @@ impl Debug for dyn Process {
 #[derive(Clone)]
 pub struct Processor {
     processor: Box<dyn Process>,
-    inputs: Box<[Buffer]>,
-    outputs: Box<[Buffer]>,
+    inputs: Box<[SignalBuffer]>,
+    outputs: Box<[SignalBuffer]>,
 }
 
 impl Debug for Processor {
@@ -141,18 +183,9 @@ impl Processor {
 
     /// Creates a new [`Processor`] from the given boxed [`Process`] object.
     pub fn new_from_boxed(processor: Box<dyn Process>) -> Self {
-        let mut input_buffers = Vec::with_capacity(processor.num_inputs());
-        for _spec in processor.input_spec() {
-            input_buffers.push(Buffer::zeros(0));
-        }
-        let mut output_buffers = Vec::with_capacity(processor.num_outputs());
-        for _spec in processor.output_spec() {
-            output_buffers.push(Buffer::zeros(0));
-        }
-
         Self {
-            inputs: input_buffers.into_boxed_slice(),
-            outputs: output_buffers.into_boxed_slice(),
+            inputs: processor.make_default_input_buffers(0).into_boxed_slice(),
+            outputs: processor.make_default_output_buffers(0).into_boxed_slice(),
             processor,
         }
     }
@@ -175,48 +208,48 @@ impl Processor {
     pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
         let input_spec = self.input_spec();
         for (input, spec) in self.inputs.iter_mut().zip(input_spec) {
-            input.resize(block_size, spec.default_value.into());
+            input.resize(block_size, spec.default_value);
         }
         let output_spec = self.output_spec();
         for (output, spec) in self.outputs.iter_mut().zip(output_spec) {
-            output.resize(block_size, spec.default_value.into());
+            output.resize(block_size, spec.default_value);
         }
         self.processor.resize_buffers(sample_rate, block_size);
     }
 
     /// Returns a slice of the input buffers.
     #[inline]
-    pub fn inputs(&self) -> &[Buffer] {
+    pub fn inputs(&self) -> &[SignalBuffer] {
         &self.inputs[..]
     }
 
     /// Returns a mutable slice of the input buffers.
     #[inline]
-    pub fn inputs_mut(&mut self) -> &mut [Buffer] {
+    pub fn inputs_mut(&mut self) -> &mut [SignalBuffer] {
         &mut self.inputs[..]
     }
 
     /// Returns a reference to the input buffer at the given index.
     #[inline]
-    pub fn input(&self, index: usize) -> &Buffer {
+    pub fn input(&self, index: usize) -> &SignalBuffer {
         &self.inputs()[index]
     }
 
     /// Returns a mutable reference to the input buffer at the given index.
     #[inline]
-    pub fn input_mut(&mut self, index: usize) -> &mut Buffer {
+    pub fn input_mut(&mut self, index: usize) -> &mut SignalBuffer {
         &mut self.inputs_mut()[index]
     }
 
     /// Returns a slice of the output buffers.
     #[inline]
-    pub fn outputs(&self) -> &[Buffer] {
+    pub fn outputs(&self) -> &[SignalBuffer] {
         &self.outputs[..]
     }
 
     /// Returns a reference to the output buffer at the given index.
     #[inline]
-    pub fn output(&self, index: usize) -> &Buffer {
+    pub fn output(&self, index: usize) -> &SignalBuffer {
         &self.outputs()[index]
     }
 
@@ -228,17 +261,14 @@ impl Processor {
 
     /// Processes the input buffers and writes the results to the output buffers.
     #[inline]
-    pub fn process(&mut self) {
-        assert_eq!(
-            self.inputs().len(),
-            self.processor.num_inputs(),
-            "The number of inputs must match the number returned by Process::num_inputs()"
-        );
-        assert_eq!(
-            self.outputs().len(),
-            self.processor.num_outputs(),
-            "The number of outputs must match the number returned by Process::num_outputs()"
-        );
-        self.processor.process(&self.inputs, &mut self.outputs);
+    pub fn process(&mut self) -> Result<(), ProcessorError> {
+        if self.inputs.len() != self.processor.num_inputs() {
+            return Err(ProcessorError::NumInputsMismatch);
+        }
+        if self.outputs.len() != self.processor.num_outputs() {
+            return Err(ProcessorError::NumOutputsMismatch);
+        }
+        self.processor.process(&self.inputs, &mut self.outputs)?;
+        Ok(())
     }
 }

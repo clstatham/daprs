@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{prelude::*, processor::ProcessorError, signal::SignalBuffer};
 use std::ops::*;
 
 /// A processor that outputs a constant value.
@@ -34,10 +34,16 @@ impl Process for ConstantProc {
         vec![SignalSpec::unbounded("out", self.value)]
     }
 
-    fn process(&mut self, _inputs: &[Buffer], outputs: &mut [Buffer]) {
+    fn process(
+        &mut self,
+        _inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
         let out = &mut outputs[0];
 
-        out.fill(Sample::from(self.value));
+        out.fill(self.value);
+
+        Ok(())
     }
 }
 
@@ -59,14 +65,26 @@ macro_rules! impl_binary_proc {
                 vec![SignalSpec::unbounded("out", 0.0)]
             }
 
-            fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
-                let in1 = &inputs[0];
-                let in2 = &inputs[1];
-                let out = &mut outputs[0];
+            fn process(
+                &mut self,
+                inputs: &[SignalBuffer],
+                outputs: &mut [SignalBuffer],
+            ) -> Result<(), ProcessorError> {
+                let in1 = inputs[0]
+                    .as_sample()
+                    .ok_or(ProcessorError::InputSpecMismatch(0))?;
+                let in2 = inputs[1]
+                    .as_sample()
+                    .ok_or(ProcessorError::InputSpecMismatch(1))?;
+                let out = outputs[0]
+                    .as_sample_mut()
+                    .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
                 for (sample, in1, in2) in itertools::izip!(out, in1, in2) {
                     *sample = (**in1).$method(**in2).into();
                 }
+
+                Ok(())
             }
         }
     };
@@ -292,13 +310,23 @@ macro_rules! impl_unary_proc {
                 vec![SignalSpec::unbounded("out", 0.0)]
             }
 
-            fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
-                let in1 = &inputs[0];
-                let out = &mut outputs[0];
+            fn process(
+                &mut self,
+                inputs: &[SignalBuffer],
+                outputs: &mut [SignalBuffer],
+            ) -> Result<(), ProcessorError> {
+                let in1 = inputs[0]
+                    .as_sample()
+                    .ok_or(ProcessorError::InputSpecMismatch(0))?;
+                let out = outputs[0]
+                    .as_sample_mut()
+                    .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
                 for (sample, in1) in itertools::izip!(out, in1) {
                     *sample = (**in1).$method().into();
                 }
+
+                Ok(())
             }
         }
     };
