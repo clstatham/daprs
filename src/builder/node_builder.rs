@@ -45,6 +45,7 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn connect_input(
         self,
         source: impl IntoNode<'a>,
@@ -60,6 +61,7 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn connect_output(
         self,
         output: impl IntoOutputIdx,
@@ -123,14 +125,17 @@ impl IntoInputIdx for u32 {
 
 impl IntoInputIdx for &str {
     #[inline]
+    #[track_caller]
     fn into_input_idx(self, node: Node) -> u32 {
-        node.graph().with_graph(|graph| {
+        let Some(idx) = node.graph().with_graph(|graph| {
             graph.digraph()[node.id()]
                 .input_spec()
                 .iter()
                 .position(|s| s.name == self)
-                .unwrap_or_else(|| panic!("no input with name {self}")) as u32
-        })
+        }) else {
+            panic!("no input with name {self}")
+        };
+        idx as u32
     }
 }
 
@@ -147,14 +152,17 @@ impl IntoOutputIdx for u32 {
 
 impl IntoOutputIdx for &str {
     #[inline]
+    #[track_caller]
     fn into_output_idx(self, node: Node) -> u32 {
-        node.graph().with_graph(|graph| {
+        let Some(idx) = node.graph().with_graph(|graph| {
             graph.digraph()[node.id()]
                 .output_spec()
                 .iter()
                 .position(|s| s.name == self)
-                .unwrap_or_else(|| panic!("no output with name {self}")) as u32
-        })
+        }) else {
+            panic!("no output with name {self}")
+        };
+        idx as u32
     }
 }
 
