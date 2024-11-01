@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use std::{sync::mpsc, time::Duration};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
@@ -109,12 +109,34 @@ impl Runtime {
         Ok(self.graph.outputs())
     }
 
-    /// Runs the audio graph repeatedly for the given duration's worth of samples, and returns the rendered output channels.
+    /// Runs the audio graph as fast as possible for the given duration's worth of samples, and returns the rendered output channels.
     pub fn run_offline(
         &mut self,
-        duration: std::time::Duration,
+        duration: Duration,
         sample_rate: f64,
         block_size: usize,
+    ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
+        self.run_offline_inner(duration, sample_rate, block_size, false)
+    }
+
+    /// Simulates the audio graph running for the given duration's worth of samples, and returns the rendered output channels.
+    ///
+    /// This method will add a delay between each block of samples to simulate real-time processing.
+    pub fn simulate(
+        &mut self,
+        duration: Duration,
+        sample_rate: f64,
+        block_size: usize,
+    ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
+        self.run_offline_inner(duration, sample_rate, block_size, true)
+    }
+
+    fn run_offline_inner(
+        &mut self,
+        duration: Duration,
+        sample_rate: f64,
+        block_size: usize,
+        add_delay: bool,
     ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
         let secs = duration.as_secs_f64();
         let samples = (sample_rate * secs) as usize;
@@ -149,6 +171,12 @@ impl Runtime {
                 output[sample_count..sample_count + actual_block_size].copy_from_slice(buffer);
             }
 
+            if add_delay {
+                std::thread::sleep(Duration::from_secs_f64(
+                    actual_block_size as f64 / sample_rate,
+                ));
+            }
+
             sample_count += actual_block_size;
         }
 
@@ -158,7 +186,7 @@ impl Runtime {
     pub fn run_offline_to_file(
         &mut self,
         file_path: impl AsRef<std::path::Path>,
-        duration: std::time::Duration,
+        duration: Duration,
         sample_rate: f64,
         block_size: usize,
     ) -> RuntimeResult<()> {
@@ -202,7 +230,7 @@ impl Runtime {
 
     pub fn run_for(
         &mut self,
-        duration: std::time::Duration,
+        duration: Duration,
         backend: Backend,
         device: Device,
     ) -> RuntimeResult<()> {
@@ -367,7 +395,7 @@ impl Runtime {
                 drop(stream);
                 break;
             }
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            std::thread::sleep(Duration::from_millis(10));
         }
 
         runtime_tx.send(self).unwrap();
