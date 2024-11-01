@@ -22,7 +22,7 @@ fn main() {
     bang.connect_output(0, new_message, 0);
 
     // connect the metronome to trigger the print
-    bang.connect_output(0, print1, "print");
+    bang.connect_output(0, print1, 0);
 
     // connect the new message to the print's "message" input (comment this line out to see it print its own message)
     new_message.connect_output(0, print1, "message");
