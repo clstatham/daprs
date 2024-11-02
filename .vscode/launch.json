@@ -23,6 +23,14 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Launch `buffer` example",
+            "program": "${workspaceFolder}/target/debug/examples/buffer.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in library 'pypapr'",
             "cargo": {
                 "args": [

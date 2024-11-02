@@ -14,6 +14,8 @@ pub enum ProcessorError {
     InputSpecMismatch(usize),
     #[error("Output {0} signal type mismatch")]
     OutputSpecMismatch(usize),
+    #[error("Invalid value: {0}")]
+    InvalidValue(&'static str),
 }
 
 /// Information about an input/output of a [`Process`] implementor.
@@ -26,7 +28,7 @@ pub struct SignalSpec {
 }
 
 impl Default for SignalSpec {
-    /// Creates a new unnamed and unbounded [`SignalSpec`] (min = [`f64::MIN`], max = [`f64::MAX`]).
+    /// Creates a new unnamed and unbounded [`SignalSpec`] (min/max are `None`, default value is `0.0`).
     fn default() -> Self {
         Self {
             name: "",
@@ -38,22 +40,22 @@ impl Default for SignalSpec {
 }
 
 impl SignalSpec {
-    /// Creates a new bounded [`SignalSpec`] with the given name, minimum and maximum values.
+    /// Creates a new bounded [`SignalSpec`] with the given name, minimum, maximum, and default value.
     pub fn new(
         name: &'static str,
-        min: Option<Signal>,
-        max: Option<Signal>,
-        default_value: Signal,
+        min: Option<impl Into<Signal>>,
+        max: Option<impl Into<Signal>>,
+        default_value: impl Into<Signal>,
     ) -> Self {
         Self {
             name,
-            min,
-            max,
-            default_value,
+            min: min.map(Into::into),
+            max: max.map(Into::into),
+            default_value: default_value.into(),
         }
     }
 
-    /// Creates a new unbounded [`SignalSpec`] with the given name.
+    /// Creates a new unbounded [`SignalSpec`] with the given name and default value.
     pub fn unbounded(name: &'static str, default_value: impl Into<Signal>) -> Self {
         Self {
             name,
@@ -68,6 +70,7 @@ impl SignalSpec {
 ///
 /// This is usually used as part of a [`Processor`], operating on its internal input/output buffers.
 pub trait Process: 'static + Send + Sync + ProcessClone {
+    /// Returns the name of this [`Process`].
     fn name(&self) -> &str {
         std::any::type_name::<Self>()
     }
@@ -78,6 +81,7 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
     /// Returns information about the outputs this [`Process`] produces.
     fn output_spec(&self) -> Vec<SignalSpec>;
 
+    /// Allocates input buffers for this processor with the given length and fills them with their default values.
     fn make_default_input_buffers(&self, length: usize) -> Vec<SignalBuffer> {
         let input_spec = self.input_spec();
         let mut buffers = Vec::with_capacity(input_spec.len());
@@ -87,6 +91,7 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
         buffers
     }
 
+    /// Allocates output buffers for this processor with the given length and fills them with their default values.
     fn make_default_output_buffers(&self, length: usize) -> Vec<SignalBuffer> {
         let output_spec = self.output_spec();
         let mut buffers = Vec::with_capacity(output_spec.len());
@@ -190,6 +195,7 @@ impl Processor {
         }
     }
 
+    /// Returns the name of this [`Processor`].
     pub fn name(&self) -> &str {
         self.processor.name()
     }

@@ -76,7 +76,7 @@ impl<'a> Node<'a> {
         self
     }
 
-    /// Converts the node's output from a message to a sample.
+    /// Converts the node's output from a float message to a sample.
     ///
     /// # Panics
     ///
@@ -89,7 +89,7 @@ impl<'a> Node<'a> {
         m2s
     }
 
-    /// Converts the node's output from a sample to a message.
+    /// Converts the node's output from a sample to a float message.
     ///
     /// # Panics
     ///
@@ -100,6 +100,32 @@ impl<'a> Node<'a> {
         let s2m = self.graph().s2m();
         s2m.connect_input(self, 0, 0);
         s2m
+    }
+
+    /// Converts the node's output from a float message to an integer message.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    pub fn f2i(self) -> Node<'a> {
+        self.assert_single_output();
+        let f2i = self.graph().f2i();
+        f2i.connect_input(self, 0, 0);
+        f2i
+    }
+
+    /// Converts the node's output from an integer message to a float message.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    pub fn i2f(self) -> Node<'a> {
+        self.assert_single_output();
+        let i2f = self.graph().i2f();
+        i2f.connect_input(self, 0, 0);
+        i2f
     }
 }
 

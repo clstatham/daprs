@@ -47,6 +47,8 @@ pub enum GraphConstructionError {
     MismatchedGraphs,
     #[error("Operation `{op}` invalid: Node type `{kind}` has multiple outputs")]
     NodeHasMultipleOutputs { op: String, kind: String },
+    #[error("Filesystem error: {0}")]
+    FilesystemError(#[from] std::io::Error),
 }
 
 pub type GraphRunResult<T> = Result<T, GraphRunError>;

@@ -10,6 +10,7 @@ pub mod message;
 pub mod processor;
 pub mod runtime;
 pub mod signal;
+mod util;
 
 #[allow(unused_imports)]
 pub mod prelude {
@@ -20,9 +21,10 @@ pub mod prelude {
     pub use crate::builtins::*;
     pub use crate::graph::{edge::Edge, Graph};
     pub use crate::message::*;
-    pub use crate::processor::{Process, Processor, SignalSpec};
+    pub use crate::processor::{Process, Processor, ProcessorError, SignalSpec};
     pub use crate::runtime::{Backend, Device, Runtime};
-    pub use crate::signal::{Buffer, Sample};
+    pub use crate::signal::{Buffer, Sample, Signal, SignalBuffer};
+    pub use std::time::Duration;
 }
 
 pub fn available_backends() -> Vec<Backend> {

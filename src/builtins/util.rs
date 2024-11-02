@@ -62,17 +62,56 @@ impl GraphBuilder {
     /// | Index | Name | Type | Description |
     /// | --- | --- | --- | --- |
     /// | `0` | `message` | `Message` | The message to send. |
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use daprs::prelude::*;
-    ///
-    /// let mut builder = GraphBuilder::new();
-    /// builder.message(Bang);
-    /// ```
     pub fn message(&self, message: impl Message) -> Node {
         self.add_processor(MessageProc::new(message))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ConstantMessageProc(BoxedMessage);
+
+impl ConstantMessageProc {
+    pub fn new(message: impl Message) -> Self {
+        Self(Box::new(message))
+    }
+}
+
+impl Process for ConstantMessageProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("message", Signal::new_message_none())]
+    }
+
+    fn process(
+        &mut self,
+        _inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let message = outputs[0]
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for message in message {
+            *message = Some(self.0.clone());
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that sends a constant message.
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `message` | `Message` | The constant message. |
+    pub fn constant_message(&self, message: impl Message) -> Node {
+        self.add_processor(ConstantMessageProc::new(message))
     }
 }
 
@@ -176,21 +215,6 @@ impl GraphBuilder {
     /// | --- | --- | --- | --- | --- |
     /// | `0` | `trig` | `Bang` | | Triggers the print. |
     /// | `1` | `message` | `Message` | | The message to print. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | | | | |
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use daprs::prelude::*;
-    ///
-    /// let mut builder = GraphBuilder::new();
-    /// builder.print(Some("name"), Some("message"));
-    /// ```
     pub fn print(&self, name: Option<&str>, msg: Option<&str>) -> Node {
         self.add_processor(PrintProc::new(name, msg))
     }
@@ -301,5 +325,123 @@ impl GraphBuilder {
     /// | `0` | `message` | `Message` | The message value. |
     pub fn s2m(&self) -> Node {
         self.add_processor(SampleToMessageProc)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct F2IProc;
+
+impl Process for F2IProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("f", Signal::new_message_none())]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("i", Signal::new_message_none())]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let f = inputs[0]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+        let i = outputs[0]
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (f, i) in itertools::izip!(f, i) {
+            if let Some(f) = f {
+                if let Some(f) = (**f).downcast_ref::<f64>() {
+                    *i = Some(Box::new(f.floor() as i64));
+                } else {
+                    return Err(ProcessorError::InputSpecMismatch(0));
+                }
+            } else {
+                *i = None;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that converts a float message to an integer message.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `f` | `Message(f64)` | | The float message to convert. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `i` | `Message(i64)` | The integer message. |
+    pub fn f2i(&self) -> Node {
+        self.add_processor(F2IProc)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct I2FProc;
+
+impl Process for I2FProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("i", Signal::new_message_none())]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("f", Signal::new_message_none())]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let i = inputs[0]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+        let f = outputs[0]
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (i, f) in itertools::izip!(i, f) {
+            if let Some(i) = i {
+                if let Some(i) = (**i).downcast_ref::<i64>() {
+                    *f = Some(Box::new(*i as f64));
+                } else {
+                    return Err(ProcessorError::InputSpecMismatch(0));
+                }
+            } else {
+                *f = None;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that converts an integer message to a float message.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `i` | `Message(i64)` | | The integer message to convert. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `f` | `Message(f64)` | The float message. |
+    pub fn i2f(&self) -> Node {
+        self.add_processor(I2FProc)
     }
 }

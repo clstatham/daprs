@@ -4,6 +4,7 @@ use std::{
         Add, AddAssign, Deref, DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub,
         SubAssign,
     },
+    path::Path,
 };
 
 use crate::{
@@ -323,6 +324,104 @@ impl<T> Buffer<T> {
     }
 }
 
+impl Buffer<Sample> {
+    pub fn load_wav(path: impl AsRef<Path>) -> Result<Self, hound::Error> {
+        let reader = hound::WavReader::open(path)?;
+        if reader.spec().channels == 1 {
+            let samples: Result<Vec<_>, hound::Error> = reader
+                .into_samples::<f32>()
+                .map(|sample| Ok(Sample(sample? as f64)))
+                .collect();
+            let samples = samples?;
+
+            Ok(Buffer::from_slice(&samples))
+        } else {
+            let channels = reader.spec().channels;
+
+            let samples: Result<Vec<_>, hound::Error> = reader
+                .into_samples::<f32>()
+                .step_by(channels as usize)
+                .map(|sample| Ok(Sample(sample? as f64)))
+                .collect();
+            let samples = samples?;
+
+            Ok(Buffer::from_slice(&samples))
+        }
+    }
+
+    pub fn save_wav(&self, path: impl AsRef<Path>, sample_rate: u32) -> Result<(), hound::Error> {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut writer = hound::WavWriter::create(path, spec)?;
+        for sample in self.buf.iter() {
+            writer.write_sample(sample.0 as f32)?;
+        }
+        writer.finalize()?;
+        Ok(())
+    }
+
+    /// Returns the maximum value in the buffer.
+    #[inline]
+    pub fn max(&self) -> Sample {
+        self.buf
+            .iter()
+            .cloned()
+            .fold(Sample::MIN, |a, b| a.max(*b).into())
+    }
+
+    /// Returns the minimum value in the buffer.
+    #[inline]
+    pub fn min(&self) -> Sample {
+        self.buf
+            .iter()
+            .cloned()
+            .fold(Sample::MAX, |a, b| a.min(*b).into())
+    }
+
+    /// Returns the sum of all values in the buffer.
+    #[inline]
+    pub fn sum(&self) -> Sample {
+        self.buf.iter().cloned().fold(Sample::ZERO, |a, b| a + b)
+    }
+
+    /// Returns the mean of all values in the buffer.
+    #[inline]
+    pub fn mean(&self) -> Sample {
+        self.sum() / Sample(self.len() as f64)
+    }
+
+    /// Returns the root mean square of all values in the buffer.
+    #[inline]
+    pub fn rms(&self) -> Sample {
+        self.buf
+            .iter()
+            .cloned()
+            .fold(Sample::ZERO, |a, b| a + b * b)
+    }
+
+    /// Returns the variance of all values in the buffer.
+    #[inline]
+    pub fn variance(&self) -> Sample {
+        let mean = self.mean();
+        let sum = self
+            .buf
+            .iter()
+            .cloned()
+            .fold(Sample::ZERO, |a, b| a + (b - mean) * (b - mean));
+        sum / Sample((self.len() - 1) as f64)
+    }
+
+    /// Returns the standard deviation of all values in the buffer.
+    #[inline]
+    pub fn stddev(&self) -> Sample {
+        self.variance().sqrt().into()
+    }
+}
+
 impl<T> Deref for Buffer<T> {
     type Target = [T];
     #[inline]
@@ -342,6 +441,34 @@ impl<T> AsRef<[T]> for Buffer<T> {
     #[inline]
     fn as_ref(&self) -> &[T] {
         self.buf.as_ref()
+    }
+}
+
+impl<T> From<Vec<T>> for Buffer<T> {
+    #[inline]
+    fn from(vec: Vec<T>) -> Self {
+        Buffer {
+            buf: vec.into_boxed_slice(),
+        }
+    }
+}
+
+impl<T> From<Box<[T]>> for Buffer<T> {
+    #[inline]
+    fn from(buf: Box<[T]>) -> Self {
+        Buffer { buf }
+    }
+}
+
+impl<T> From<&[T]> for Buffer<T>
+where
+    T: Clone,
+{
+    #[inline]
+    fn from(slice: &[T]) -> Self {
+        Buffer {
+            buf: slice.to_vec().into_boxed_slice(),
+        }
     }
 }
 
