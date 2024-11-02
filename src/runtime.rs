@@ -24,6 +24,8 @@ pub enum RuntimeError {
     UnsupportedSampleFormat(cpal::SampleFormat),
     GraphRunError(#[from] GraphRunError),
     ProcessorError(#[from] ProcessorError),
+    #[error("Channel mismatch: expected {0} channels, got {1}")]
+    ChannelMismatch(usize, usize),
 }
 
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
@@ -290,11 +292,10 @@ impl Runtime {
 
             let channels = config.channels();
             if self.graph.num_outputs() != channels as usize {
-                panic!(
-                    "Graph has {} outputs but device has {} channels",
+                return Err(RuntimeError::ChannelMismatch(
                     self.graph.num_outputs(),
-                    channels
-                );
+                    channels as usize,
+                ));
             }
 
             log::info!("Configuration: {:#?}", config);

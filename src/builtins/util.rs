@@ -473,9 +473,7 @@ impl Process for SampleRateProc {
             .as_sample_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
-        for sample_rate_out in itertools::izip!(sample_rate_out) {
-            *sample_rate_out = Sample::new(self.sample_rate);
-        }
+        sample_rate_out.fill(Sample::new(self.sample_rate));
 
         Ok(())
     }
@@ -483,6 +481,8 @@ impl Process for SampleRateProc {
 
 impl GraphBuilder {
     /// A processor that outputs the sample rate that the graph is running at.
+    ///
+    /// This processor outputs `Sample`s for convenience in connecting to other audio-rate processors.
     ///
     /// # Outputs
     ///

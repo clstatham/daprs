@@ -9,20 +9,26 @@ fn main() {
 
     // add some outputs
     let out1 = graph.output();
+    let out2 = graph.output();
 
     // add a buffer reader
     let buf = Buffer::load_wav("examples/assets/piano1.wav").unwrap();
+    let len = buf.len() as f64;
     let buffer = graph.buffer_reader(buf);
 
     // connect the buffer reader to the outputs
     buffer.connect_output(0, out1, 0);
+    buffer.connect_output(0, out2, 0);
 
-    // create a 1 Hz sawtooth oscillator to drive the buffer reader
+    // create a sawtooth oscillator to drive the buffer reader
     let saw = graph.saw_osc();
-    graph.constant(1.0).connect_output(0, saw, "frequency");
 
-    // multiply the saw oscillator's amplitude by the sample rate
-    let saw = saw * graph.sample_rate();
+    // we want to read the sample to its full length, so set the frequency to the sample rate divided by the length
+    let freq = graph.sample_rate() / len;
+    freq.connect_output(0, saw, "frequency");
+
+    // multiply the saw oscillator's amplitude by the length of the buffer, so it outputs the full range of the buffer
+    let saw = saw * len;
 
     // convert the saw oscillator to output an integer message
     let saw = saw.s2m().f2i();
