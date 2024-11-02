@@ -22,7 +22,7 @@ fn main() {
     graph.constant(1.0).connect_output(0, saw, "frequency");
 
     // multiply the saw oscillator's amplitude by the sample rate
-    let saw = saw * graph.constant(48_000.0);
+    let saw = saw * graph.sample_rate();
 
     // convert the saw oscillator to output an integer message
     let saw = saw.s2m().f2i();

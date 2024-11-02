@@ -445,3 +445,51 @@ impl GraphBuilder {
         self.add_processor(I2FProc)
     }
 }
+
+#[derive(Clone, Debug, Default)]
+pub struct SampleRateProc {
+    sample_rate: f64,
+}
+
+impl Process for SampleRateProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("sample_rate", 0.0)]
+    }
+
+    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+        self.sample_rate = sample_rate;
+    }
+
+    fn process(
+        &mut self,
+        _inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let sample_rate_out = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for sample_rate_out in itertools::izip!(sample_rate_out) {
+            *sample_rate_out = Sample::new(self.sample_rate);
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that outputs the sample rate that the graph is running at.
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `sample_rate` | `Sample` | The sample rate of the graph. |
+    pub fn sample_rate(&self) -> Node {
+        self.add_processor(SampleRateProc::default())
+    }
+}
