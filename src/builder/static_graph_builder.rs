@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     graph::{Graph, NodeIndex},
-    prelude::{ConstantProc, Process},
+    prelude::Process,
     runtime::Runtime,
 };
 
@@ -39,10 +39,6 @@ impl StaticGraphBuilder {
             graph: self.clone(),
             node_id: graph.add_processor(processor),
         })
-    }
-
-    pub fn constant(&self, value: f64) -> StaticNode {
-        self.add_processor(ConstantProc::new(value))
     }
 
     pub fn from_graph(graph: Graph) -> Self {

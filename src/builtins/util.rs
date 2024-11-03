@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     message::Message,
-    prelude::{GraphBuilder, Node, Process, SignalSpec},
+    prelude::{GraphBuilder, Node, Process, SignalSpec, StaticGraphBuilder, StaticNode},
     processor::ProcessorError,
     signal::{Sample, Signal, SignalBuffer},
 };
@@ -70,6 +70,25 @@ impl GraphBuilder {
     }
 }
 
+impl StaticGraphBuilder {
+    /// A processor that sends a message when triggered.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `trig` | `Bang` | | Triggers the message. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `message` | `Message` | The message to send. |
+    pub fn message(&self, message: Message) -> StaticNode {
+        self.add_processor(MessageProc::new(message))
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConstantMessageProc(Message);
 
@@ -115,6 +134,19 @@ impl GraphBuilder {
     /// | --- | --- | --- | --- |
     /// | `0` | `message` | `Message` | The constant message. |
     pub fn constant_message(&self, message: Message) -> Node {
+        self.add_processor(ConstantMessageProc::new(message))
+    }
+}
+
+impl StaticGraphBuilder {
+    /// A processor that sends a constant message.
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `message` | `Message` | The constant message. |
+    pub fn constant_message(&self, message: Message) -> StaticNode {
         self.add_processor(ConstantMessageProc::new(message))
     }
 }
@@ -220,11 +252,29 @@ impl GraphBuilder {
     /// | --- | --- | --- | --- | --- |
     /// | `0` | `trig` | `Bang` | | Triggers the print. |
     /// | `1` | `message` | `Message` | | The message to print. |
-    pub fn print(
+    pub fn print<'a>(
         &self,
-        name: impl Into<Option<&'static str>>,
-        msg: impl Into<Option<&'static str>>,
+        name: impl Into<Option<&'a str>>,
+        msg: impl Into<Option<&'a str>>,
     ) -> Node {
+        self.add_processor(PrintProc::new(name.into(), msg.into()))
+    }
+}
+
+impl StaticGraphBuilder {
+    /// A processor that prints a message when triggered.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `trig` | `Bang` | | Triggers the print. |
+    /// | `1` | `message` | `Message` | | The message to print. |
+    pub fn print<'a>(
+        &self,
+        name: impl Into<Option<&'a str>>,
+        msg: impl Into<Option<&'a str>>,
+    ) -> StaticNode {
         self.add_processor(PrintProc::new(name.into(), msg.into()))
     }
 }

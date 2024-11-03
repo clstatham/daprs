@@ -85,6 +85,22 @@ impl StaticNode {
         self.graph
             .connect(self.id(), output_index, target.id(), target_input);
     }
+
+    #[inline]
+    pub fn m2s(&self) -> StaticNode {
+        self.assert_single_output();
+        let proc = self.graph.add_processor(MessageToSampleProc);
+        proc.connect_input(self, 0, 0);
+        proc
+    }
+
+    #[inline]
+    pub fn s2m(&self) -> StaticNode {
+        self.assert_single_output();
+        let proc = self.graph.add_processor(SampleToMessageProc);
+        proc.connect_input(self, 0, 0);
+        proc
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -129,6 +145,7 @@ mod sealed {
     impl Sealed for crate::graph::NodeIndex {}
     impl Sealed for super::StaticNode {}
     impl Sealed for &super::StaticNode {}
+    impl Sealed for super::Message {}
     impl Sealed for f64 {}
     impl Sealed for u32 {}
     impl Sealed for &str {}
@@ -168,6 +185,12 @@ impl IntoStaticNode for NodeIndex {
 impl IntoStaticNode for f64 {
     fn into_static_node(self, graph: &StaticGraphBuilder) -> StaticNode {
         graph.constant(self)
+    }
+}
+
+impl IntoStaticNode for Message {
+    fn into_static_node(self, graph: &StaticGraphBuilder) -> StaticNode {
+        graph.constant_message(self)
     }
 }
 
@@ -229,7 +252,7 @@ macro_rules! impl_binary_node_ops {
     ($name:ident, $proc:ty, $doc:expr) => {
         impl StaticNode {
             #[allow(clippy::should_implement_trait)]
-            pub fn $name(self, other: impl IntoStaticNode) -> StaticNode {
+            pub fn $name(&self, other: impl IntoStaticNode) -> StaticNode {
                 let other = other.into_static_node(self.graph());
                 self.assert_single_output();
                 other.assert_single_output();
@@ -246,7 +269,7 @@ macro_rules! impl_binary_node_ops {
     ($name:ident, $std_op:ident, $proc:ty, $doc:expr) => {
         impl StaticNode {
             #[allow(clippy::should_implement_trait)]
-            pub fn $name(self, other: impl IntoStaticNode) -> StaticNode {
+            pub fn $name(&self, other: impl IntoStaticNode) -> StaticNode {
                 let other = other.into_static_node(self.graph());
                 self.assert_single_output();
                 other.assert_single_output();
@@ -267,7 +290,7 @@ macro_rules! impl_binary_node_ops {
             type Output = StaticNode;
 
             fn $name(self, other: T) -> StaticNode {
-                StaticNode::$name(self.clone(), other)
+                StaticNode::$name(self, other)
             }
         }
     };
@@ -310,7 +333,7 @@ macro_rules! impl_unary_node_ops {
     ($name:ident, $proc:ty, $doc:expr) => {
         impl StaticNode {
             #[allow(clippy::should_implement_trait)]
-            pub fn $name(self) -> StaticNode {
+            pub fn $name(&self) -> StaticNode {
                 self.assert_single_output();
 
                 let processor = <$proc>::default();
@@ -329,7 +352,7 @@ impl std::ops::Neg for &StaticNode {
     type Output = StaticNode;
 
     fn neg(self) -> StaticNode {
-        StaticNode::neg(self.clone())
+        StaticNode::neg(self)
     }
 }
 

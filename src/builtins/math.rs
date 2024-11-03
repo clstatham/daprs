@@ -56,6 +56,19 @@ impl GraphBuilder {
     }
 }
 
+impl StaticGraphBuilder {
+    /// A processor that outputs a constant value.
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Default | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `0.0` | The constant value. |
+    pub fn constant(&self, value: f64) -> StaticNode {
+        self.add_processor(ConstantProc::new(value))
+    }
+}
+
 macro_rules! impl_binary_proc {
     ($name:ident, $method:ident, $doc:expr) => {
         #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -97,12 +110,7 @@ macro_rules! impl_binary_proc {
             }
         }
 
-        impl GraphBuilder {
-            #[doc = $doc]
-            pub fn $method(&self) -> Node {
-                self.add_processor($name::default())
-            }
-        }
+        $crate::add_to_builders!($method, $name, $doc);
     };
 }
 
@@ -348,12 +356,7 @@ macro_rules! impl_unary_proc {
             }
         }
 
-        impl GraphBuilder {
-            #[doc = $doc]
-            pub fn $method(&self) -> Node {
-                self.add_processor($name::default())
-            }
-        }
+        $crate::add_to_builders!($method, $name, $doc);
     };
 }
 

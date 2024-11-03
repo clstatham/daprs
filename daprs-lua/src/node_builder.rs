@@ -1,6 +1,11 @@
-use daprs::builder::static_node_builder::{StaticInput, StaticNode, StaticOutput};
+use daprs::{
+    builder::static_node_builder::{StaticInput, StaticNode, StaticOutput},
+    prelude::Message,
+};
 use mlua::prelude::*;
 use serde::Serialize;
+
+use crate::LuaBang;
 
 #[derive(Clone, Serialize, FromLua)]
 pub struct LuaNode(pub(crate) StaticNode);
@@ -22,6 +27,54 @@ impl LuaUserData for LuaNode {
         methods.add_method("output_named", |_, this, output: String| {
             Ok(LuaOutput(this.0.output(output.as_str())))
         });
+
+        methods.add_method("m2s", |_, this, _args: ()| Ok(LuaNode(this.0.m2s())));
+        methods.add_method("s2m", |_, this, _args: ()| Ok(LuaNode(this.0.s2m())));
+
+        methods.add_meta_method("__add", |_, this, other: LuaNode| {
+            Ok(LuaNode(&this.0 + &other.0))
+        });
+
+        methods.add_meta_method("__sub", |_, this, other: LuaNode| {
+            Ok(LuaNode(&this.0 - &other.0))
+        });
+
+        methods.add_meta_method("__mul", |_, this, other: LuaNode| {
+            Ok(LuaNode(&this.0 * &other.0))
+        });
+
+        methods.add_meta_method("__div", |_, this, other: LuaNode| {
+            Ok(LuaNode(&this.0 / &other.0))
+        });
+
+        methods.add_meta_method("__unm", |_, this, _: ()| Ok(LuaNode(-&this.0)));
+
+        macro_rules! impl_unary_op {
+            ($($method:ident),*) => {
+                $(
+                    methods.add_method(stringify!($method), |_, this, _: ()| {
+                        Ok(LuaNode(this.0.$method()))
+                    });
+                )*
+            };
+        }
+
+        macro_rules! impl_binary_op {
+            ($($method:ident),*) => {
+                $(
+                    methods.add_method(stringify!($method), |_, this, other: f64| {
+                        Ok(LuaNode(this.0.$method(other)))
+                    });
+                )*
+            };
+        }
+
+        impl_unary_op!(
+            sin, cos, tan, asin, acos, atan, sqrt, cbrt, ceil, floor, round, abs, signum, fract,
+            recip
+        );
+
+        impl_binary_op!(powf, add, sub, mul, div, rem, min, max, atan2, hypot);
     }
 }
 
@@ -35,8 +88,14 @@ impl LuaUserData for LuaInput {
             Ok(())
         });
 
-        methods.add_method("set", |_, this, value: f64| {
-            this.0.set(value);
+        methods.add_method("set", |_, this, value: LuaValue| {
+            match value {
+                LuaValue::UserData(data) if data.is::<LuaBang>() => this.0.set(Message::Bang),
+                LuaValue::Number(float) => this.0.set(float),
+                LuaValue::Integer(int) => this.0.set(Message::Int(int)),
+                LuaValue::String(string) => this.0.set(Message::String(string.to_string_lossy())),
+                _ => return Err(mlua::Error::external("Invalid message type")),
+            }
             Ok(())
         });
     }

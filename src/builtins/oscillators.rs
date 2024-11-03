@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    builder::{static_graph_builder::StaticGraphBuilder, static_node_builder::StaticNode},
-    prelude::*,
-};
+use crate::{add_to_builders, prelude::*};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SineOscillator {
@@ -72,47 +69,27 @@ impl Process for SineOscillator {
     }
 }
 
-impl GraphBuilder {
-    /// A free-running sine wave oscillator.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `frequency` | `Sample` | `440.0` | The frequency of the sine wave in Hz. |
-    /// | `1` | `phase` | `Sample` | `0.0` | The phase of the sine wave in radians. |
-    /// | `2` | `reset` | `Message(Bang)` |  | A message to reset the oscillator phase. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Sample` | The output sine wave signal. |
-    pub fn sine_osc(&self) -> Node {
-        self.add_processor(SineOscillator::default())
-    }
-}
+add_to_builders!(
+    sine_osc,
+    SineOscillator,
+    r#"
+A free-running sine wave oscillator.
 
-impl StaticGraphBuilder {
-    /// A free-running sine wave oscillator.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `frequency` | `Sample` | `440.0` | The frequency of the sine wave in Hz. |
-    /// | `1` | `phase` | `Sample` | `0.0` | The phase of the sine wave in radians. |
-    /// | `2` | `reset` | `Message(Bang)` |  | A message to reset the oscillator phase. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Sample` | The output sine wave signal. |
-    pub fn sine_osc(&self) -> StaticNode {
-        self.add_processor(SineOscillator::default())
-    }
-}
+# Inputs
+
+| Index | Name | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `0` | `frequency` | `Sample` | `440.0` | The frequency of the sine wave in Hz. |
+| `1` | `phase` | `Sample` | `0.0` | The phase of the sine wave in radians. |
+| `2` | `reset` | `Message(Bang)` |  | A message to reset the oscillator phase. |
+
+# Outputs
+
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `out` | `Sample` | The output sine wave signal. |
+"#
+);
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SawOscillator {
@@ -170,43 +147,23 @@ impl Process for SawOscillator {
         Ok(())
     }
 }
+add_to_builders!(
+    saw_osc,
+    SawOscillator,
+    r#"
+A free-running sawtooth wave oscillator.
 
-impl GraphBuilder {
-    /// A free-running unipolar sawtooth wave oscillator.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `frequency` | `Sample` | `440.0` | The frequency of the sawtooth wave in Hz. |
-    /// | `1` | `phase` | `Sample` | `0.0` | The phase of the sawtooth wave in radians. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Sample` | The output unipolar sawtooth wave signal. |
-    pub fn saw_osc(&self) -> Node {
-        self.add_processor(SawOscillator::default())
-    }
-}
+# Inputs
 
-impl StaticGraphBuilder {
-    /// A free-running unipolar sawtooth wave oscillator.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `frequency` | `Sample` | `440.0` | The frequency of the sawtooth wave in Hz. |
-    /// | `1` | `phase` | `Sample` | `0.0` | The phase of the sawtooth wave in radians. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Sample` | The output unipolar sawtooth wave signal. |
-    pub fn saw_osc(&self) -> StaticNode {
-        self.add_processor(SawOscillator::default())
-    }
-}
+| Index | Name | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `0` | `frequency` | `Sample` | `440.0` | The frequency of the sawtooth wave in Hz. |
+| `1` | `phase` | `Sample` | `0.0` | The phase of the sawtooth wave in radians. |
+
+# Outputs
+
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `out` | `Sample` | The output sawtooth wave signal. |
+"#
+);
