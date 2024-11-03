@@ -76,6 +76,22 @@ impl<'a> Node<'a> {
         self
     }
 
+    #[inline]
+    pub fn output(self, output_index: impl IntoOutputIdx) -> Output<'a> {
+        Output {
+            node: self,
+            output_index: output_index.into_output_idx(self),
+        }
+    }
+
+    #[inline]
+    pub fn input(self, input_index: impl IntoInputIdx) -> Input<'a> {
+        Input {
+            node: self,
+            input_index: input_index.into_input_idx(self),
+        }
+    }
+
     /// Converts the node's output from a float message to a sample.
     ///
     /// # Panics
@@ -127,6 +143,67 @@ impl<'a> Node<'a> {
         i2f.connect_input(self, 0, 0);
         i2f
     }
+
+    /// Smooths the node's output using a predefined smoothing factor (0.001).
+    /// This is an acceptable default for smoothing control signals, such as those from GUI controls.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    pub fn smooth(self) -> Node<'a> {
+        self.assert_single_output();
+        let smooth = self.graph().smooth();
+        smooth.connect_input(self, 0, 0);
+        smooth.connect_input(self.graph().constant(0.001), 0, 1);
+        smooth
+    }
+}
+
+pub struct Input<'a> {
+    pub(crate) node: Node<'a>,
+    pub(crate) input_index: u32,
+}
+
+impl<'a> Input<'a> {
+    #[inline]
+    pub const fn node(self) -> Node<'a> {
+        self.node
+    }
+
+    #[inline]
+    pub const fn input_index(self) -> u32 {
+        self.input_index
+    }
+
+    #[inline]
+    pub fn connect(self, output: Output<'a>) -> Node<'a> {
+        self.node
+            .connect_input(output.node, output.output_index, self.input_index)
+    }
+}
+
+pub struct Output<'a> {
+    pub(crate) node: Node<'a>,
+    pub(crate) output_index: u32,
+}
+
+impl<'a> Output<'a> {
+    #[inline]
+    pub const fn node(self) -> Node<'a> {
+        self.node
+    }
+
+    #[inline]
+    pub const fn output_index(self) -> u32 {
+        self.output_index
+    }
+
+    #[inline]
+    pub fn connect(self, input: Input<'a>) -> Node<'a> {
+        self.node
+            .connect_output(self.output_index, input.node, input.input_index)
+    }
 }
 
 #[doc(hidden)]
@@ -137,6 +214,8 @@ mod sealed {
     impl Sealed for f64 {}
     impl Sealed for u32 {}
     impl Sealed for &str {}
+    impl Sealed for super::Input<'_> {}
+    impl Sealed for super::Output<'_> {}
 }
 
 pub trait IntoNode<'a>: sealed::Sealed {
@@ -191,6 +270,15 @@ impl IntoInputIdx for &str {
     }
 }
 
+impl IntoInputIdx for Input<'_> {
+    #[inline]
+    #[track_caller]
+    fn into_input_idx(self, node: Node) -> u32 {
+        assert_eq!(self.node.id(), node.id(), "input from different node");
+        self.input_index
+    }
+}
+
 pub trait IntoOutputIdx: sealed::Sealed {
     fn into_output_idx(self, node: Node) -> u32;
 }
@@ -215,6 +303,15 @@ impl IntoOutputIdx for &str {
             panic!("no output with name {self}")
         };
         idx as u32
+    }
+}
+
+impl IntoOutputIdx for Output<'_> {
+    #[inline]
+    #[track_caller]
+    fn into_output_idx(self, node: Node) -> u32 {
+        assert_eq!(self.node.id(), node.id(), "output from different node");
+        self.output_index
     }
 }
 

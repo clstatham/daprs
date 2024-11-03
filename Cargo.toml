@@ -9,9 +9,12 @@ name = "daprs"
 [features]
 default = []
 jack = ["cpal/jack"]
+mem2g = []
+mem4g = []
+mem8g = []
 
 [workspace]
-members = ["daprs-macros"]
+members = ["daprs-iced", "daprs-macros"]
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }

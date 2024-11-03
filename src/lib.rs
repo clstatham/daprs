@@ -10,7 +10,6 @@ pub mod message;
 pub mod processor;
 pub mod runtime;
 pub mod signal;
-mod util;
 
 #[allow(unused_imports)]
 pub mod prelude {

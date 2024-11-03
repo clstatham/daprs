@@ -1,18 +1,13 @@
 use crate::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SineOscillator {
+    // phase accumulator
     t: f64,
+    // phase increment per sample
     t_step: f64,
-}
-
-impl Default for SineOscillator {
-    fn default() -> Self {
-        Self {
-            t: 0.0,
-            t_step: 0.0,
-        }
-    }
+    // sample rate
+    sample_rate: f64,
 }
 
 impl Process for SineOscillator {
@@ -20,6 +15,7 @@ impl Process for SineOscillator {
         vec![
             SignalSpec::unbounded("frequency", 440.0),
             SignalSpec::unbounded("phase", 0.0),
+            SignalSpec::unbounded("reset", Signal::new_message_none()),
         ]
     }
 
@@ -28,7 +24,7 @@ impl Process for SineOscillator {
     }
 
     fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
-        self.t_step = sample_rate.recip();
+        self.sample_rate = sample_rate;
     }
 
     fn process(
@@ -44,14 +40,25 @@ impl Process for SineOscillator {
             .as_sample()
             .ok_or(ProcessorError::InputSpecMismatch(1))?;
 
+        let reset = inputs[2]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(2))?;
+
         let out = outputs[0]
             .as_sample_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
-        for (out, frequency, phase) in itertools::izip!(out, frequency, phase) {
-            *out = (self.t * **frequency * 2.0 * std::f64::consts::PI + **phase)
-                .sin()
-                .into();
+        for (out, frequency, phase, reset) in itertools::izip!(out, frequency, phase, reset) {
+            if reset.is_some() {
+                self.t = 0.0;
+            }
+
+            // calculate the sine wave using the phase accumulator
+            let sine = (self.t * std::f64::consts::TAU + **phase).sin();
+            **out = sine;
+
+            // increment the phase accumulator
+            self.t_step = **frequency / self.sample_rate;
             self.t += self.t_step;
         }
 
@@ -68,6 +75,7 @@ impl GraphBuilder {
     /// | --- | --- | --- | --- | --- |
     /// | `0` | `frequency` | `Sample` | `440.0` | The frequency of the sine wave in Hz. |
     /// | `1` | `phase` | `Sample` | `0.0` | The phase of the sine wave in radians. |
+    /// | `2` | `reset` | `Message(Bang)` |  | A message to reset the oscillator phase. |
     ///
     /// # Outputs
     ///
@@ -81,8 +89,12 @@ impl GraphBuilder {
 
 #[derive(Clone, Debug, Default)]
 pub struct SawOscillator {
+    // phase accumulator
     t: f64,
+    // phase increment per sample
     t_step: f64,
+    // sample rate
+    sample_rate: f64,
 }
 
 impl Process for SawOscillator {
@@ -98,7 +110,7 @@ impl Process for SawOscillator {
     }
 
     fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
-        self.t_step = sample_rate.recip();
+        self.sample_rate = sample_rate;
     }
 
     fn process(
@@ -119,7 +131,11 @@ impl Process for SawOscillator {
             .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
         for (out, frequency, phase) in itertools::izip!(out, frequency, phase) {
-            **out = (self.t * **frequency + **phase) % 1.0;
+            // calculate the sawtooth wave using the phase accumulator
+            **out = (self.t + **phase) % 1.0;
+
+            // increment the phase accumulator
+            self.t_step = **frequency / self.sample_rate;
             self.t += self.t_step;
         }
 

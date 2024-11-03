@@ -31,7 +31,7 @@ pub enum RuntimeError {
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
 /// The audio backend to use for the runtime.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub enum Backend {
     #[default]
     Default,

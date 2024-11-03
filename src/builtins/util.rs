@@ -493,3 +493,211 @@ impl GraphBuilder {
         self.add_processor(SampleRateProc::default())
     }
 }
+
+#[inline(always)]
+fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    a + (b - a) * t
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SmoothProc {
+    current: f64,
+}
+
+impl Process for SmoothProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::unbounded("target", 0.0),
+            SignalSpec::unbounded("rate", 0.0),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", 0.0)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let target = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let rate = inputs[1]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(1))?;
+
+        let out = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (target, rate, out) in itertools::izip!(target, rate, out) {
+            let target = **target;
+            let rate = **rate;
+
+            let rate = rate.clamp(0.0, 1.0);
+
+            self.current = lerp(self.current, target, rate);
+
+            **out = self.current;
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that smoothly ramps between values over time.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `target` | `Sample` | | The target value. |
+    /// | `1` | `rate` | `Sample` | | The rate of smoothing. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Sample` | The current value of the ramp. |
+    pub fn smooth(&self) -> Node {
+        self.add_processor(SmoothProc::default())
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ChangedProc {
+    last: f64,
+}
+
+impl Process for ChangedProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::unbounded("in", 0.0),
+            SignalSpec::unbounded("threshold", 0.0),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", Signal::new_message_none())]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let in_signal = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let threshold = inputs[1]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(1))?;
+
+        let out_signal = outputs[0]
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (in_signal, threshold, out_signal) in itertools::izip!(in_signal, threshold, out_signal)
+        {
+            let in_signal = **in_signal;
+            let threshold = **threshold;
+
+            if (self.last - in_signal).abs() > threshold {
+                *out_signal = Some(Box::new(Bang));
+            } else {
+                *out_signal = None;
+            }
+
+            self.last = in_signal;
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `in` | `Sample` | | The input signal to detect changes on. |
+    /// | `1` | `threshold` | `Sample` | | The threshold for a change to be detected. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Message` | A bang message when a change is detected. |
+    pub fn changed(&self) -> Node {
+        self.add_processor(ChangedProc::default())
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ZeroCrossingProc {
+    last: f64,
+}
+
+impl Process for ZeroCrossingProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("in", 0.0)]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", Signal::new_message_none())]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let in_signal = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let out_signal = outputs[0]
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
+            let in_signal = **in_signal;
+
+            if (self.last < 0.0 && in_signal >= 0.0) || (self.last > 0.0 && in_signal <= 0.0) {
+                *out_signal = Some(Box::new(Bang));
+            } else {
+                *out_signal = None;
+            }
+
+            self.last = in_signal;
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that sends a bang message when a zero crossing is detected.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `in` | `Sample` | | The input signal to detect zero crossings on. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Message` | A bang message when a zero crossing is detected. |
+    pub fn zero_crossing(&self) -> Node {
+        self.add_processor(ZeroCrossingProc::default())
+    }
+}

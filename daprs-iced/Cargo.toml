@@ -1,0 +1,19 @@
+[package]
+name = "daprs-iced"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+iced = "0.9"
+iced_audio = "0.12"
+iced_native = "0.10"
+crossbeam-channel = "0.5"
+itertools = "0.13"
+derive_more = { version = "1", features = ["display"] }
+thiserror = "1.0"
+
+[dependencies.daprs]
+path = "../"
+
+[dev-dependencies]
+env_logger = "0.11"
