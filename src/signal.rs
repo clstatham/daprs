@@ -425,12 +425,12 @@ impl Buffer<Option<Message>> {
         if self.buf.len() > 1 {
             let first_some = self.buf.iter().find(|message| message.is_some());
             if let Some(first_some) = first_some {
-                let first_type = first_some.as_ref().unwrap();
+                let first_some = first_some.as_ref().unwrap();
                 self.buf.iter().all(|message| {
                     message.is_none()
                         || message
                             .as_ref()
-                            .is_some_and(|message| message.is_same_type(first_type))
+                            .is_some_and(|message| message.is_same_type(first_some))
                 })
             } else {
                 true

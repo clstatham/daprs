@@ -94,6 +94,7 @@ impl Message {
         match self {
             Message::Int(i) => Some(*i),
             Message::Float(x) => Some(x.round() as i64),
+            Message::String(s) => s.parse().ok(),
             _ => None,
         }
     }
@@ -102,12 +103,16 @@ impl Message {
         match self {
             Message::Int(i) => Some(*i as f64),
             Message::Float(x) => Some(*x),
+            Message::String(s) => s.parse().ok(),
             _ => None,
         }
     }
 
     pub fn cast_to_string(&self) -> Option<String> {
         match self {
+            Message::Bang => Some("bang".to_string()),
+            Message::Int(i) => Some(i.to_string()),
+            Message::Float(x) => Some(x.to_string()),
             Message::String(s) => Some(s.clone()),
             _ => None,
         }
