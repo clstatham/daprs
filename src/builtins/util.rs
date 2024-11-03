@@ -215,8 +215,12 @@ impl GraphBuilder {
     /// | --- | --- | --- | --- | --- |
     /// | `0` | `trig` | `Bang` | | Triggers the print. |
     /// | `1` | `message` | `Message` | | The message to print. |
-    pub fn print(&self, name: Option<&str>, msg: Option<&str>) -> Node {
-        self.add_processor(PrintProc::new(name, msg))
+    pub fn print(
+        &self,
+        name: impl Into<Option<&'static str>>,
+        msg: impl Into<Option<&'static str>>,
+    ) -> Node {
+        self.add_processor(PrintProc::new(name.into(), msg.into()))
     }
 }
 

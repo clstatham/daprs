@@ -11,15 +11,15 @@ fn main() {
     let out1 = graph.output();
     let out2 = graph.output();
 
-    // add a processor
-    let sine = graph.add_processor(SineOscillator::default());
+    // add a sine oscillator
+    let sine = graph.sine_osc();
 
     // set the frequency of the sine oscillator
-    sine.connect_input(440.0, 0, "frequency");
+    sine.input("frequency").set(440.0);
 
-    // connect the processor to the outputs
-    sine.connect_output(0, out1, 0);
-    sine.connect_output(0, out2, 0);
+    // connect the sine oscillator to the outputs
+    sine.output(0).connect(out1.input(0));
+    sine.output(0).connect(out2.input(0));
 
     // build the graph
     let graph = graph.build();

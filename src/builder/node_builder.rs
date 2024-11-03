@@ -77,18 +77,18 @@ impl<'a> Node<'a> {
     }
 
     #[inline]
-    pub fn output(self, output_index: impl IntoOutputIdx) -> Output<'a> {
+    pub fn output(self, index: impl IntoOutputIdx) -> Output<'a> {
         Output {
             node: self,
-            output_index: output_index.into_output_idx(self),
+            output_index: index.into_output_idx(self),
         }
     }
 
     #[inline]
-    pub fn input(self, input_index: impl IntoInputIdx) -> Input<'a> {
+    pub fn input(self, index: impl IntoInputIdx) -> Input<'a> {
         Input {
             node: self,
-            input_index: input_index.into_input_idx(self),
+            input_index: index.into_input_idx(self),
         }
     }
 
@@ -180,6 +180,14 @@ impl<'a> Input<'a> {
     pub fn connect(self, output: Output<'a>) -> Node<'a> {
         self.node
             .connect_input(output.node, output.output_index, self.input_index)
+    }
+
+    #[inline]
+    #[track_caller]
+    pub fn set(self, value: impl IntoNode<'a>) -> Node<'a> {
+        let value = value.into_node(self.node.graph());
+        value.assert_single_output();
+        self.node.connect_input(value, 0, self.input_index)
     }
 }
 

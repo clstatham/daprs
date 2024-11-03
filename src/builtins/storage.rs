@@ -4,7 +4,7 @@ use crate::prelude::*;
 pub struct BufferReaderProc {
     buffer: SignalBuffer,
     sample_rate: f64,
-    t: usize,
+    pos: usize,
 }
 
 impl BufferReaderProc {
@@ -12,14 +12,17 @@ impl BufferReaderProc {
         Self {
             buffer: SignalBuffer::Sample(buffer),
             sample_rate: 0.0,
-            t: 0,
+            pos: 0,
         }
     }
 }
 
 impl Process for BufferReaderProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("t", Signal::new_message_some(0))]
+        vec![SignalSpec::unbounded(
+            "position",
+            Signal::new_message_some(0),
+        )]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -35,7 +38,7 @@ impl Process for BufferReaderProc {
         inputs: &[SignalBuffer],
         outputs: &mut [SignalBuffer],
     ) -> Result<(), ProcessorError> {
-        let t = inputs[0]
+        let position = inputs[0]
             .as_message()
             .ok_or(ProcessorError::InputSpecMismatch(0))?;
 
@@ -45,18 +48,22 @@ impl Process for BufferReaderProc {
 
         let buffer = self.buffer.as_sample().unwrap();
 
-        for (out, t) in itertools::izip!(out, t) {
-            if let Some(t) = t {
-                let Some(&t) = (**t).downcast_ref::<i64>() else {
+        for (out, position) in itertools::izip!(out, position) {
+            if let Some(pos) = position {
+                let Some(&pos) = (**pos).downcast_ref::<i64>() else {
                     return Err(ProcessorError::InputSpecMismatch(0));
                 };
 
-                let t = if t < 0 { buffer.len() as i64 + t } else { t } as usize;
+                let pos = if pos < 0 {
+                    buffer.len() as i64 + pos
+                } else {
+                    pos
+                } as usize;
 
-                self.t = t % buffer.len();
+                self.pos = pos % buffer.len();
             }
 
-            *out = buffer[self.t];
+            *out = buffer[self.pos];
         }
 
         Ok(())
@@ -72,7 +79,7 @@ impl GraphBuilder {
     ///
     /// | Index | Name | Type | Default | Description |
     /// | --- | --- | --- | --- | --- |
-    /// | `0` | `t` | `Message(i64)` | `0` | The sample index to read from the buffer. |
+    /// | `0` | `position` | `Message(i64)` | `0` | The sample index to read from the buffer. |
     ///
     /// # Outputs
     ///

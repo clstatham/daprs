@@ -12,7 +12,7 @@ fn main() {
 
     // add a sine oscillator node with a frequency of 1 Hz
     let sine = graph.sine_osc();
-    graph.constant(1.0).connect_output(0, sine, "frequency");
+    sine.input("frequency").set(1.0);
 
     // make the sine only output positive values
     let sine = sine.abs();
@@ -21,16 +21,17 @@ fn main() {
     let sine = sine.s2m();
 
     // connect the sine oscillator to the metronome
-    sine.connect_output(0, bang, "period");
+    // sine.connect_output(0, bang, "period");
+    sine.output(0).connect(bang.input("period"));
 
     // add a print node
-    let print = graph.print(Some("freq"), None);
+    let print = graph.print("freq", None);
 
     // connect the metronome to trigger the print
-    bang.connect_output(0, print, "trig");
+    bang.output(0).connect(print.input("trig"));
 
     // connect the sine oscillator to the print
-    sine.connect_output(0, print, "message");
+    sine.output(0).connect(print.input("message"));
 
     // build the graph
     let graph = graph.build();
