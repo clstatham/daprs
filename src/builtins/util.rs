@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     message::Message,
     prelude::{GraphBuilder, Node, Process, SignalSpec},
@@ -5,7 +7,7 @@ use crate::{
     signal::{Sample, Signal, SignalBuffer},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MessageProc(Message);
 
 impl MessageProc {
@@ -14,6 +16,7 @@ impl MessageProc {
     }
 }
 
+#[typetag::serde]
 impl Process for MessageProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("trig", Signal::new_message_none())]
@@ -67,7 +70,7 @@ impl GraphBuilder {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConstantMessageProc(Message);
 
 impl ConstantMessageProc {
@@ -76,6 +79,7 @@ impl ConstantMessageProc {
     }
 }
 
+#[typetag::serde]
 impl Process for ConstantMessageProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -115,7 +119,7 @@ impl GraphBuilder {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PrintProc {
     pub name: Option<String>,
     pub msg: Option<String>,
@@ -151,6 +155,7 @@ impl PrintProc {
     }
 }
 
+#[typetag::serde]
 impl Process for PrintProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -224,9 +229,10 @@ impl GraphBuilder {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MessageToSampleProc;
 
+#[typetag::serde]
 impl Process for MessageToSampleProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("message", Signal::new_message_none())]
@@ -281,9 +287,10 @@ impl GraphBuilder {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SampleToMessageProc;
 
+#[typetag::serde]
 impl Process for SampleToMessageProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("sample", 0.0)]
@@ -332,11 +339,12 @@ impl GraphBuilder {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SampleRateProc {
     sample_rate: f64,
 }
 
+#[typetag::serde]
 impl Process for SampleRateProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -385,11 +393,12 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + (b - a) * t
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SmoothProc {
     current: f64,
 }
 
+#[typetag::serde]
 impl Process for SmoothProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -454,11 +463,12 @@ impl GraphBuilder {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ChangedProc {
     last: f64,
 }
 
+#[typetag::serde]
 impl Process for ChangedProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -526,11 +536,12 @@ impl GraphBuilder {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ZeroCrossingProc {
     last: f64,
 }
 
+#[typetag::serde]
 impl Process for ZeroCrossingProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("in", 0.0)]

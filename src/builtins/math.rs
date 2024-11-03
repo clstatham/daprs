@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{prelude::*, processor::ProcessorError, signal::SignalBuffer};
 use std::ops::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConstantProc {
     value: f64,
 }
@@ -18,6 +20,7 @@ impl Default for ConstantProc {
     }
 }
 
+#[typetag::serde]
 impl Process for ConstantProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -55,9 +58,10 @@ impl GraphBuilder {
 
 macro_rules! impl_binary_proc {
     ($name:ident, $method:ident, $doc:expr) => {
-        #[derive(Clone, Debug, Default)]
+        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
         pub struct $name;
 
+        #[typetag::serde]
         impl Process for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![
@@ -311,9 +315,10 @@ A processor that calculates the minimum of two signals.
 
 macro_rules! impl_unary_proc {
     ($name:ident, $method:ident, $doc:expr) => {
-        #[derive(Clone, Debug, Default)]
+        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
         pub struct $name;
 
+        #[typetag::serde]
         impl Process for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![SignalSpec::unbounded("in", 0.0)]

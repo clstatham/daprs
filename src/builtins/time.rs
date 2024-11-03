@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     message::Message,
     prelude::{GraphBuilder, Node, Process, SignalSpec},
@@ -5,7 +7,7 @@ use crate::{
     signal::Signal,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetroProc {
     period: f64,
     last_time: f64,
@@ -40,6 +42,7 @@ impl MetroProc {
     }
 }
 
+#[typetag::serde]
 impl Process for MetroProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("period", Signal::new_message_none())]

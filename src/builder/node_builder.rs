@@ -1,8 +1,10 @@
+use serde::Serialize;
+
 use super::graph_builder::GraphBuilder;
 use crate::builtins::*;
 use crate::graph::NodeIndex;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize)]
 pub struct Node<'a> {
     pub(crate) graph_builder: &'a GraphBuilder,
     pub(crate) node_id: NodeIndex,
@@ -151,6 +153,7 @@ impl<'a> Input<'a> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn connect(self, output: Output<'a>) -> Node<'a> {
         self.node
             .connect_input(output.node, output.output_index, self.input_index)
@@ -182,6 +185,7 @@ impl<'a> Output<'a> {
     }
 
     #[inline]
+    #[track_caller]
     pub fn connect(self, input: Input<'a>) -> Node<'a> {
         self.node
             .connect_output(self.output_index, input.node, input.input_index)

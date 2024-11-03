@@ -1,5 +1,7 @@
 use std::sync::Mutex;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     graph::{Graph, NodeIndex},
     prelude::Process,
@@ -8,8 +10,15 @@ use crate::{
 
 use super::node_builder::Node;
 
+#[derive(Serialize, Deserialize)]
 pub struct GraphBuilder {
     graph: Mutex<Graph>,
+}
+
+impl Clone for GraphBuilder {
+    fn clone(&self) -> Self {
+        Self::from_graph(self.with_graph(|graph| graph.clone()))
+    }
 }
 
 impl Default for GraphBuilder {

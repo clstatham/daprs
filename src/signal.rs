@@ -7,10 +7,12 @@ use std::{
     path::Path,
 };
 
+use serde::{Deserialize, Serialize};
+
 use crate::{message::Message, prelude::SignalSpec};
 
 /// A single 64-bit floating-point sample of signal data.
-#[derive(Default, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Default, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
 #[repr(transparent)]
 pub struct Sample(f64);
 
@@ -242,7 +244,7 @@ impl Display for Sample {
 /// An owning, fixed-length array of [`Sample`]s.
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
 /// It can also be [`collected`](std::iter::Iterator::collect) from an iterator of [`Sample`]s.
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Serialize, Deserialize)]
 pub struct Buffer<T> {
     buf: Box<[T]>,
 }
@@ -322,6 +324,9 @@ impl<T> Buffer<T> {
 }
 
 impl Buffer<Sample> {
+    /// Loads a buffer from a WAV file.
+    ///
+    /// Multi-channel WAV files are supported, but only the first channel will be loaded.
     pub fn load_wav(path: impl AsRef<Path>) -> Result<Self, hound::Error> {
         let reader = hound::WavReader::open(path)?;
         if reader.spec().channels == 1 {
@@ -346,6 +351,9 @@ impl Buffer<Sample> {
         }
     }
 
+    /// Saves the buffer to a WAV file.
+    ///
+    /// The buffer will be saved as a single-channel 32-bit WAV file with the given sample rate.
     pub fn save_wav(&self, path: impl AsRef<Path>, sample_rate: u32) -> Result<(), hound::Error> {
         let spec = hound::WavSpec {
             channels: 1,
@@ -420,7 +428,7 @@ impl Buffer<Sample> {
 }
 
 impl Buffer<Option<Message>> {
-    /// Returns `true` if all messages in the buffer are of the same type.
+    /// Returns `true` if all messages in the buffer are of the same message type.
     pub fn is_homogeneous(&self) -> bool {
         if self.buf.len() > 1 {
             let first_some = self.buf.iter().find(|message| message.is_some());
@@ -447,34 +455,46 @@ impl Buffer<Option<Message>> {
         debug_assert!(self.is_homogeneous(), "Buffer is not homogeneous");
     }
 
+    /// Returns `true` if all messages in the buffer are `None`.
+    #[inline]
     pub fn is_all_none(&self) -> bool {
         self.buf.iter().all(Option::is_none)
     }
 
+    /// Returns `true` if all messages in the buffer are `Some(Message::Bang)`.
+    #[inline]
     pub fn is_all_bang(&self) -> bool {
         self.buf.iter().all(|message| {
             message.is_none() || message.as_ref().is_some_and(|message| message.is_bang())
         })
     }
 
+    /// Returns `true` if all messages in the buffer are `Some(Message::Int)`.
+    #[inline]
     pub fn is_all_int(&self) -> bool {
         self.buf.iter().all(|message| {
             message.is_none() || message.as_ref().is_some_and(|message| message.is_int())
         })
     }
 
+    /// Returns `true` if all messages in the buffer are `Some(Message::Float)`.
+    #[inline]
     pub fn is_all_float(&self) -> bool {
         self.buf.iter().all(|message| {
             message.is_none() || message.as_ref().is_some_and(|message| message.is_float())
         })
     }
 
+    /// Returns `true` if all messages in the buffer are `Some(Message::String)`.
+    #[inline]
     pub fn is_all_string(&self) -> bool {
         self.buf.iter().all(|message| {
             message.is_none() || message.as_ref().is_some_and(|message| message.is_string())
         })
     }
 
+    /// Returns `true` if all messages in the buffer are `Some(Message::List)`.
+    #[inline]
     pub fn is_all_list(&self) -> bool {
         self.buf.iter().all(|message| {
             message.is_none() || message.as_ref().is_some_and(|message| message.is_list())
@@ -595,7 +615,7 @@ impl Into<Signal> for f64 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SignalBuffer {
     Sample(Buffer<Sample>),
     Message(Buffer<Option<Message>>),

@@ -1,6 +1,7 @@
 use std::{sync::mpsc, time::Duration};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     graph::{Graph, GraphRunError},
@@ -63,7 +64,7 @@ pub enum Device {
 /// In real-time mode, the runtime will render audio samples in real-time using a specified audio backend and device.
 ///
 /// In offline mode, the runtime will render audio samples as fast as possible and return the rendered output channels.
-#[derive(Default)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Runtime {
     graph: Graph,
 }

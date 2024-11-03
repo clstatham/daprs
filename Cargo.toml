@@ -14,16 +14,19 @@ mem4g = []
 mem8g = []
 
 [workspace]
-members = ["daprs-iced", "daprs-macros"]
+members = ["daprs-iced", "daprs-lua", "daprs-macros"]
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }
 itertools = "0.13.0"
 log = "0.4.22"
-petgraph = "0.6.5"
+petgraph = { version = "0.6.5", features = ["serde-1"] }
 hound = "3.5"
 thiserror = "1.0"
 downcast-rs = "1.2.1"
+serde = { version = "1", features = ["derive"] }
+erased-serde = "0.4.5"
+typetag = "0.2.18"
 
 [dependencies.daprs-macros]
 path = "daprs-macros"

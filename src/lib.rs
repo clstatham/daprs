@@ -16,6 +16,8 @@ pub mod prelude {
     pub use crate::builder::{
         graph_builder::GraphBuilder,
         node_builder::{IntoNode, Node},
+        static_graph_builder::StaticGraphBuilder,
+        static_node_builder::{IntoStaticNode, StaticNode},
     };
     pub use crate::builtins::*;
     pub use crate::graph::{edge::Edge, Graph};
@@ -24,6 +26,7 @@ pub mod prelude {
     pub use crate::runtime::{Backend, Device, Runtime};
     pub use crate::signal::{Buffer, Sample, Signal, SignalBuffer};
     pub use std::time::Duration;
+    pub use typetag;
 }
 
 pub fn available_backends() -> Vec<Backend> {

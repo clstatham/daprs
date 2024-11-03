@@ -1,26 +1,30 @@
 use crossbeam_channel::{Receiver, Sender};
 use daprs::prelude::*;
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct GuiChannel {
-    tx: GuiTx,
-    rx: GuiRx,
+    #[serde(skip)]
+    tx: Option<GuiTx>,
+    #[serde(skip)]
+    rx: Option<GuiRx>,
 }
 
 impl GuiChannel {
     pub fn new() -> Self {
         let (tx, rx) = crossbeam_channel::unbounded();
         Self {
-            tx: GuiTx::new(tx),
-            rx: GuiRx::new(rx),
+            tx: Some(GuiTx::new(tx)),
+            rx: Some(GuiRx::new(rx)),
         }
     }
 
     pub fn tx(&self) -> &GuiTx {
-        &self.tx
+        self.tx.as_ref().unwrap()
     }
 
     pub fn rx(&self) -> &GuiRx {
-        &self.rx
+        self.rx.as_ref().unwrap()
     }
 }
 
@@ -45,22 +49,23 @@ impl GuiTx {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GuiRx {
-    rx: Receiver<Message>,
+    #[serde(skip)]
+    rx: Option<Receiver<Message>>,
     last_message: Option<Message>,
 }
 
 impl GuiRx {
     pub fn new(rx: Receiver<Message>) -> Self {
         Self {
-            rx,
+            rx: Some(rx),
             last_message: None,
         }
     }
 
     pub fn recv(&mut self) -> Option<&Message> {
-        if let Ok(msg) = self.rx.try_recv() {
+        if let Ok(msg) = self.rx.as_ref().unwrap().try_recv() {
             self.last_message = Some(msg.clone());
         }
         self.last_message.as_ref()
@@ -71,6 +76,7 @@ impl GuiRx {
     }
 }
 
+#[typetag::serde]
 impl Process for GuiRx {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]

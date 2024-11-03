@@ -1,6 +1,8 @@
 use std::fmt::{Debug, Display};
 
-#[derive(Debug, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Message {
     Bang,
     Int(i64),
@@ -31,6 +33,8 @@ impl Display for Message {
 }
 
 impl Message {
+    /// Returns true if the two messages are of the same message type.
+    #[inline]
     pub fn is_same_type(&self, other: &Message) -> bool {
         matches!(
             (self, other),
@@ -42,6 +46,10 @@ impl Message {
         )
     }
 
+    /// Attempts to convert the message to an integer.
+    ///
+    /// This does not attempt to *cast* the message to an integer, but rather checks if the message is already `Message::Int`.
+    #[inline]
     pub fn as_int(&self) -> Option<i64> {
         match self {
             Message::Int(i) => Some(*i),
@@ -49,6 +57,10 @@ impl Message {
         }
     }
 
+    /// Attempts to convert the message to a float.
+    ///
+    /// This does not attempt to *cast* the message to a float, but rather checks if the message is already `Message::Float`.
+    #[inline]
     pub fn as_float(&self) -> Option<f64> {
         match self {
             Message::Float(x) => Some(*x),
@@ -56,6 +68,10 @@ impl Message {
         }
     }
 
+    /// Attempts to convert the message to a string.
+    ///
+    /// This does not attempt to *cast* the message to a string, but rather checks if the message is already `Message::String`.
+    #[inline]
     pub fn as_string(&self) -> Option<&str> {
         match self {
             Message::String(s) => Some(s),
@@ -63,6 +79,10 @@ impl Message {
         }
     }
 
+    /// Attempts to convert the message to a list.
+    ///
+    /// This does not attempt to *cast* the message to a list, but rather checks if the message is already `Message::List`.
+    #[inline]
     pub fn as_list(&self) -> Option<&[Message]> {
         match self {
             Message::List(list) => Some(list),
@@ -70,26 +90,38 @@ impl Message {
         }
     }
 
+    /// Returns true if the message is a bang.
+    #[inline]
     pub fn is_bang(&self) -> bool {
         matches!(self, Message::Bang)
     }
 
+    /// Returns true if the message is an integer.
+    #[inline]
     pub fn is_int(&self) -> bool {
         matches!(self, Message::Int(_))
     }
 
+    /// Returns true if the message is a float.
+    #[inline]
     pub fn is_float(&self) -> bool {
         matches!(self, Message::Float(_))
     }
 
+    /// Returns true if the message is a string.
+    #[inline]
     pub fn is_string(&self) -> bool {
         matches!(self, Message::String(_))
     }
 
+    /// Returns true if the message is a list.
+    #[inline]
     pub fn is_list(&self) -> bool {
         matches!(self, Message::List(_))
     }
 
+    /// Attempts to cast the message to an integer using whatever method is most appropriate.
+    #[inline]
     pub fn cast_to_int(&self) -> Option<i64> {
         match self {
             Message::Int(i) => Some(*i),
@@ -99,6 +131,8 @@ impl Message {
         }
     }
 
+    /// Attempts to cast the message to a float using whatever method is most appropriate.
+    #[inline]
     pub fn cast_to_float(&self) -> Option<f64> {
         match self {
             Message::Int(i) => Some(*i as f64),
@@ -108,6 +142,8 @@ impl Message {
         }
     }
 
+    /// Attempts to cast the message to a string using whatever method is most appropriate.
+    #[inline]
     pub fn cast_to_string(&self) -> Option<String> {
         match self {
             Message::Bang => Some("bang".to_string()),
@@ -118,6 +154,8 @@ impl Message {
         }
     }
 
+    /// Attempts to cast the message to a list using whatever method is most appropriate.
+    #[inline]
     pub fn cast_to_list(&self) -> Option<Vec<Message>> {
         match self {
             Message::List(list) => Some(list.clone()),

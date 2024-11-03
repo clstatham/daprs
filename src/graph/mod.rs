@@ -4,6 +4,7 @@ use petgraph::{
     prelude::{Direction, EdgeRef, StableDiGraph},
     visit::DfsPostOrder,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::{
     processor::{Process, Processor, ProcessorError},
@@ -60,7 +61,7 @@ pub type GraphConstructionResult<T> = Result<T, GraphConstructionError>;
 ///
 /// This struct is meant for the actual management of processing the audio graph, or for building custom graphs using a more direct API.
 /// See also the [`builder`] module, which provides a more ergonomic way to construct graphs.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 pub struct Graph {
     digraph: DiGraph,
 

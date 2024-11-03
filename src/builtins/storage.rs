@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 use crate::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BufferReaderProc {
     buffer: SignalBuffer,
     sample_rate: f64,
@@ -17,6 +19,7 @@ impl BufferReaderProc {
     }
 }
 
+#[typetag::serde]
 impl Process for BufferReaderProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded(
