@@ -32,41 +32,41 @@ impl Default for GuiChannel {
 
 #[derive(Debug, Clone)]
 pub struct GuiTx {
-    tx: Sender<BoxedMessage>,
+    tx: Sender<Message>,
 }
 
 impl GuiTx {
-    pub fn new(tx: Sender<BoxedMessage>) -> Self {
+    pub fn new(tx: Sender<Message>) -> Self {
         Self { tx }
     }
 
-    pub fn send(&self, message: impl Message) {
-        self.tx.try_send(Box::new(message)).ok();
+    pub fn send(&self, message: Message) {
+        self.tx.try_send(message).ok();
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct GuiRx {
-    rx: Receiver<BoxedMessage>,
-    last_message: Option<BoxedMessage>,
+    rx: Receiver<Message>,
+    last_message: Option<Message>,
 }
 
 impl GuiRx {
-    pub fn new(rx: Receiver<BoxedMessage>) -> Self {
+    pub fn new(rx: Receiver<Message>) -> Self {
         Self {
             rx,
             last_message: None,
         }
     }
 
-    pub fn recv(&mut self) -> Option<&BoxedMessage> {
+    pub fn recv(&mut self) -> Option<&Message> {
         if let Ok(msg) = self.rx.try_recv() {
             self.last_message = Some(msg.clone());
         }
         self.last_message.as_ref()
     }
 
-    pub fn last_message(&self) -> Option<&BoxedMessage> {
+    pub fn last_message(&self) -> Option<&Message> {
         self.last_message.as_ref()
     }
 }

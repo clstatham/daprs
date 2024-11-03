@@ -21,7 +21,7 @@ impl Process for BufferReaderProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded(
             "position",
-            Signal::new_message_some(0),
+            Signal::new_message_some(Message::Int(0)),
         )]
     }
 
@@ -50,7 +50,7 @@ impl Process for BufferReaderProc {
 
         for (out, position) in itertools::izip!(out, position) {
             if let Some(pos) = position {
-                let Some(&pos) = (**pos).downcast_ref::<i64>() else {
+                let Some(pos) = pos.cast_to_int() else {
                     return Err(ProcessorError::InputSpecMismatch(0));
                 };
 

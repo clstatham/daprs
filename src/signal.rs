@@ -7,10 +7,7 @@ use std::{
     path::Path,
 };
 
-use crate::{
-    message::{BoxedMessage, Message},
-    prelude::SignalSpec,
-};
+use crate::{message::Message, prelude::SignalSpec};
 
 /// A single 64-bit floating-point sample of signal data.
 #[derive(Default, Clone, Copy, PartialEq, PartialOrd)]
@@ -422,6 +419,69 @@ impl Buffer<Sample> {
     }
 }
 
+impl Buffer<Option<Message>> {
+    /// Returns `true` if all messages in the buffer are of the same type.
+    pub fn is_homogeneous(&self) -> bool {
+        if self.buf.len() > 1 {
+            let first_some = self.buf.iter().find(|message| message.is_some());
+            if let Some(first_some) = first_some {
+                let first_type = first_some.as_ref().unwrap();
+                self.buf.iter().all(|message| {
+                    message.is_none()
+                        || message
+                            .as_ref()
+                            .is_some_and(|message| message.is_same_type(first_type))
+                })
+            } else {
+                true
+            }
+        } else {
+            true
+        }
+    }
+
+    /// Panics on debug builds if the buffer is not homogeneous.
+    #[track_caller]
+    #[inline]
+    pub fn debug_assert_homogeneous(&self) {
+        debug_assert!(self.is_homogeneous(), "Buffer is not homogeneous");
+    }
+
+    pub fn is_all_none(&self) -> bool {
+        self.buf.iter().all(Option::is_none)
+    }
+
+    pub fn is_all_bang(&self) -> bool {
+        self.buf.iter().all(|message| {
+            message.is_none() || message.as_ref().is_some_and(|message| message.is_bang())
+        })
+    }
+
+    pub fn is_all_int(&self) -> bool {
+        self.buf.iter().all(|message| {
+            message.is_none() || message.as_ref().is_some_and(|message| message.is_int())
+        })
+    }
+
+    pub fn is_all_float(&self) -> bool {
+        self.buf.iter().all(|message| {
+            message.is_none() || message.as_ref().is_some_and(|message| message.is_float())
+        })
+    }
+
+    pub fn is_all_string(&self) -> bool {
+        self.buf.iter().all(|message| {
+            message.is_none() || message.as_ref().is_some_and(|message| message.is_string())
+        })
+    }
+
+    pub fn is_all_list(&self) -> bool {
+        self.buf.iter().all(|message| {
+            message.is_none() || message.as_ref().is_some_and(|message| message.is_list())
+        })
+    }
+}
+
 impl<T> Deref for Buffer<T> {
     type Target = [T];
     #[inline]
@@ -492,46 +552,11 @@ impl<'a, T> IntoIterator for &'a mut Buffer<T> {
     }
 }
 
-impl Buffer<Option<BoxedMessage>> {
-    /// Returns `true` if all messages in the buffer are of the same type.
-    pub fn is_homogeneous(&self) -> bool {
-        if self.buf.len() > 1 {
-            let first_some = self.buf.iter().find(|message| message.is_some());
-            if let Some(first_some) = first_some {
-                let type_id = (**first_some.as_ref().unwrap()).type_id();
-                self.buf.iter().all(|message| match message {
-                    Some(message) => (**message).type_id() == type_id,
-                    None => true,
-                })
-            } else {
-                true
-            }
-        } else {
-            true
-        }
-    }
-
-    /// Panics on debug builds if the buffer is not homogeneous.
-    #[track_caller]
-    #[inline]
-    pub fn debug_assert_homogeneous(&self) {
-        debug_assert!(self.is_homogeneous(), "Buffer is not homogeneous");
-    }
-
-    /// Returns `true` if all messages in the buffer are of the same type as `T`.
-    pub fn is_all<T: Message>(&self) -> bool {
-        self.buf.iter().all(|message| match message {
-            Some(message) => (**message).is::<T>(),
-            None => true,
-        })
-    }
-}
-
 /// A signal that can be either a single sample or a message.
 #[derive(Debug, Clone)]
 pub enum Signal {
     Sample(Sample),
-    Message(Option<BoxedMessage>),
+    Message(Option<Message>),
 }
 
 impl Signal {
@@ -539,8 +564,8 @@ impl Signal {
         Self::Sample(Sample(value))
     }
 
-    pub fn new_message_some(message: impl Message) -> Self {
-        Self::Message(Some(Box::new(message)))
+    pub fn new_message_some(message: Message) -> Self {
+        Self::Message(Some(message))
     }
 
     pub fn new_message_none() -> Self {
@@ -573,7 +598,7 @@ impl Into<Signal> for f64 {
 #[derive(Debug, Clone)]
 pub enum SignalBuffer {
     Sample(Buffer<Sample>),
-    Message(Buffer<Option<BoxedMessage>>),
+    Message(Buffer<Option<Message>>),
 }
 
 impl SignalBuffer {
@@ -613,7 +638,7 @@ impl SignalBuffer {
         }
     }
 
-    pub fn as_message(&self) -> Option<&Buffer<Option<BoxedMessage>>> {
+    pub fn as_message(&self) -> Option<&Buffer<Option<Message>>> {
         match self {
             Self::Sample(_) => None,
             Self::Message(buffer) => Some(buffer),
@@ -627,7 +652,7 @@ impl SignalBuffer {
         }
     }
 
-    pub fn as_message_mut(&mut self) -> Option<&mut Buffer<Option<BoxedMessage>>> {
+    pub fn as_message_mut(&mut self) -> Option<&mut Buffer<Option<Message>>> {
         match self {
             Self::Sample(_) => None,
             Self::Message(buffer) => Some(buffer),

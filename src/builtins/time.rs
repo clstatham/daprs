@@ -1,5 +1,5 @@
 use crate::{
-    message::Bang,
+    message::Message,
     prelude::{GraphBuilder, Node, Process, SignalSpec},
     processor::ProcessorError,
     signal::Signal,
@@ -68,13 +68,13 @@ impl Process for MetroProc {
 
         for (period, out) in itertools::izip!(period, out) {
             if let Some(period) = period {
-                if let Some(period) = (**period).downcast_ref::<f64>() {
-                    self.period = *period;
+                if let Some(period) = period.cast_to_float() {
+                    self.period = period;
                 }
             }
 
             if self.next_sample() {
-                *out = Some(Box::new(Bang));
+                *out = Some(Message::Bang);
             } else {
                 *out = None;
             }

@@ -118,32 +118,6 @@ impl<'a> Node<'a> {
         s2m
     }
 
-    /// Converts the node's output from a float message to an integer message.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the node has more than one output.
-    #[inline]
-    pub fn f2i(self) -> Node<'a> {
-        self.assert_single_output();
-        let f2i = self.graph().f2i();
-        f2i.connect_input(self, 0, 0);
-        f2i
-    }
-
-    /// Converts the node's output from an integer message to a float message.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the node has more than one output.
-    #[inline]
-    pub fn i2f(self) -> Node<'a> {
-        self.assert_single_output();
-        let i2f = self.graph().i2f();
-        i2f.connect_input(self, 0, 0);
-        i2f
-    }
-
     /// Smooths the node's output using a predefined smoothing factor (0.001).
     /// This is an acceptable default for smoothing control signals, such as those from GUI controls.
     ///

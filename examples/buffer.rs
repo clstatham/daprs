@@ -30,8 +30,8 @@ fn main() {
     // multiply the saw oscillator's amplitude by the length of the buffer, so it outputs the full range of the buffer
     let saw = saw * len;
 
-    // convert the saw oscillator to output an integer message
-    let saw = saw.s2m().f2i();
+    // convert the saw oscillator to output a message
+    let saw = saw.s2m();
 
     // connect the saw oscillator to the buffer reader
     saw.output(0).connect(buffer.input("position"));

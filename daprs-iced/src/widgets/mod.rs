@@ -36,7 +36,7 @@ impl Widget for Button {
     }
 
     fn update(&mut self, _message: ()) {
-        self.channel.tx().send(Bang);
+        self.channel.tx().send(Message::Bang);
     }
 
     fn rx(&self) -> GuiRx {
@@ -71,7 +71,9 @@ impl Widget for Knob {
 
     fn update(&mut self, message: Normal) {
         self.normal_param.update(message);
-        self.channel.tx().send(message.as_f32() as f64);
+        self.channel
+            .tx()
+            .send(Message::Float(message.as_f32() as f64));
     }
 
     fn rx(&self) -> GuiRx {
@@ -106,7 +108,7 @@ impl Widget for NumberDialer {
 
     fn update(&mut self, message: f64) {
         self.value = message;
-        self.channel.tx().send(message);
+        self.channel.tx().send(Message::Float(message));
     }
 
     fn rx(&self) -> GuiRx {

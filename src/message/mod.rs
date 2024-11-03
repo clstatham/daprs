@@ -1,66 +1,122 @@
 use std::fmt::{Debug, Display};
 
-use downcast_rs::{impl_downcast, DowncastSync};
-
-pub trait Message: DowncastSync + Debug + Display + MessageClone {}
-impl_downcast!(sync Message);
-
-pub type BoxedMessage = Box<dyn Message>;
-
-mod sealed {
-    pub trait Sealed {}
-    impl<T: Clone> Sealed for T {}
-}
-
-#[doc(hidden)]
-pub trait MessageClone: sealed::Sealed {
-    fn clone_boxed(&self) -> Box<dyn Message>;
-}
-
-impl<T> MessageClone for T
-where
-    T: Clone + Message,
-{
-    fn clone_boxed(&self) -> Box<dyn Message> {
-        Box::new(self.clone())
-    }
-}
-
-impl Clone for Box<dyn Message> {
-    fn clone(&self) -> Self {
-        self.clone_boxed()
-    }
-}
-
-impl Message for String {}
-impl Message for f64 {}
-impl Message for i64 {}
-impl Message for bool {}
-
 #[derive(Debug, Clone)]
-pub struct Nil;
-impl Message for Nil {}
+pub enum Message {
+    Bang,
+    Int(i64),
+    Float(f64),
+    String(String),
+    List(Vec<Message>),
+}
 
-impl Display for Nil {
+impl Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "nil")
+        match self {
+            Message::Bang => write!(f, "bang"),
+            Message::Int(i) => write!(f, "{}", i),
+            Message::Float(x) => write!(f, "{}", x),
+            Message::String(s) => write!(f, "{}", s),
+            Message::List(list) => {
+                write!(f, "[")?;
+                for (i, item) in list.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{}", item)?;
+                }
+                write!(f, "]")
+            }
+        }
     }
 }
 
-pub fn nil() -> BoxedMessage {
-    Box::new(Nil)
-}
-
-#[derive(Debug, Clone)]
-pub struct Bang;
-impl Message for Bang {}
-
-impl Display for Bang {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "bang")
+impl Message {
+    pub fn is_same_type(&self, other: &Message) -> bool {
+        matches!(
+            (self, other),
+            (Message::Bang, Message::Bang)
+                | (Message::Int(_), Message::Int(_))
+                | (Message::Float(_), Message::Float(_))
+                | (Message::String(_), Message::String(_))
+                | (Message::List(_), Message::List(_))
+        )
     }
-}
 
-pub fn bang() -> BoxedMessage {
-    Box::new(Bang)
+    pub fn as_int(&self) -> Option<i64> {
+        match self {
+            Message::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Message::Float(x) => Some(*x),
+            _ => None,
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            Message::String(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn as_list(&self) -> Option<&[Message]> {
+        match self {
+            Message::List(list) => Some(list),
+            _ => None,
+        }
+    }
+
+    pub fn is_bang(&self) -> bool {
+        matches!(self, Message::Bang)
+    }
+
+    pub fn is_int(&self) -> bool {
+        matches!(self, Message::Int(_))
+    }
+
+    pub fn is_float(&self) -> bool {
+        matches!(self, Message::Float(_))
+    }
+
+    pub fn is_string(&self) -> bool {
+        matches!(self, Message::String(_))
+    }
+
+    pub fn is_list(&self) -> bool {
+        matches!(self, Message::List(_))
+    }
+
+    pub fn cast_to_int(&self) -> Option<i64> {
+        match self {
+            Message::Int(i) => Some(*i),
+            Message::Float(x) => Some(x.round() as i64),
+            _ => None,
+        }
+    }
+
+    pub fn cast_to_float(&self) -> Option<f64> {
+        match self {
+            Message::Int(i) => Some(*i as f64),
+            Message::Float(x) => Some(*x),
+            _ => None,
+        }
+    }
+
+    pub fn cast_to_string(&self) -> Option<String> {
+        match self {
+            Message::String(s) => Some(s.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn cast_to_list(&self) -> Option<Vec<Message>> {
+        match self {
+            Message::List(list) => Some(list.clone()),
+            msg => Some(vec![msg.clone()]),
+        }
+    }
 }
