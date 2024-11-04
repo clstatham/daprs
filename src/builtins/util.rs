@@ -445,7 +445,7 @@ impl Process for SmoothProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("target", 0.0),
-            SignalSpec::unbounded("rate", 1.0),
+            SignalSpec::unbounded("factor", 1.0),
         ]
     }
 
@@ -462,7 +462,7 @@ impl Process for SmoothProc {
             .as_sample()
             .ok_or(ProcessorError::InputSpecMismatch(0))?;
 
-        let rate = inputs[1]
+        let factor = inputs[1]
             .as_sample()
             .ok_or(ProcessorError::InputSpecMismatch(1))?;
 
@@ -470,13 +470,13 @@ impl Process for SmoothProc {
             .as_sample_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
-        for (target, rate, out) in itertools::izip!(target, rate, out) {
+        for (target, factor, out) in itertools::izip!(target, factor, out) {
             let target = **target;
-            let rate = **rate;
+            let factor = **factor;
 
-            let rate = rate.clamp(0.0, 1.0);
+            let factor = factor.clamp(0.0, 1.0);
 
-            self.current = lerp(self.current, target, rate);
+            self.current = lerp(self.current, target, factor);
 
             **out = self.current;
         }
@@ -496,7 +496,7 @@ A processor that smoothly ramps between values over time.
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `0` | `target` | `Sample` | 0.0 | The target value. |
-| `1` | `rate` | `Sample` | 1.0  | The rate of smoothing. |
+| `1` | `factor` | `Sample` | 1.0  | The factor of smoothing (0 <= factor <= 1). |
 
 # Outputs
 

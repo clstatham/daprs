@@ -142,6 +142,21 @@ impl Node {
         proc.connect_input(self, 0, 0);
         proc
     }
+
+    /// Smooths the output signal.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    #[track_caller]
+    pub fn smooth(&self) -> Node {
+        self.assert_single_output();
+        let proc = self.graph.add_processor(SmoothProc::default());
+        proc.input("factor").set(0.1);
+        proc.connect_input(self, 0, 0);
+        proc
+    }
 }
 
 /// An input of a node in the graph.
