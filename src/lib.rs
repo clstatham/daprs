@@ -22,7 +22,7 @@ pub mod prelude {
         static_node_builder::{IntoStaticNode, StaticNode},
     };
     pub use crate::builtins::*;
-    pub use crate::graph::{edge::Edge, Graph};
+    pub use crate::graph::Graph;
     pub use crate::message::*;
     pub use crate::processor::{Process, Processor, ProcessorError, SignalSpec};
     pub use crate::runtime::{Backend, Device, Runtime};
@@ -31,7 +31,7 @@ pub mod prelude {
     pub use typetag;
 }
 
-/// Lists the available backends.
+/// Returns a Vec of available backends.
 pub fn available_backends() -> Vec<Backend> {
     let mut backends = vec![Backend::Default];
     for host in cpal::available_hosts() {
@@ -64,7 +64,7 @@ pub fn list_backends() {
     }
 }
 
-/// Lists the available devices for the given backend.
+/// Prints the available devices for the given backend.
 pub fn list_devices(backend: Backend) {
     println!("Listing devices for backend: {:?}", backend);
     let host = match backend {

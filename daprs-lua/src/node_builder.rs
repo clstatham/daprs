@@ -27,20 +27,36 @@ impl LuaUserData for LuaNode {
         methods.add_method("m2s", |_, this, _args: ()| Ok(LuaNode(this.0.m2s())));
         methods.add_method("s2m", |_, this, _args: ()| Ok(LuaNode(this.0.s2m())));
 
-        methods.add_meta_method("__add", |_, this, other: LuaNode| {
-            Ok(LuaNode(&this.0 + &other.0))
+        methods.add_meta_method("__add", |_, this, other: LuaValue| match other {
+            LuaValue::Number(float) => Ok(LuaNode(&this.0 + float)),
+            LuaValue::UserData(data) if data.is::<LuaNode>() => {
+                Ok(LuaNode(&this.0 + &data.borrow::<LuaNode>().unwrap().0))
+            }
+            _ => Err(mlua::Error::external("Invalid operand type")),
         });
 
-        methods.add_meta_method("__sub", |_, this, other: LuaNode| {
-            Ok(LuaNode(&this.0 - &other.0))
+        methods.add_meta_method("__sub", |_, this, other: LuaValue| match other {
+            LuaValue::Number(float) => Ok(LuaNode(&this.0 - float)),
+            LuaValue::UserData(data) if data.is::<LuaNode>() => {
+                Ok(LuaNode(&this.0 - &data.borrow::<LuaNode>().unwrap().0))
+            }
+            _ => Err(mlua::Error::external("Invalid operand type")),
         });
 
-        methods.add_meta_method("__mul", |_, this, other: LuaNode| {
-            Ok(LuaNode(&this.0 * &other.0))
+        methods.add_meta_method("__mul", |_, this, other: LuaValue| match other {
+            LuaValue::Number(float) => Ok(LuaNode(&this.0 * float)),
+            LuaValue::UserData(data) if data.is::<LuaNode>() => {
+                Ok(LuaNode(&this.0 * &data.borrow::<LuaNode>().unwrap().0))
+            }
+            _ => Err(mlua::Error::external("Invalid operand type")),
         });
 
-        methods.add_meta_method("__div", |_, this, other: LuaNode| {
-            Ok(LuaNode(&this.0 / &other.0))
+        methods.add_meta_method("__div", |_, this, other: LuaValue| match other {
+            LuaValue::Number(float) => Ok(LuaNode(&this.0 / float)),
+            LuaValue::UserData(data) if data.is::<LuaNode>() => {
+                Ok(LuaNode(&this.0 / &data.borrow::<LuaNode>().unwrap().0))
+            }
+            _ => Err(mlua::Error::external("Invalid operand type")),
         });
 
         methods.add_meta_method("__unm", |_, this, _: ()| Ok(LuaNode(-&this.0)));
