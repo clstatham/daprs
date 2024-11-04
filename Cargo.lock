@@ -740,7 +740,6 @@ name = "daprs"
 version = "0.1.0"
 dependencies = [
  "cpal",
- "daprs-macros",
  "downcast-rs",
  "env_logger",
  "erased-serde",
@@ -776,15 +775,6 @@ dependencies = [
  "daprs",
  "mlua",
  "serde",
-]
-
-[[package]]
-name = "daprs-macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.87",
 ]
 
 [[package]]

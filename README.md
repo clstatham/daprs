@@ -1,6 +1,6 @@
 # daprs
 
-**daprs** is a WIP library for writing digital audio processors in Rust.
+**daprs** is a library for writing and running digital audio processors in Rust.
 
 ## Design Goals
 
@@ -8,7 +8,6 @@
 - Stack memory >>> Heap memory
 - No allocations on the realtime audio thread
 - Do as much work ahead of time as possible
-- Type safety and type-checked graph construction
 
 ## License
 

@@ -1,5 +1,7 @@
 [package]
 name = "daprs"
+description = "DAPRS - Digital Audio Processing in Rust"
+license = "Apache 2.0 OR MIT"
 version = "0.1.0"
 edition = "2021"
 
@@ -14,7 +16,7 @@ mem4g = []
 mem8g = []
 
 [workspace]
-members = ["daprs-iced", "daprs-lua", "daprs-macros"]
+members = ["daprs-iced", "daprs-lua"]
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }
@@ -27,9 +29,6 @@ downcast-rs = "1.2.1"
 serde = { version = "1", features = ["derive"] }
 erased-serde = "0.4.5"
 typetag = "0.2.18"
-
-[dependencies.daprs-macros]
-path = "daprs-macros"
 
 [dev-dependencies]
 env_logger = "0.11"
