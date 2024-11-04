@@ -17,13 +17,13 @@ pub mod signal;
 pub mod prelude {
     pub use crate::builder::{
         graph_builder::GraphBuilder,
-        node_builder::{IntoNode, Node},
+        node_builder::{Input, IntoNode, Node, Output},
     };
     pub use crate::builtins::*;
     pub use crate::graph::Graph;
     pub use crate::message::*;
     pub use crate::processor::{Process, Processor, ProcessorError, SignalSpec};
-    pub use crate::runtime::{Backend, Device, Runtime};
+    pub use crate::runtime::{Backend, Device, Runtime, RuntimeHandle};
     pub use crate::signal::{Buffer, Sample, Signal, SignalBuffer};
     pub use std::time::Duration;
 }

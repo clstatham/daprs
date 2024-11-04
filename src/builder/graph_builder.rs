@@ -2,13 +2,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::{
-    graph::{Graph, NodeIndex},
-    prelude::Process,
-    runtime::Runtime,
-};
+use crate::{graph::Graph, prelude::Process, runtime::Runtime};
 
-use super::node_builder::Node;
+use super::node_builder::{IntoInputIdx, IntoNode, IntoOutputIdx, Node};
 
 /// A builder for constructing audio graphs.
 #[derive(Clone, Default)]
@@ -86,8 +82,18 @@ impl GraphBuilder {
     /// Panics if the nodes, output, or input are invalid.
     #[track_caller]
     #[inline]
-    pub fn connect(&self, from: NodeIndex, from_output: u32, to: NodeIndex, to_input: u32) {
-        self.with_graph_mut(|graph| graph.connect(from, from_output, to, to_input))
+    pub fn connect(
+        &self,
+        from: impl IntoNode,
+        from_output: impl IntoOutputIdx,
+        to: impl IntoNode,
+        to_input: impl IntoInputIdx,
+    ) {
+        let from = from.into_node(self);
+        let to = to.into_node(self);
+        let from_output = from_output.into_output_idx(&from);
+        let to_input = to_input.into_input_idx(&to);
+        self.with_graph_mut(|graph| graph.connect(from.id(), from_output, to.id(), to_input))
             .unwrap();
     }
 }

@@ -8,7 +8,9 @@
 		},
 		{
 			"path": "../raug-iced"
+		},
+		{
+			"path": "../raug-python"
 		}
 	],
-	"settings": {}
 }

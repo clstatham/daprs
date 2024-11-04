@@ -8,18 +8,13 @@ fn bench_demo(c: &mut Criterion) {
     let graph = GraphBuilder::new();
 
     let out1 = graph.add_output();
-    let out2 = graph.add_output();
 
     let sine = graph.sine_osc();
     sine.input("frequency").set(440.0);
     let sine = sine * 0.2;
     sine.output(0).connect(&out1.input(0));
-    sine.output(0).connect(&out2.input(0));
 
     let mut runtime = graph.build_runtime();
-
-    runtime.reset(SAMPLE_RATE as f64, 128).unwrap();
-    runtime.prepare().unwrap();
 
     let mut group = c.benchmark_group("demo");
 
