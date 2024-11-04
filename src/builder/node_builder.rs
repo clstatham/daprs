@@ -228,11 +228,13 @@ impl Output {
             .connect_output(self.output_index, &input.node, input.input_index);
     }
 
+    /// Returns the signal type of the output.
     #[inline]
     pub fn kind(&self) -> SignalKind {
         self.node.output_kind(self.output_index)
     }
 
+    /// Converts the output to a sample signal.
     #[inline]
     pub fn to_audio(&self) -> Output {
         if self.kind() == SignalKind::Sample {
@@ -243,6 +245,7 @@ impl Output {
         proc.output(0)
     }
 
+    /// Converts the output to a message signal.
     #[inline]
     pub fn to_message(&self) -> Output {
         if self.kind() == SignalKind::Message {
@@ -253,6 +256,7 @@ impl Output {
         proc.output(0)
     }
 
+    /// Converts the output to the given signal type.
     #[inline]
     pub fn to_kind(&self, kind: SignalKind) -> Output {
         match kind {
