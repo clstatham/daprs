@@ -47,10 +47,10 @@ fn main() {
 
     let gain = graph.add_processor(GainProc { gain: 0.5 });
 
-    sine.output(0).connect(gain.input(0));
+    sine.output(0).connect(&gain.input(0));
 
-    gain.output(0).connect(out1.input(0));
-    gain.output(0).connect(out2.input(0));
+    gain.output(0).connect(&out1.input(0));
+    gain.output(0).connect(&out2.input(0));
 
     let mut runtime = graph.build_runtime();
 

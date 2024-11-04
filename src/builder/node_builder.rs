@@ -1,316 +1,297 @@
-//! Contains the [`Node`] struct and related types and traits.
+//! Contains the [`StaticNode`] type and related types and traits.
+
+use petgraph::prelude::*;
+
+use crate::{prelude::*, signal::SignalKind};
 
 use super::graph_builder::GraphBuilder;
-use crate::builtins::*;
-use crate::graph::NodeIndex;
-use crate::signal::SignalKind;
 
-/// A node in a [`GraphBuilder`].
-#[derive(Clone, Copy)]
+/// A node in a [`StaticGraphBuilder`].
+///
+/// This type has no lifetime parameter, so it can be used in any context.
+#[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
-pub struct Node<'a> {
-    pub(crate) graph_builder: &'a GraphBuilder,
+pub struct Node {
+    pub(crate) graph: GraphBuilder,
     pub(crate) node_id: NodeIndex,
 }
 
-impl<'a> std::fmt::Debug for Node<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self.node_id, f)
-    }
-}
-
-impl<'a> Node<'a> {
+impl Node {
     #[inline]
-    pub(crate) const fn id(self) -> NodeIndex {
+    pub(crate) fn id(&self) -> NodeIndex {
         self.node_id
     }
 
-    /// Returns the graph builder that the node belongs to.
+    /// Returns the graph that the node belongs to.
     #[inline]
-    pub fn graph(self) -> &'a GraphBuilder {
-        self.graph_builder
-    }
-
-    /// Returns the number of inputs of the node.
-    #[inline]
-    pub fn num_inputs(self) -> usize {
-        self.graph()
-            .with_graph(|graph| graph.digraph()[self.id()].inputs().len())
-    }
-
-    /// Returns the number of outputs of the node.
-    #[inline]
-    pub fn num_outputs(self) -> usize {
-        self.graph()
-            .with_graph(|graph| graph.digraph()[self.id()].outputs().len())
-    }
-
-    /// Returns the type of signal that the node expects at the given input.
-    #[inline]
-    pub fn input_kind(self, index: impl IntoInputIdx) -> SignalKind {
-        let index = index.into_input_idx(self);
-        self.graph()
-            .with_graph(|graph| graph.digraph()[self.id()].input_spec()[index as usize].kind())
-    }
-
-    /// Returns the type of signal that the node produces at the given output.
-    #[inline]
-    pub fn output_kind(self, index: impl IntoOutputIdx) -> SignalKind {
-        let index = index.into_output_idx(self);
-        self.graph()
-            .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].kind())
+    pub fn graph(&self) -> &GraphBuilder {
+        &self.graph
     }
 
     /// Asserts that the node has a single output.
     #[inline]
     #[track_caller]
-    pub(crate) fn assert_single_output(self) -> Self {
-        assert_eq!(self.num_outputs(), 1, "expected a single output");
-        self
+    pub fn assert_single_output(&self) {
+        assert_eq!(self.num_outputs(), 1, "expected single output");
     }
 
-    /// Connects the node's input to the given source output.
+    /// Returns the number of inputs of the node.
+    #[inline]
+    pub fn num_inputs(&self) -> usize {
+        self.graph
+            .with_graph(|graph| graph.digraph()[self.id()].inputs().len())
+    }
+
+    /// Returns the number of outputs of the node.
+    #[inline]
+    pub fn num_outputs(&self) -> usize {
+        self.graph
+            .with_graph(|graph| graph.digraph()[self.id()].outputs().len())
+    }
+
+    /// Returns the input of the node at the given index.
+    #[inline]
+    pub fn input(&self, index: impl IntoInputIdx) -> Input {
+        Input {
+            node: self.clone(),
+            input_index: index.into_static_input_idx(self),
+        }
+    }
+
+    /// Returns the output of the node at the given index.
+    #[inline]
+    pub fn output(&self, index: impl IntoOutputIdx) -> Output {
+        Output {
+            node: self.clone(),
+            output_index: index.into_static_output_idx(self),
+        }
+    }
+
+    /// Returns the signal type of the input at the given index.
+    #[inline]
+    pub fn input_kind(&self, index: impl IntoInputIdx) -> SignalKind {
+        let index = index.into_static_input_idx(self);
+        self.graph
+            .with_graph(|graph| graph.digraph()[self.id()].input_spec()[index as usize].kind())
+    }
+
+    /// Returns the signal type of the output at the given index.
+    #[inline]
+    pub fn output_kind(&self, index: impl IntoOutputIdx) -> SignalKind {
+        let index = index.into_static_output_idx(self);
+        self.graph
+            .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].kind())
+    }
+
+    /// Connects the given input of this node to the given output of another node.
     #[inline]
     #[track_caller]
     pub fn connect_input(
-        self,
-        source: impl IntoNode<'a>,
+        &self,
+        source: impl IntoNode,
         source_output: impl IntoOutputIdx,
-        input: impl IntoInputIdx,
-    ) -> Self {
-        let source = source.into_node(self.graph_builder);
-        let source_output = source_output.into_output_idx(source);
-        let target_input = input.into_input_idx(self);
-        self.graph_builder
-            .connect(source.id(), source_output, self.id(), target_input);
-        self
+        target_input: impl IntoInputIdx,
+    ) {
+        let output = source.into_static_node(&self.graph);
+        let source_output = source_output.into_static_output_idx(&output);
+        let target_input = target_input.into_static_input_idx(self);
+        self.graph
+            .connect(output.id(), source_output, self.id(), target_input);
     }
 
-    /// Connects the node's output to the given target input.
+    /// Connects the given output of this node to the given input of another node.
     #[inline]
     #[track_caller]
     pub fn connect_output(
-        self,
+        &self,
         output: impl IntoOutputIdx,
-        target: impl IntoNode<'a>,
+        target: impl IntoNode,
         target_input: impl IntoInputIdx,
-    ) -> Self {
-        let target = target.into_node(self.graph_builder);
-        let output_index = output.into_output_idx(self);
-        let target_input = target_input.into_input_idx(target);
-        self.graph_builder
+    ) {
+        let target = target.into_static_node(&self.graph);
+        let output_index = output.into_static_output_idx(self);
+        let target_input = target_input.into_static_input_idx(&target);
+        self.graph
             .connect(self.id(), output_index, target.id(), target_input);
-        self
     }
 
-    /// Returns the output of the node with the given index.
-    #[inline]
-    pub fn output(self, index: impl IntoOutputIdx) -> Output<'a> {
-        Output {
-            node: self,
-            output_index: index.into_output_idx(self),
-        }
-    }
-
-    /// Returns the input of the node with the given index.
-    #[inline]
-    pub fn input(self, index: impl IntoInputIdx) -> Input<'a> {
-        let index = index.into_input_idx(self);
-        Input {
-            node: self,
-            input_index: index.into_input_idx(self),
-        }
-    }
-
-    /// Converts the node's output from a float message to a sample.
+    /// Converts the output message to a signal.
     ///
     /// # Panics
     ///
     /// Panics if the node has more than one output.
     #[inline]
-    pub fn m2s(self) -> Node<'a> {
+    #[track_caller]
+    pub fn m2s(&self) -> Node {
         self.assert_single_output();
-        let m2s = self.graph().m2s();
-        m2s.connect_input(self, 0, 0);
-        m2s
+        let proc = self.graph.add_processor(MessageToSampleProc);
+        proc.connect_input(self, 0, 0);
+        proc
     }
 
-    /// Converts the node's output from a sample to a float message.
+    /// Converts the output signal to a message.
     ///
     /// # Panics
     ///
     /// Panics if the node has more than one output.
     #[inline]
-    pub fn s2m(self) -> Node<'a> {
+    #[track_caller]
+    pub fn s2m(&self) -> Node {
         self.assert_single_output();
-        let s2m = self.graph().s2m();
-        s2m.connect_input(self, 0, 0);
-        s2m
-    }
-
-    /// Smooths the node's output using a predefined smoothing factor (0.001).
-    /// This is an acceptable default for smoothing control signals, such as those from GUI controls.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the node has more than one output.
-    #[inline]
-    pub fn smooth(self) -> Node<'a> {
-        self.assert_single_output();
-        let smooth = self.graph().smooth();
-        smooth.connect_input(self, 0, 0);
-        smooth.connect_input(self.graph().constant(0.001), 0, 1);
-        smooth
+        let proc = self.graph.add_processor(SampleToMessageProc);
+        proc.connect_input(self, 0, 0);
+        proc
     }
 }
 
-/// An input of a node.
-#[derive(Clone, Copy)]
-pub struct Input<'a> {
-    pub(crate) node: Node<'a>,
+/// An input of a node in the graph.
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct Input {
+    pub(crate) node: Node,
     pub(crate) input_index: u32,
 }
 
-impl<'a> Input<'a> {
-    /// Returns the node that the input belongs to.
+impl Input {
+    /// Sets the value of the input.
     #[inline]
-    pub const fn node(self) -> Node<'a> {
-        self.node
+    pub fn set(&self, value: impl IntoNode) {
+        let value = value.into_static_node(self.node.graph());
+        value.assert_single_output();
+        self.node.connect_input(value, 0, self.input_index);
     }
 
-    /// Returns the input index of the input.
+    /// Returns the signal type of the input.
     #[inline]
-    pub const fn input_index(self) -> u32 {
-        self.input_index
+    pub fn kind(&self) -> SignalKind {
+        self.node.input_kind(self.input_index)
     }
 
     /// Connects the input to the given output.
     #[inline]
     #[track_caller]
-    pub fn connect(self, output: Output<'a>) -> Node<'a> {
+    pub fn connect(&self, output: &Output) {
         self.node
-            .connect_input(output.node, output.output_index, self.input_index)
+            .connect_input(&output.node, output.output_index, self.input_index);
     }
 
-    /// Returns the kind of signal that the input expects.
+    /// Creates a parameter for the input.
     #[inline]
-    pub fn kind(self) -> SignalKind {
-        self.node.input_kind(self.input_index)
-    }
-
-    /// Sets the input to the given value.
-    #[inline]
-    #[track_caller]
-    pub fn set(self, value: impl IntoNode<'a>) -> Node<'a> {
-        let value = value.into_node(self.node.graph());
-        value.assert_single_output();
-        self.node.connect_input(value, 0, self.input_index)
-    }
-
-    /// Creates a [`Param`] node and connects it to the input. The [`Param`] node can be used to control the input value remotely at runtime.
-    #[inline]
-    pub fn param(self) -> Param {
+    pub fn param(&self) -> Param {
         let param = Param::new();
-        let param_node = self.node.graph().add_processor(param.clone());
-
+        let proc = self.node.graph().add_processor(param.clone());
         match self.kind() {
-            SignalKind::Message => {
-                param_node.output(0).connect(self);
-            }
-            SignalKind::Sample => {
-                param_node.m2s().output(0).connect(self);
-            }
+            SignalKind::Message => proc.output(0).connect(self),
+            SignalKind::Sample => proc.m2s().output(0).connect(self),
         }
-
         param
     }
 }
 
-/// An output of a node.
-#[derive(Clone, Copy)]
-pub struct Output<'a> {
-    pub(crate) node: Node<'a>,
+/// An output of a node in the graph.
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub struct Output {
+    pub(crate) node: Node,
     pub(crate) output_index: u32,
 }
 
-impl<'a> Output<'a> {
-    /// Returns the node that the output belongs to.
-    #[inline]
-    pub const fn node(self) -> Node<'a> {
-        self.node
-    }
-
-    /// Returns the output index of the output.
-    #[inline]
-    pub const fn output_index(self) -> u32 {
-        self.output_index
-    }
-
+impl Output {
     /// Connects the output to the given input.
     #[inline]
     #[track_caller]
-    pub fn connect(self, input: Input<'a>) -> Node<'a> {
+    pub fn connect(&self, input: &Input) {
         self.node
-            .connect_output(self.output_index, input.node, input.input_index)
+            .connect_output(self.output_index, &input.node, input.input_index);
     }
 }
 
-#[doc(hidden)]
 mod sealed {
     pub trait Sealed {}
     impl Sealed for crate::graph::NodeIndex {}
-    impl<'a> Sealed for super::Node<'a> {}
+    impl Sealed for super::Node {}
+    impl Sealed for &super::Node {}
+    impl Sealed for super::Message {}
     impl Sealed for f64 {}
     impl Sealed for u32 {}
     impl Sealed for &str {}
-    impl Sealed for super::Input<'_> {}
-    impl Sealed for super::Output<'_> {}
 }
 
-/// A trait for converting a value into a node.
-pub trait IntoNode<'a>: sealed::Sealed {
-    /// Converts the value into a node.
-    fn into_node(self, graph_builder: &'a GraphBuilder) -> Node<'a>;
+/// Trait for converting a value into a static node.
+pub trait IntoNode: sealed::Sealed {
+    /// Converts the value into a static node.
+    fn into_static_node(self, graph: &GraphBuilder) -> Node;
 }
 
-impl<'a> IntoNode<'a> for NodeIndex {
-    fn into_node(self, graph_builder: &'a GraphBuilder) -> Node<'a> {
+impl IntoNode for Node {
+    fn into_static_node(self, graph: &GraphBuilder) -> Node {
         Node {
-            graph_builder,
+            graph: graph.clone(),
+            node_id: self.node_id,
+        }
+    }
+}
+
+impl IntoNode for &Node {
+    fn into_static_node(self, graph: &GraphBuilder) -> Node {
+        Node {
+            graph: graph.clone(),
+            node_id: self.node_id,
+        }
+    }
+}
+
+impl IntoNode for NodeIndex {
+    fn into_static_node(self, graph: &GraphBuilder) -> Node {
+        Node {
+            graph: graph.clone(),
             node_id: self,
         }
     }
 }
 
-impl<'a> IntoNode<'a> for Node<'a> {
-    fn into_node(self, _graph_builder: &'a GraphBuilder) -> Node<'a> {
+impl IntoNode for f64 {
+    fn into_static_node(self, graph: &GraphBuilder) -> Node {
+        graph.constant(self)
+    }
+}
+
+impl IntoNode for Message {
+    fn into_static_node(self, graph: &GraphBuilder) -> Node {
+        graph.constant_message(self)
+    }
+}
+
+/// Trait for converting a value into an input index for a node.
+pub trait IntoOutputIdx: sealed::Sealed {
+    /// Converts the value into an input index for the given node.
+    fn into_static_output_idx(self, node: &Node) -> u32;
+}
+
+/// Trait for converting a value into an output index for a node.
+pub trait IntoInputIdx: sealed::Sealed {
+    /// Converts the value into an output index for the given node.
+    fn into_static_input_idx(self, node: &Node) -> u32;
+}
+
+impl IntoOutputIdx for u32 {
+    #[inline]
+    fn into_static_output_idx(self, _: &Node) -> u32 {
         self
     }
 }
 
-impl<'a> IntoNode<'a> for f64 {
-    fn into_node(self, graph_builder: &'a GraphBuilder) -> Node<'a> {
-        graph_builder.constant(self)
-    }
-}
-
-/// A trait for converting a value into an input index.
-pub trait IntoInputIdx: sealed::Sealed {
-    /// Converts the value into an input index.
-    fn into_input_idx(self, node: Node) -> u32;
-}
-
 impl IntoInputIdx for u32 {
     #[inline]
-    fn into_input_idx(self, _node: Node) -> u32 {
+    fn into_static_input_idx(self, _: &Node) -> u32 {
         self
     }
 }
 
 impl IntoInputIdx for &str {
-    #[inline]
     #[track_caller]
-    fn into_input_idx(self, node: Node) -> u32 {
+    #[inline]
+    fn into_static_input_idx(self, node: &Node) -> u32 {
         let Some(idx) = node.graph().with_graph(|graph| {
             graph.digraph()[node.id()]
                 .input_spec()
@@ -323,32 +304,10 @@ impl IntoInputIdx for &str {
     }
 }
 
-impl IntoInputIdx for Input<'_> {
-    #[inline]
-    #[track_caller]
-    fn into_input_idx(self, node: Node) -> u32 {
-        assert_eq!(self.node.id(), node.id(), "input from different node");
-        self.input_index
-    }
-}
-
-/// A trait for converting a value into an output index.
-pub trait IntoOutputIdx: sealed::Sealed {
-    /// Converts the value into an output index.
-    fn into_output_idx(self, node: Node) -> u32;
-}
-
-impl IntoOutputIdx for u32 {
-    #[inline]
-    fn into_output_idx(self, _node: Node) -> u32 {
-        self
-    }
-}
-
 impl IntoOutputIdx for &str {
-    #[inline]
     #[track_caller]
-    fn into_output_idx(self, node: Node) -> u32 {
+    #[inline]
+    fn into_static_output_idx(self, node: &Node) -> u32 {
         let Some(idx) = node.graph().with_graph(|graph| {
             graph.digraph()[node.id()]
                 .output_spec()
@@ -361,22 +320,13 @@ impl IntoOutputIdx for &str {
     }
 }
 
-impl IntoOutputIdx for Output<'_> {
-    #[inline]
-    #[track_caller]
-    fn into_output_idx(self, node: Node) -> u32 {
-        assert_eq!(self.node.id(), node.id(), "output from different node");
-        self.output_index
-    }
-}
-
 macro_rules! impl_binary_node_ops {
     ($name:ident, $proc:ty, $doc:expr) => {
-        impl<'a> Node<'a> {
+        impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
-            pub fn $name(self, other: impl IntoNode<'a>) -> Node<'a> {
-                let other = other.into_node(self.graph());
+            pub fn $name(&self, other: impl IntoNode) -> Node {
+                let other = other.into_static_node(self.graph());
                 self.assert_single_output();
                 other.assert_single_output();
 
@@ -390,11 +340,11 @@ macro_rules! impl_binary_node_ops {
         }
     };
     ($name:ident, $std_op:ident, $proc:ty, $doc:expr) => {
-        impl<'a> Node<'a> {
+        impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
-            pub fn $name(self, other: impl IntoNode<'a>) -> Node<'a> {
-                let other = other.into_node(self.graph());
+            pub fn $name(&self, other: impl IntoNode) -> Node {
+                let other = other.into_static_node(self.graph());
                 self.assert_single_output();
                 other.assert_single_output();
 
@@ -407,13 +357,24 @@ macro_rules! impl_binary_node_ops {
             }
         }
 
-        impl<'a, T> std::ops::$std_op<T> for Node<'a>
+        impl<T> std::ops::$std_op<T> for Node
         where
-            T: IntoNode<'a>,
+            T: IntoNode,
         {
-            type Output = Node<'a>;
+            type Output = Node;
 
-            fn $name(self, other: T) -> Self::Output {
+            fn $name(self, other: T) -> Node {
+                Node::$name(&self, other)
+            }
+        }
+
+        impl<T> std::ops::$std_op<T> for &Node
+        where
+            T: IntoNode,
+        {
+            type Output = Node;
+
+            fn $name(self, other: T) -> Node {
                 Node::$name(self, other)
             }
         }
@@ -455,10 +416,10 @@ impl_binary_node_ops!(min, math::MinProc, "Returns the minimum of two signals.")
 
 macro_rules! impl_unary_node_ops {
     ($name:ident, $proc:ty, $doc:expr) => {
-        impl<'a> Node<'a> {
+        impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
-            pub fn $name(self) -> Node<'a> {
+            pub fn $name(&self) -> Node {
                 self.assert_single_output();
 
                 let processor = <$proc>::default();
@@ -473,10 +434,10 @@ macro_rules! impl_unary_node_ops {
 
 impl_unary_node_ops!(neg, math::NegProc, "Negates the input signal.");
 
-impl<'a> std::ops::Neg for Node<'a> {
-    type Output = Node<'a>;
+impl std::ops::Neg for &Node {
+    type Output = Node;
 
-    fn neg(self) -> Self::Output {
+    fn neg(self) -> Node {
         Node::neg(self)
     }
 }

@@ -2,7 +2,7 @@ use raug::prelude::*;
 
 fn main() {
     // initialize logging
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    env_logger::init();
 
     // create a new graph
     let graph = GraphBuilder::new();
@@ -18,11 +18,11 @@ fn main() {
     sine.input("frequency").set(440.0);
 
     // set the amplitude of the sine oscillator
-    let sine = sine * 0.2;
+    let sine = &sine * 0.2;
 
     // connect the sine oscillator to the outputs
-    sine.output(0).connect(out1.input(0));
-    sine.output(0).connect(out2.input(0));
+    sine.output(0).connect(&out1.input(0));
+    sine.output(0).connect(&out2.input(0));
 
     // build the graph
     let mut runtime = graph.build_runtime();

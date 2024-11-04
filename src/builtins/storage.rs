@@ -98,24 +98,3 @@ impl GraphBuilder {
         self.add_processor(BufferReaderProc::new(buffer.into()))
     }
 }
-
-impl StaticGraphBuilder {
-    /// A processor that reads a sample from a buffer.
-    ///
-    /// If the index is out of bounds, it will wrap around.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `position` | `Message(i64)` | `0` | The sample index to read from the buffer. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Sample` | The sample value read from the buffer. |
-    pub fn buffer_reader(&self, buffer: impl Into<Buffer<Sample>>) -> StaticNode {
-        self.add_processor(BufferReaderProc::new(buffer.into()))
-    }
-}

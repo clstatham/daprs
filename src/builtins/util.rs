@@ -5,8 +5,9 @@ use std::sync::{Arc, Mutex};
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::{
+    add_to_builders,
     message::Message,
-    prelude::{GraphBuilder, Node, Process, SignalSpec, StaticGraphBuilder, StaticNode},
+    prelude::{GraphBuilder, Node, Process, SignalSpec},
     processor::ProcessorError,
     signal::{Sample, Signal, SignalBuffer},
 };
@@ -79,25 +80,6 @@ impl GraphBuilder {
     }
 }
 
-impl StaticGraphBuilder {
-    /// A processor that sends a message when triggered.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `trig` | `Bang` | | Triggers the message. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message` | The message to send. |
-    pub fn message(&self, message: Message) -> StaticNode {
-        self.add_processor(MessageProc::new(message))
-    }
-}
-
 /// A processor that sends a constant message every sample.
 ///
 /// See also: [constant_message](crate::builder::graph_builder::GraphBuilder::constant_message).
@@ -148,19 +130,6 @@ impl GraphBuilder {
     /// | --- | --- | --- | --- |
     /// | `0` | `message` | `Message` | The constant message. |
     pub fn constant_message(&self, message: Message) -> Node {
-        self.add_processor(ConstantMessageProc::new(message))
-    }
-}
-
-impl StaticGraphBuilder {
-    /// A processor that sends a constant message.
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message` | The constant message. |
-    pub fn constant_message(&self, message: Message) -> StaticNode {
         self.add_processor(ConstantMessageProc::new(message))
     }
 }
@@ -283,24 +252,6 @@ impl GraphBuilder {
     }
 }
 
-impl StaticGraphBuilder {
-    /// A processor that prints a message when triggered.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `trig` | `Message(Bang)` | | Triggers the print. |
-    /// | `1` | `message` | `Message` | | The message to print. |
-    pub fn print<'a>(
-        &self,
-        name: impl Into<Option<&'a str>>,
-        msg: impl Into<Option<&'a str>>,
-    ) -> StaticNode {
-        self.add_processor(PrintProc::new(name.into(), msg.into()))
-    }
-}
-
 /// A processor that converts a message to a sample.
 ///
 /// See also: [m2s](crate::builder::graph_builder::GraphBuilder::m2s).
@@ -342,47 +293,27 @@ impl Process for MessageToSampleProc {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that converts a message to a sample.
-    ///
-    /// Messages that are not castable to a float are ignored.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message` | | The message to convert. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `sample` | `Sample` | The sample value. |
-    pub fn m2s(&self) -> Node {
-        self.add_processor(MessageToSampleProc)
-    }
-}
+add_to_builders!(
+    m2s,
+    MessageToSampleProc,
+    r#"
+A processor that converts a message to a sample.
 
-impl StaticGraphBuilder {
-    /// A processor that converts a message to a sample.
-    ///
-    /// Messages that are not castable to a float are ignored.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message` | | The message to convert. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `sample` | `Sample` | The sample value. |
-    pub fn m2s(&self) -> StaticNode {
-        self.add_processor(MessageToSampleProc)
-    }
-}
+Messages that are not castable to a float are ignor
+
+# Inputs
+
+| Index | Name | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `0` | `message` | `Message` | | The message to co
+
+# Outputs
+
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `sample` | `Sample` | The sample value. |
+"#
+);
 
 /// A processor that converts a sample to an f64 message.
 ///
@@ -421,43 +352,25 @@ impl Process for SampleToMessageProc {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that converts a sample to an f64 message.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `sample` | `Sample` | | The sample to convert. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message(f64)` | The message value. |
-    pub fn s2m(&self) -> Node {
-        self.add_processor(SampleToMessageProc)
-    }
-}
+add_to_builders!(
+    s2m,
+    SampleToMessageProc,
+    r#"
+A processor that converts a sample to an f64 message.
 
-impl StaticGraphBuilder {
-    /// A processor that converts a sample to an f64 message.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `sample` | `Sample` | | The sample to convert. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message(f64)` | The message value. |
-    pub fn s2m(&self) -> StaticNode {
-        self.add_processor(SampleToMessageProc)
-    }
-}
+# Inputs
+
+| Index | Name | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `0` | `sample` | `Sample` | | The sample to convert. |
+
+# Outputs
+
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `message` | `Message(f64)` | The message value. |
+"#
+);
 
 /// A processor that outputs the sample rate that the graph is running at.
 ///
@@ -497,35 +410,21 @@ impl Process for SampleRateProc {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that outputs the sample rate that the graph is running at.
-    ///
-    /// This processor outputs `Sample`s for convenience in connecting to other audio-rate processors.
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `sample_rate` | `Sample` | The sample rate of the graph. |
-    pub fn sample_rate(&self) -> Node {
-        self.add_processor(SampleRateProc::default())
-    }
-}
+add_to_builders!(
+    sample_rate,
+    SampleRateProc,
+    r#"
+A processor that outputs the sample rate that the graph is running at.
 
-impl StaticGraphBuilder {
-    /// A processor that outputs the sample rate that the graph is running at.
-    ///
-    /// This processor outputs `Sample`s for convenience in connecting to other audio-rate processors.
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `sample_rate` | `Sample` | The sample rate of the graph. |
-    pub fn sample_rate(&self) -> StaticNode {
-        self.add_processor(SampleRateProc::default())
-    }
-}
+This processor outputs `Sample`s for convenience in connecting to other 
+
+# Outputs
+
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `sample_rate` | `Sample` | The sample rate of the graph. |
+"#
+);
 
 #[inline(always)]
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
@@ -546,7 +445,7 @@ impl Process for SmoothProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("target", 0.0),
-            SignalSpec::unbounded("rate", 0.0),
+            SignalSpec::unbounded("rate", 1.0),
         ]
     }
 
@@ -586,45 +485,26 @@ impl Process for SmoothProc {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that smoothly ramps between values over time.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `target` | `Sample` | | The target value. |
-    /// | `1` | `rate` | `Sample` | | The rate of smoothing. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Sample` | The current value of the ramp. |
-    pub fn smooth(&self) -> Node {
-        self.add_processor(SmoothProc::default())
-    }
-}
+add_to_builders!(
+    smooth,
+    SmoothProc,
+    r#"
+A processor that smoothly ramps between values over time.
 
-impl StaticGraphBuilder {
-    /// A processor that smoothly ramps between values over time.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `target` | `Sample` | | The target value. |
-    /// | `1` | `rate` | `Sample` | | The rate of smoothing. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Sample` | The current value of the ramp. |
-    pub fn smooth(&self) -> StaticNode {
-        self.add_processor(SmoothProc::default())
-    }
-}
+# Inputs
+
+| Index | Name | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `0` | `target` | `Sample` | 0.0 | The target value. |
+| `1` | `rate` | `Sample` | 1.0  | The rate of smoothing. |
+
+# Outputs
+
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `out` | `Sample` | The current value of the ramp. |
+"#
+);
 
 /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
 ///
@@ -683,45 +563,22 @@ impl Process for ChangedProc {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `in` | `Sample` | | The input signal to detect changes on. |
-    /// | `1` | `threshold` | `Sample` | | The threshold for a change to be detected. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
-    pub fn changed(&self) -> Node {
-        self.add_processor(ChangedProc::default())
-    }
-}
-
-impl StaticGraphBuilder {
-    /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `in` | `Sample` | | The input signal to detect changes on. |
-    /// | `1` | `threshold` | `Sample` | | The threshold for a change to be detected. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
-    pub fn changed(&self) -> StaticNode {
-        self.add_processor(ChangedProc::default())
-    }
-}
+add_to_builders!(
+    changed,
+    ChangedProc,
+    r#"
+A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
+# Inputs
+| Index | Name | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `0` | `in` | `Sample` | | The input signal to detect changes on. |
+| `1` | `threshold` | `Sample` | | The threshold for a change to be detected. |
+# Outputs
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
+"#
+);
 
 /// A processor that sends a bang message when a zero crossing is detected.
 ///
@@ -771,43 +628,21 @@ impl Process for ZeroCrossingProc {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that sends a bang message when a zero crossing is detected.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `in` | `Sample` | | The input signal to detect zero crossings on. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
-    pub fn zero_crossing(&self) -> Node {
-        self.add_processor(ZeroCrossingProc::default())
-    }
-}
-
-impl StaticGraphBuilder {
-    /// A processor that sends a bang message when a zero crossing is detected.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `in` | `Sample` | | The input signal to detect zero crossings on. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
-    pub fn zero_crossing(&self) -> StaticNode {
-        self.add_processor(ZeroCrossingProc::default())
-    }
-}
+add_to_builders!(
+    zero_crossing,
+    ZeroCrossingProc,
+    r#"
+A processor that sends a bang message when a zero crossing is detected.
+# Inputs
+| Index | Name | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `0` | `in` | `Sample` | | The input signal to detect zero crossings on. |
+# Outputs
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
+"#
+);
 
 /// A sender for a `Param`.
 #[derive(Clone, Debug)]
@@ -868,6 +703,18 @@ where
 }
 
 /// A processor that can be used to send/receive messages from outside the graph.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `set` | `Message` | | The message to set the parameter to. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `get` | `Message` | The current value of the parameter. |
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Param {

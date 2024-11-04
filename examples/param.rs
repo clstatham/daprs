@@ -23,8 +23,8 @@ fn main() {
     let sine = sine * 0.2;
 
     // connect the sine oscillator to the outputs
-    sine.output(0).connect(out1.input(0));
-    sine.output(0).connect(out2.input(0));
+    sine.output(0).connect(&out1.input(0));
+    sine.output(0).connect(&out2.input(0));
 
     // build the runtime
     let mut runtime = graph.build_runtime();

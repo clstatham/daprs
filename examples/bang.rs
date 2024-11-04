@@ -22,16 +22,16 @@ fn main() {
 
     // connect the sine oscillator to the metronome
     // sine.connect_output(0, bang, "period");
-    sine.output(0).connect(bang.input("period"));
+    sine.output(0).connect(&bang.input("period"));
 
     // add a print node
     let print = graph.print("freq", None);
 
     // connect the metronome to trigger the print
-    bang.output(0).connect(print.input("trig"));
+    bang.output(0).connect(&print.input("trig"));
 
     // connect the sine oscillator to the print
-    sine.output(0).connect(print.input("message"));
+    sine.output(0).connect(&print.input("message"));
 
     // build the graph
     let graph = graph.build();

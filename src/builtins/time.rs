@@ -2,7 +2,7 @@
 
 use crate::{
     message::Message,
-    prelude::{GraphBuilder, Node, Process, SignalSpec, StaticGraphBuilder, StaticNode},
+    prelude::{GraphBuilder, Node, Process, SignalSpec},
     processor::ProcessorError,
     signal::Signal,
 };
@@ -107,25 +107,6 @@ impl GraphBuilder {
     /// | --- | --- | --- | --- |
     /// | `0` | `out` | `Bang` | Emits a bang at the given period. |
     pub fn metro(&self, period: f64) -> Node {
-        self.add_processor(MetroProc::new(period))
-    }
-}
-
-impl StaticGraphBuilder {
-    /// A metronome that emits a bang at the given period.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `period` | `Message(f64)` | | The period of the metronome in seconds. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Bang` | Emits a bang at the given period. |
-    pub fn metro(&self, period: f64) -> StaticNode {
         self.add_processor(MetroProc::new(period))
     }
 }

@@ -1,13 +1,22 @@
-- Writing a successor to PAPR
+- Welcome to Raug (Rusty Audio Graphs)!
+- A successor to PAPR
 	- I understand Rust and optimized programming much better now since working on my game engine
 	- New version is much more lightweight and easier to use
 - Design goals
 	- Fast; focus on `Copy` types and shared references wherever possible
 	- No allocations on the real-time audio thread
 	- Precompute as much as possible
-	- Type safety wherever possible
 - 2 API levels:
 	- Low-level `processor` API where raw access to audio data are available for arbitrary processing in Rust
 	- High-level `builder` API for constructing signal processor graphs intuitively
 		- Bindings to Lua! (Potentially Python, JS in the future)
-- 
+- Other notable features
+	- Run signal flow graphs either in real-time or offline
+	- Save rendered audio to WAV files
+- Example Tour
+	- `demo.rs` (intro to `builder` api)
+	- `bang.rs` (messages)
+	- `param.rs` (external control of signals)
+	- `processor.rs` (`processor` api)
+- Bonus: Lua bindings!
+	- (go over example)
