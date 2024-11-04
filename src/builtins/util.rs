@@ -128,8 +128,8 @@ impl GraphBuilder {
     /// | Index | Name | Type | Description |
     /// | --- | --- | --- | --- |
     /// | `0` | `message` | `Message` | The constant message. |
-    pub fn constant_message(&self, message: Message) -> Node {
-        self.add_processor(ConstantMessageProc::new(message))
+    pub fn constant_message(&self, message: impl Into<Message>) -> Node {
+        self.add_processor(ConstantMessageProc::new(message.into()))
     }
 }
 

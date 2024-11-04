@@ -283,6 +283,7 @@ mod sealed {
     impl Sealed for super::Message {}
     impl Sealed for Param {}
     impl Sealed for f64 {}
+    impl Sealed for i64 {}
     impl Sealed for u32 {}
     impl Sealed for &str {}
 }
