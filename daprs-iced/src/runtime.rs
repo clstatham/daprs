@@ -94,7 +94,7 @@ impl<T: Widget> Application for IcedRuntimeApp<T> {
                     return Command::none();
                 }
 
-                let runtime = self.runtime.take().unwrap();
+                let mut runtime = self.runtime.take().unwrap();
                 let handle = runtime
                     .run(self.backend.clone(), self.device.clone())
                     .unwrap();
@@ -107,7 +107,7 @@ impl<T: Widget> Application for IcedRuntimeApp<T> {
                 }
 
                 let handle = self.handle.take().unwrap();
-                self.runtime = Some(handle.stop());
+                handle.stop();
                 self.running = false;
             }
             IcedRuntimeMessage::Message(message) => {

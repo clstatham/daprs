@@ -70,12 +70,10 @@ impl LuaUserData for LuaGraphBuilder {
             Ok(LuaNode(this.0.saw_osc()))
         });
 
-        methods.add_method_mut("build", |_lua, this, _args: ()| {
-            Ok(std::mem::take(this).build())
-        });
+        methods.add_method("build", |_lua, this, _args: ()| Ok(this.build()));
 
-        methods.add_method_mut("build_runtime", |_lua, this, _args: ()| {
-            Ok(std::mem::take(this).build_runtime())
+        methods.add_method("build_runtime", |_lua, this, _args: ()| {
+            Ok(this.build_runtime())
         });
     }
 }
@@ -85,11 +83,11 @@ impl LuaGraphBuilder {
         Self::default()
     }
 
-    pub fn build(self) -> LuaGraph {
+    pub fn build(&self) -> LuaGraph {
         LuaGraph(self.0.build())
     }
 
-    pub fn build_runtime(self) -> LuaRuntime {
+    pub fn build_runtime(&self) -> LuaRuntime {
         LuaRuntime(self.0.build_runtime())
     }
 

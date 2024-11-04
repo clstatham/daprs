@@ -22,13 +22,24 @@ fn main() {
     sine.output(0).connect(out2.input(0));
 
     // build the graph
-    let graph = graph.build();
+    let mut runtime = graph.build_runtime();
 
-    // create a new runtime
-    let mut runtime = Runtime::new(graph);
+    // // run the runtime for 1 second and output to a file
+    // runtime
+    //     .run_offline_to_file("target/demo.wav", Duration::from_secs(1), 48_000.0, 512)
+    //     .unwrap();
 
-    // run the runtime for 1 second and output to a file
+    // run the runtime for 1 second and output to the default audio device
     runtime
-        .run_offline_to_file("target/demo.wav", Duration::from_secs(1), 48_000.0, 512)
+        .run_for(Duration::from_secs(1), Backend::Default, Device::Default)
+        .unwrap();
+
+    sine.input("frequency").set(880.0);
+
+    let mut runtime = graph.build_runtime();
+
+    // run the runtime for 1 second and output to the default audio device
+    runtime
+        .run_for(Duration::from_secs(1), Backend::Default, Device::Default)
         .unwrap();
 }

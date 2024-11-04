@@ -176,6 +176,8 @@ impl Graph {
     /// The signal will flow from the `source` [`GraphNode`]'s `source_output`-th output to the `target` [`GraphNode`]'s `target_input`-th input.
     ///
     /// Duplicate edges will not be recreated, and instead the existing one will be returned.
+    ///
+    /// If there is already an edge connected to the target input, it will be replaced.
     pub fn connect(
         &mut self,
         source: NodeIndex,
@@ -197,6 +199,16 @@ impl Graph {
                 // edge already exists
                 return Ok(edge.id());
             }
+        }
+
+        // check if there's already a connection to the target input
+        if let Some(edge) = self
+            .digraph
+            .edges_directed(target, Direction::Incoming)
+            .find(|edge| edge.weight().target_input == target_input)
+        {
+            // remove the existing edge
+            self.digraph.remove_edge(edge.id()).unwrap();
         }
 
         self.needs_reset = true;
@@ -379,7 +391,7 @@ impl Graph {
     /// Prepares all [`GraphNode`]s in the graph for processing.
     ///
     /// This should be run at least once before the audio thread starts running, and again anytime the graph structure is modified.
-    pub fn prepare_nodes(&mut self) -> GraphRunResult<()> {
+    pub fn prepare(&mut self) -> GraphRunResult<()> {
         self.allocate_visitor();
         self.visit(|graph, node| {
             graph.digraph[node].prepare();

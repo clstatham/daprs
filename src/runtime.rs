@@ -113,7 +113,7 @@ impl Runtime {
 
     /// Runs the preparation phase for every node in the graph.
     pub fn prepare(&mut self) -> RuntimeResult<()> {
-        self.graph.prepare_nodes()?;
+        self.graph.prepare()?;
         Ok(())
     }
 
@@ -268,113 +268,98 @@ impl Runtime {
         backend: Backend,
         device: Device,
     ) -> RuntimeResult<()> {
-        let runtime = std::mem::take(self);
-        let handle = runtime.run(backend, device)?;
+        let handle = self.run(backend, device)?;
         std::thread::sleep(duration);
-        *self = handle.stop();
+        handle.stop();
         Ok(())
     }
 
     /// Runs the audio graph in real-time using the specified audio backend and device.
-    pub fn run(mut self, backend: Backend, device: Device) -> RuntimeResult<RuntimeHandle> {
+    pub fn run(&mut self, backend: Backend, device: Device) -> RuntimeResult<RuntimeHandle> {
         let (kill_tx, kill_rx) = mpsc::channel();
-        let (runtime_tx, runtime_rx) = mpsc::channel();
 
-        let handle = RuntimeHandle {
-            kill_tx,
-            runtime_rx,
+        let handle = RuntimeHandle { kill_tx };
+
+        let host_id = match backend {
+            Backend::Default => cpal::default_host().id(),
+            #[cfg(target_os = "linux")]
+            Backend::Alsa => cpal::available_hosts()
+                .into_iter()
+                .find(|h| *h == cpal::HostId::Alsa)
+                .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
+            #[cfg(all(target_os = "linux", feature = "jack"))]
+            Backend::Jack => cpal::available_hosts()
+                .into_iter()
+                .find(|h| *h == cpal::HostId::Jack)
+                .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
+            #[cfg(target_os = "windows")]
+            Backend::Wasapi => cpal::available_hosts()
+                .into_iter()
+                .find(|h| *h == cpal::HostId::Wasapi)
+                .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
+        };
+        let host = cpal::host_from_id(host_id)?;
+
+        log::info!("Using host: {:?}", host.id());
+
+        let cpal_device = match &device {
+            Device::Default => host.default_output_device(),
+            Device::Index(index) => host.output_devices().unwrap().nth(*index),
+            Device::Name(name) => host
+                .output_devices()
+                .unwrap()
+                .find(|d| d.name().unwrap().contains(name)),
         };
 
+        let device = cpal_device.ok_or_else(|| RuntimeError::DeviceUnavailable(device))?;
+
+        log::info!("Using device: {}", device.name()?);
+
+        let config = device.default_output_config()?;
+
+        let channels = config.channels();
+        if self.graph.num_outputs() != channels as usize {
+            return Err(RuntimeError::ChannelMismatch(
+                self.graph.num_outputs(),
+                channels as usize,
+            ));
+        }
+
+        log::info!("Configuration: {:#?}", config);
+
+        let audio_rate = config.sample_rate().0 as f64;
+        let initial_block_size = audio_rate as usize / 100;
+
+        self.graph.reset(audio_rate, initial_block_size)?;
+
+        self.prepare()?;
+
+        let runtime = self.clone();
+
         std::thread::spawn(move || -> RuntimeResult<()> {
-            let host_id = match backend {
-                Backend::Default => cpal::default_host().id(),
-                #[cfg(target_os = "linux")]
-                Backend::Alsa => cpal::available_hosts()
-                    .into_iter()
-                    .find(|h| *h == cpal::HostId::Alsa)
-                    .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
-                #[cfg(all(target_os = "linux", feature = "jack"))]
-                Backend::Jack => cpal::available_hosts()
-                    .into_iter()
-                    .find(|h| *h == cpal::HostId::Jack)
-                    .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
-                #[cfg(target_os = "windows")]
-                Backend::Wasapi => cpal::available_hosts()
-                    .into_iter()
-                    .find(|h| *h == cpal::HostId::Wasapi)
-                    .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
-            };
-            let host = cpal::host_from_id(host_id)?;
-
-            log::info!("Using host: {:?}", host.id());
-
-            let cpal_device = match &device {
-                Device::Default => host.default_output_device(),
-                Device::Index(index) => host.output_devices().unwrap().nth(*index),
-                Device::Name(name) => host
-                    .output_devices()
-                    .unwrap()
-                    .find(|d| d.name().unwrap().contains(name)),
-            };
-
-            let device = cpal_device.ok_or_else(|| RuntimeError::DeviceUnavailable(device))?;
-
-            log::info!("Using device: {}", device.name()?);
-
-            let config = device.default_output_config()?;
-
-            let channels = config.channels();
-            if self.graph.num_outputs() != channels as usize {
-                return Err(RuntimeError::ChannelMismatch(
-                    self.graph.num_outputs(),
-                    channels as usize,
-                ));
-            }
-
-            log::info!("Configuration: {:#?}", config);
-
-            let audio_rate = config.sample_rate().0 as f64;
-            let initial_block_size = audio_rate as usize / 100;
-
-            self.graph.reset(audio_rate, initial_block_size)?;
-
-            self.prepare()?;
-
-            match config.sample_format() {
-                cpal::SampleFormat::I8 => {
-                    self.run_inner::<i8>(&device, &config.config(), kill_rx, runtime_tx)?
-                }
-                cpal::SampleFormat::I16 => {
-                    self.run_inner::<i16>(&device, &config.config(), kill_rx, runtime_tx)?
-                }
-                cpal::SampleFormat::I32 => {
-                    self.run_inner::<i32>(&device, &config.config(), kill_rx, runtime_tx)?
-                }
-                cpal::SampleFormat::I64 => {
-                    self.run_inner::<i64>(&device, &config.config(), kill_rx, runtime_tx)?
-                }
-                cpal::SampleFormat::U8 => {
-                    self.run_inner::<u8>(&device, &config.config(), kill_rx, runtime_tx)?
-                }
-                cpal::SampleFormat::U16 => {
-                    self.run_inner::<u16>(&device, &config.config(), kill_rx, runtime_tx)?
-                }
-                cpal::SampleFormat::U32 => {
-                    self.run_inner::<u32>(&device, &config.config(), kill_rx, runtime_tx)?
-                }
-                cpal::SampleFormat::U64 => {
-                    self.run_inner::<u64>(&device, &config.config(), kill_rx, runtime_tx)?
-                }
-                cpal::SampleFormat::F32 => {
-                    self.run_inner::<f32>(&device, &config.config(), kill_rx, runtime_tx)?
-                }
-                cpal::SampleFormat::F64 => {
-                    self.run_inner::<f64>(&device, &config.config(), kill_rx, runtime_tx)?
-                }
+            let stream = match config.sample_format() {
+                cpal::SampleFormat::I8 => runtime.run_inner::<i8>(&device, &config.config())?,
+                cpal::SampleFormat::I16 => runtime.run_inner::<i16>(&device, &config.config())?,
+                cpal::SampleFormat::I32 => runtime.run_inner::<i32>(&device, &config.config())?,
+                cpal::SampleFormat::I64 => runtime.run_inner::<i64>(&device, &config.config())?,
+                cpal::SampleFormat::U8 => runtime.run_inner::<u8>(&device, &config.config())?,
+                cpal::SampleFormat::U16 => runtime.run_inner::<u16>(&device, &config.config())?,
+                cpal::SampleFormat::U32 => runtime.run_inner::<u32>(&device, &config.config())?,
+                cpal::SampleFormat::U64 => runtime.run_inner::<u64>(&device, &config.config())?,
+                cpal::SampleFormat::F32 => runtime.run_inner::<f32>(&device, &config.config())?,
+                cpal::SampleFormat::F64 => runtime.run_inner::<f64>(&device, &config.config())?,
 
                 sample_format => {
                     return Err(RuntimeError::UnsupportedSampleFormat(sample_format));
                 }
+            };
+
+            loop {
+                if kill_rx.try_recv().is_ok() {
+                    drop(stream);
+                    break;
+                }
+                std::thread::yield_now();
             }
 
             Ok(())
@@ -387,9 +372,7 @@ impl Runtime {
         self,
         device: &cpal::Device,
         config: &cpal::StreamConfig,
-        kill_rx: mpsc::Receiver<()>,
-        runtime_tx: mpsc::Sender<Runtime>,
-    ) -> RuntimeResult<()>
+    ) -> RuntimeResult<cpal::Stream>
     where
         T: cpal::SizedSample + cpal::FromSample<f64>,
     {
@@ -424,30 +407,18 @@ impl Runtime {
 
         stream.play().unwrap();
 
-        loop {
-            if kill_rx.try_recv().is_ok() {
-                drop(stream);
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        }
-
-        runtime_tx.send(self).unwrap();
-
-        Ok(())
+        Ok(stream)
     }
 }
 
-/// A handle to a running runtime. Can be used to stop the runtime and retrieve the runtime instance again.
+/// A handle to a running runtime. Can be used to stop the runtime.
 pub struct RuntimeHandle {
     kill_tx: mpsc::Sender<()>,
-    runtime_rx: mpsc::Receiver<Runtime>,
 }
 
 impl RuntimeHandle {
-    /// Stops the running runtime and returns the runtime instance.
-    pub fn stop(&self) -> Runtime {
-        self.kill_tx.send(()).unwrap();
-        self.runtime_rx.recv().unwrap()
+    /// Stops the running runtime.
+    pub fn stop(&self) {
+        self.kill_tx.send(()).ok();
     }
 }

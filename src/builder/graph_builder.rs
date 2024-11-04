@@ -46,12 +46,12 @@ impl GraphBuilder {
     }
 
     /// Builds the graph.
-    pub fn build(self) -> Graph {
-        Mutex::into_inner(self.graph).unwrap()
+    pub fn build(&self) -> Graph {
+        self.with_graph(|graph| graph.clone())
     }
 
     /// Builds a runtime from the graph.
-    pub fn build_runtime(self) -> Runtime {
+    pub fn build_runtime(&self) -> Runtime {
         Runtime::new(self.build())
     }
 

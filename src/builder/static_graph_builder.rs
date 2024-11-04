@@ -58,12 +58,12 @@ impl StaticGraphBuilder {
     }
 
     /// Builds a graph from the builder.
-    pub fn build(self) -> Graph {
-        self.graph.lock().unwrap().clone()
+    pub fn build(&self) -> Graph {
+        self.with_graph(|graph| graph.clone())
     }
 
     /// Builds a runtime from the graph.
-    pub fn build_runtime(self) -> Runtime {
+    pub fn build_runtime(&self) -> Runtime {
         Runtime::new(self.build())
     }
 
