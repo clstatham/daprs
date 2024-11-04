@@ -2,7 +2,7 @@
 
 use petgraph::prelude::*;
 
-use crate::prelude::*;
+use crate::{prelude::*, signal::SignalKind};
 
 use super::static_graph_builder::StaticGraphBuilder;
 
@@ -65,6 +65,22 @@ impl StaticNode {
             node: self.clone(),
             output_index: index.into_static_output_idx(self),
         }
+    }
+
+    /// Returns the signal type of the input at the given index.
+    #[inline]
+    pub fn input_kind(&self, index: impl IntoStaticInputIdx) -> SignalKind {
+        let index = index.into_static_input_idx(self);
+        self.graph
+            .with_graph(|graph| graph.digraph()[self.id()].input_spec()[index as usize].kind())
+    }
+
+    /// Returns the signal type of the output at the given index.
+    #[inline]
+    pub fn output_kind(&self, index: impl IntoStaticOutputIdx) -> SignalKind {
+        let index = index.into_static_output_idx(self);
+        self.graph
+            .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].kind())
     }
 
     /// Connects the given input of this node to the given output of another node.
@@ -145,12 +161,30 @@ impl StaticInput {
         self.node.connect_input(value, 0, self.input_index);
     }
 
+    /// Returns the signal type of the input.
+    #[inline]
+    pub fn kind(&self) -> SignalKind {
+        self.node.input_kind(self.input_index)
+    }
+
     /// Connects the input to the given output.
     #[inline]
     #[track_caller]
     pub fn connect(&self, output: &StaticOutput) {
         self.node
             .connect_input(&output.node, output.output_index, self.input_index);
+    }
+
+    /// Creates a parameter for the input.
+    #[inline]
+    pub fn param(&self) -> Param {
+        let param = Param::new();
+        let proc = self.node.graph().add_processor(param.clone());
+        match self.kind() {
+            SignalKind::Message => proc.output(0).connect(self),
+            SignalKind::Sample => proc.m2s().output(0).connect(self),
+        }
+        param
     }
 }
 
