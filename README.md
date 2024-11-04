@@ -20,20 +20,32 @@
 
 ## Examples
 
-### Processor API
+See [examples/processor.rs](examples/processor.rs) for a simple example of writing a raw audio processor.
 
-```rust
-use raug::prelude::*;
+See [examples/demo.rs](examples/demo.rs) for a simple example of building a signal flow graph.
 
-#[derive(Default, Debug, Clone)]
-struct MyProcessor {
-    gain: f64,
-}
+## Related crates
 
-impl Process for 
+- Lua bindings: [raug-lua](https://github.com/clstatham/raug-lua)
+- GUI using [iced](https://github.com/iced-rs/iced): [raug-iced](https://github.com/clstatham/raug-iced)
 
-```
+## Roadmap
+
+- [ ] More built-in processors
+- [ ] More examples
+- [ ] More tests
+- [ ] More bindings (Python? JavaScript?)
+
+## Contributing
+
+This is a personal project, but I'm happy to accept contributions. Please open an issue or PR if you have any ideas or feedback.
+
+## Versioning
+
+This project is in early development and does not yet follow semantic versioning. Breaking changes may occur at any time.
+
+The goal is to reach a somewhat-stable starting point and release version 0.1.0 on crates.io soon(tm).
 
 ## License
 
-MIT / Apache 2.0
+MIT OR Apache 2.0
