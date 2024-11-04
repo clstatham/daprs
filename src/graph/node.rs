@@ -1,3 +1,5 @@
+//! Contains the [`GraphNode`] type, which represents a node in the audio graph.
+
 use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};

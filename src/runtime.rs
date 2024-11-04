@@ -1,3 +1,5 @@
+//! The audio graph processing runtime.
+
 use std::{sync::mpsc, time::Duration};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -9,38 +11,65 @@ use crate::{
     signal::{Sample, SignalBuffer},
 };
 
+/// An error that occurred during runtime operations.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 #[error("Runtime error")]
 pub enum RuntimeError {
+    /// An error occurred while accessing the audio stream.
     StreamError(#[from] cpal::StreamError),
+
+    /// An error occurred while accessing audio devices.
     DevicesError(#[from] cpal::DevicesError),
+
+    /// An error occurred while reading or writing a WAV file.
     Hound(#[from] hound::Error),
+
+    /// An error occurred during audio host configuration (host unavailable).
     HostUnavailable(#[from] cpal::HostUnavailable),
+
+    /// An error occurred during audio device configuration (device unavailable).
     #[error("Requested device is unavailable: {0:?}")]
     DeviceUnavailable(Device),
+
+    /// An error occurred during audio device configuration (error getting the device's name).
     DeviceNameError(#[from] cpal::DeviceNameError),
+
+    /// An error occurred during audio device configuration (error getting the default device stream configuration).
     DefaultStreamConfigError(#[from] cpal::DefaultStreamConfigError),
+
+    /// An error occurred during audio device configuration (invalid sample format).
     #[error("Unsupported sample format: {0}")]
     UnsupportedSampleFormat(cpal::SampleFormat),
+
+    /// An error occurred during graph processing.
     GraphRunError(#[from] GraphRunError),
+
+    /// An error occurred during processing.
     ProcessorError(#[from] ProcessorError),
+
+    /// The number of channels in the audio graph does not match the number of channels in the audio device.
     #[error("Channel mismatch: expected {0} channels, got {1}")]
     ChannelMismatch(usize, usize),
 }
 
+/// A result type for runtime operations.
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
 /// The audio backend to use for the runtime.
 #[derive(Default, Debug, Clone)]
 pub enum Backend {
     #[default]
+    /// Default audio backend for the current platform.
     Default,
     #[cfg(all(target_os = "linux", feature = "jack"))]
+    /// JACK Audio Connection Kit
     Jack,
     #[cfg(target_os = "linux")]
+    /// Advanced Linux Sound Architecture
     Alsa,
     #[cfg(target_os = "windows")]
+    /// Windows Audio Session API
     Wasapi,
 }
 
@@ -186,6 +215,7 @@ impl Runtime {
         Ok(outputs)
     }
 
+    /// Runs the audio graph as fast as possible for the given duration's worth of samples, and writes the rendered output channels to a WAV file.
     pub fn run_offline_to_file(
         &mut self,
         file_path: impl AsRef<std::path::Path>,
@@ -231,6 +261,7 @@ impl Runtime {
         Ok(())
     }
 
+    /// Runs the audio graph in real-time for the given [`Duration`] using the specified audio backend and device.
     pub fn run_for(
         &mut self,
         duration: Duration,
@@ -244,6 +275,7 @@ impl Runtime {
         Ok(())
     }
 
+    /// Runs the audio graph in real-time using the specified audio backend and device.
     pub fn run(mut self, backend: Backend, device: Device) -> RuntimeResult<RuntimeHandle> {
         let (kill_tx, kill_rx) = mpsc::channel();
         let (runtime_tx, runtime_rx) = mpsc::channel();
@@ -406,12 +438,14 @@ impl Runtime {
     }
 }
 
+/// A handle to a running runtime. Can be used to stop the runtime and retrieve the runtime instance again.
 pub struct RuntimeHandle {
     kill_tx: mpsc::Sender<()>,
     runtime_rx: mpsc::Receiver<Runtime>,
 }
 
 impl RuntimeHandle {
+    /// Stops the running runtime and returns the runtime instance.
     pub fn stop(&self) -> Runtime {
         self.kill_tx.send(()).unwrap();
         self.runtime_rx.recv().unwrap()

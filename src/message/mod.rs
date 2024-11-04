@@ -1,13 +1,21 @@
+//! A module for working with messages that can be sent between processors.
+
 use std::fmt::{Debug, Display};
 
 use serde::{Deserialize, Serialize};
 
+/// A message that can be sent between processors.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Message {
+    /// A bang message ("do whatever it is you do").
     Bang,
+    /// An integer message.
     Int(i64),
+    /// A float message.
     Float(f64),
+    /// A string message.
     String(String),
+    /// A list of other messages.
     List(Vec<Message>),
 }
 

@@ -1,3 +1,5 @@
+//! Audio processing utilities and types.
+
 use std::fmt::Debug;
 
 use serde::{Deserialize, Serialize};
@@ -5,16 +7,26 @@ use thiserror::Error;
 
 use crate::signal::{Signal, SignalBuffer};
 
+/// An error that can occur when processing signals.
 #[derive(Debug, Clone, Error)]
 pub enum ProcessorError {
+    /// The number of inputs must match the number returned by [`Process::num_inputs`].
     #[error("The number of inputs must match the number returned by Process::num_inputs()")]
     NumInputsMismatch,
+
+    /// The number of outputs must match the number returned by [`Process::num_outputs`].
     #[error("The number of outputs must match the number returned by Process::num_outputs()")]
     NumOutputsMismatch,
+
+    /// The input signal type at the given index does not match the expected type.
     #[error("Input {0} signal type mismatch")]
     InputSpecMismatch(usize),
+
+    /// The output signal type at the given index does not match the expected type.
     #[error("Output {0} signal type mismatch")]
     OutputSpecMismatch(usize),
+
+    /// The signal value is invalid for the given reason.
     #[error("Invalid value: {0}")]
     InvalidValue(&'static str),
 }
@@ -22,9 +34,13 @@ pub enum ProcessorError {
 /// Information about an input/output of a [`Process`] implementor.
 #[derive(Debug)]
 pub struct SignalSpec {
+    /// The name of the signal.
     pub name: &'static str,
+    /// The minimum value of the signal, if any.
     pub min: Option<Signal>,
+    /// The maximum value of the signal, if any.
     pub max: Option<Signal>,
+    /// The default value of the signal.
     pub default_value: Signal,
 }
 

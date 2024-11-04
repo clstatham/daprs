@@ -1,9 +1,12 @@
+//! Contains the [`Node`] struct and related types and traits.
+
 use serde::Serialize;
 
 use super::graph_builder::GraphBuilder;
 use crate::builtins::*;
 use crate::graph::NodeIndex;
 
+/// A node in a [`GraphBuilder`].
 #[derive(Clone, Copy, Serialize)]
 pub struct Node<'a> {
     pub(crate) graph_builder: &'a GraphBuilder,
@@ -18,27 +21,31 @@ impl<'a> std::fmt::Debug for Node<'a> {
 
 impl<'a> Node<'a> {
     #[inline]
-    pub const fn id(self) -> NodeIndex {
+    pub(crate) const fn id(self) -> NodeIndex {
         self.node_id
     }
 
+    /// Returns the graph builder that the node belongs to.
     #[inline]
     pub fn graph(self) -> &'a GraphBuilder {
         self.graph_builder
     }
 
+    /// Returns the number of inputs of the node.
     #[inline]
     pub fn num_inputs(self) -> usize {
         self.graph()
             .with_graph(|graph| graph.digraph()[self.id()].inputs().len())
     }
 
+    /// Returns the number of outputs of the node.
     #[inline]
     pub fn num_outputs(self) -> usize {
         self.graph()
             .with_graph(|graph| graph.digraph()[self.id()].outputs().len())
     }
 
+    /// Asserts that the node has a single output.
     #[inline]
     #[track_caller]
     pub(crate) fn assert_single_output(self) -> Self {
@@ -46,6 +53,7 @@ impl<'a> Node<'a> {
         self
     }
 
+    /// Connects the node's input to the given source output.
     #[inline]
     #[track_caller]
     pub fn connect_input(
@@ -62,6 +70,7 @@ impl<'a> Node<'a> {
         self
     }
 
+    /// Connects the node's output to the given target input.
     #[inline]
     #[track_caller]
     pub fn connect_output(
@@ -78,6 +87,7 @@ impl<'a> Node<'a> {
         self
     }
 
+    /// Returns the output of the node with the given index.
     #[inline]
     pub fn output(self, index: impl IntoOutputIdx) -> Output<'a> {
         Output {
@@ -86,6 +96,7 @@ impl<'a> Node<'a> {
         }
     }
 
+    /// Returns the input of the node with the given index.
     #[inline]
     pub fn input(self, index: impl IntoInputIdx) -> Input<'a> {
         Input {
@@ -136,22 +147,26 @@ impl<'a> Node<'a> {
     }
 }
 
+/// An input of a node.
 pub struct Input<'a> {
     pub(crate) node: Node<'a>,
     pub(crate) input_index: u32,
 }
 
 impl<'a> Input<'a> {
+    /// Returns the node that the input belongs to.
     #[inline]
     pub const fn node(self) -> Node<'a> {
         self.node
     }
 
+    /// Returns the input index of the input.
     #[inline]
     pub const fn input_index(self) -> u32 {
         self.input_index
     }
 
+    /// Connects the input to the given output.
     #[inline]
     #[track_caller]
     pub fn connect(self, output: Output<'a>) -> Node<'a> {
@@ -159,6 +174,7 @@ impl<'a> Input<'a> {
             .connect_input(output.node, output.output_index, self.input_index)
     }
 
+    /// Sets the input to the given value.
     #[inline]
     #[track_caller]
     pub fn set(self, value: impl IntoNode<'a>) -> Node<'a> {
@@ -168,22 +184,26 @@ impl<'a> Input<'a> {
     }
 }
 
+/// An output of a node.
 pub struct Output<'a> {
     pub(crate) node: Node<'a>,
     pub(crate) output_index: u32,
 }
 
 impl<'a> Output<'a> {
+    /// Returns the node that the output belongs to.
     #[inline]
     pub const fn node(self) -> Node<'a> {
         self.node
     }
 
+    /// Returns the output index of the output.
     #[inline]
     pub const fn output_index(self) -> u32 {
         self.output_index
     }
 
+    /// Connects the output to the given input.
     #[inline]
     #[track_caller]
     pub fn connect(self, input: Input<'a>) -> Node<'a> {
@@ -204,7 +224,9 @@ mod sealed {
     impl Sealed for super::Output<'_> {}
 }
 
+/// A trait for converting a value into a node.
 pub trait IntoNode<'a>: sealed::Sealed {
+    /// Converts the value into a node.
     fn into_node(self, graph_builder: &'a GraphBuilder) -> Node<'a>;
 }
 
@@ -229,7 +251,9 @@ impl<'a> IntoNode<'a> for f64 {
     }
 }
 
+/// A trait for converting a value into an input index.
 pub trait IntoInputIdx: sealed::Sealed {
+    /// Converts the value into an input index.
     fn into_input_idx(self, node: Node) -> u32;
 }
 
@@ -265,7 +289,9 @@ impl IntoInputIdx for Input<'_> {
     }
 }
 
+/// A trait for converting a value into an output index.
 pub trait IntoOutputIdx: sealed::Sealed {
+    /// Converts the value into an output index.
     fn into_output_idx(self, node: Node) -> u32;
 }
 
@@ -305,6 +331,7 @@ macro_rules! impl_binary_node_ops {
     ($name:ident, $proc:ty, $doc:expr) => {
         impl<'a> Node<'a> {
             #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
             pub fn $name(self, other: impl IntoNode<'a>) -> Node<'a> {
                 let other = other.into_node(self.graph());
                 self.assert_single_output();
@@ -322,6 +349,7 @@ macro_rules! impl_binary_node_ops {
     ($name:ident, $std_op:ident, $proc:ty, $doc:expr) => {
         impl<'a> Node<'a> {
             #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
             pub fn $name(self, other: impl IntoNode<'a>) -> Node<'a> {
                 let other = other.into_node(self.graph());
                 self.assert_single_output();
@@ -386,6 +414,7 @@ macro_rules! impl_unary_node_ops {
     ($name:ident, $proc:ty, $doc:expr) => {
         impl<'a> Node<'a> {
             #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
             pub fn $name(self) -> Node<'a> {
                 self.assert_single_output();
 

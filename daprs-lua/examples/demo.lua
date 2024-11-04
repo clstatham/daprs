@@ -7,7 +7,7 @@ local out2 = graph:output()
 
 local sine = graph:sine_osc()
 
-sine:input_named("frequency"):set(440.0)
+sine:input("frequency"):set(440.0)
 
 sine = sine * graph:constant(0.2)
 

@@ -1,3 +1,5 @@
+//! Built-in processors and utilities for the audio graph.
+
 pub mod math;
 pub mod oscillators;
 pub mod storage;
@@ -10,6 +12,7 @@ pub use storage::*;
 pub use time::*;
 pub use util::*;
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! add_to_builders {
     ($func:ident, $proc:ty, $doc:expr) => {

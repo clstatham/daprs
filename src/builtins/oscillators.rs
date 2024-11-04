@@ -1,7 +1,12 @@
+//! Oscillator processors.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{add_to_builders, prelude::*};
 
+/// A free-running sine wave oscillator.
+///
+/// See also: [`GraphBuilder::sine_osc`](crate::builder::graph_builder::GraphBuilder::sine_osc).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SineOscillator {
     // phase accumulator
@@ -91,6 +96,9 @@ A free-running sine wave oscillator.
 "#
 );
 
+/// A free-running sawtooth wave oscillator.
+///
+/// See also: [`GraphBuilder::saw_osc`](crate::builder::graph_builder::GraphBuilder::saw_osc).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SawOscillator {
     // phase accumulator

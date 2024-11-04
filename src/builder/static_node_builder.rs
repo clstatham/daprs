@@ -1,3 +1,5 @@
+//! Contains the [`StaticNode`] type and related types and traits.
+
 use petgraph::prelude::*;
 use serde::Serialize;
 
@@ -5,6 +7,9 @@ use crate::prelude::*;
 
 use super::static_graph_builder::StaticGraphBuilder;
 
+/// A node in a [`StaticGraphBuilder`].
+///
+/// This type has no lifetime parameter, so it can be used in any context.
 #[derive(Clone, Serialize)]
 pub struct StaticNode {
     pub(crate) graph: StaticGraphBuilder,
@@ -13,33 +18,38 @@ pub struct StaticNode {
 
 impl StaticNode {
     #[inline]
-    pub fn id(&self) -> NodeIndex {
+    pub(crate) fn id(&self) -> NodeIndex {
         self.node_id
     }
 
+    /// Returns the graph that the node belongs to.
     #[inline]
     pub fn graph(&self) -> &StaticGraphBuilder {
         &self.graph
     }
 
+    /// Asserts that the node has a single output.
     #[inline]
     #[track_caller]
     pub fn assert_single_output(&self) {
         assert_eq!(self.num_outputs(), 1, "expected single output");
     }
 
+    /// Returns the number of inputs of the node.
     #[inline]
     pub fn num_inputs(&self) -> usize {
         self.graph
             .with_graph(|graph| graph.digraph()[self.id()].inputs().len())
     }
 
+    /// Returns the number of outputs of the node.
     #[inline]
     pub fn num_outputs(&self) -> usize {
         self.graph
             .with_graph(|graph| graph.digraph()[self.id()].outputs().len())
     }
 
+    /// Returns the input of the node at the given index.
     #[inline]
     pub fn input(&self, index: impl IntoStaticInputIdx) -> StaticInput {
         StaticInput {
@@ -48,6 +58,7 @@ impl StaticNode {
         }
     }
 
+    /// Returns the output of the node at the given index.
     #[inline]
     pub fn output(&self, index: impl IntoStaticOutputIdx) -> StaticOutput {
         StaticOutput {
@@ -56,6 +67,7 @@ impl StaticNode {
         }
     }
 
+    /// Connects the given input of this node to the given output of another node.
     #[inline]
     #[track_caller]
     pub fn connect_input(
@@ -71,6 +83,7 @@ impl StaticNode {
             .connect(output.id(), source_output, self.id(), target_input);
     }
 
+    /// Connects the given output of this node to the given input of another node.
     #[inline]
     #[track_caller]
     pub fn connect_output(
@@ -86,7 +99,13 @@ impl StaticNode {
             .connect(self.id(), output_index, target.id(), target_input);
     }
 
+    /// Converts the output message to a signal.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
     #[inline]
+    #[track_caller]
     pub fn m2s(&self) -> StaticNode {
         self.assert_single_output();
         let proc = self.graph.add_processor(MessageToSampleProc);
@@ -94,7 +113,13 @@ impl StaticNode {
         proc
     }
 
+    /// Converts the output signal to a message.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
     #[inline]
+    #[track_caller]
     pub fn s2m(&self) -> StaticNode {
         self.assert_single_output();
         let proc = self.graph.add_processor(SampleToMessageProc);
@@ -103,6 +128,7 @@ impl StaticNode {
     }
 }
 
+/// An input of a node in the graph.
 #[derive(Clone, Serialize)]
 pub struct StaticInput {
     pub(crate) node: StaticNode,
@@ -110,6 +136,7 @@ pub struct StaticInput {
 }
 
 impl StaticInput {
+    /// Sets the value of the input.
     #[inline]
     pub fn set(&self, value: impl IntoStaticNode) {
         let value = value.into_static_node(self.node.graph());
@@ -117,6 +144,7 @@ impl StaticInput {
         self.node.connect_input(value, 0, self.input_index);
     }
 
+    /// Connects the input to the given output.
     #[inline]
     #[track_caller]
     pub fn connect(&self, output: &StaticOutput) {
@@ -125,6 +153,7 @@ impl StaticInput {
     }
 }
 
+/// An output of a node in the graph.
 #[derive(Clone, Serialize)]
 pub struct StaticOutput {
     pub(crate) node: StaticNode,
@@ -132,6 +161,7 @@ pub struct StaticOutput {
 }
 
 impl StaticOutput {
+    /// Connects the output to the given input.
     #[inline]
     #[track_caller]
     pub fn connect(&self, input: &StaticInput) {
@@ -151,7 +181,9 @@ mod sealed {
     impl Sealed for &str {}
 }
 
+/// Trait for converting a value into a static node.
 pub trait IntoStaticNode: sealed::Sealed {
+    /// Converts the value into a static node.
     fn into_static_node(self, graph: &StaticGraphBuilder) -> StaticNode;
 }
 
@@ -194,11 +226,15 @@ impl IntoStaticNode for Message {
     }
 }
 
+/// Trait for converting a value into an input index for a node.
 pub trait IntoStaticOutputIdx: sealed::Sealed {
+    /// Converts the value into an input index for the given node.
     fn into_static_output_idx(self, node: &StaticNode) -> u32;
 }
 
+/// Trait for converting a value into an output index for a node.
 pub trait IntoStaticInputIdx: sealed::Sealed {
+    /// Converts the value into an output index for the given node.
     fn into_static_input_idx(self, node: &StaticNode) -> u32;
 }
 
@@ -252,6 +288,7 @@ macro_rules! impl_binary_node_ops {
     ($name:ident, $proc:ty, $doc:expr) => {
         impl StaticNode {
             #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
             pub fn $name(&self, other: impl IntoStaticNode) -> StaticNode {
                 let other = other.into_static_node(self.graph());
                 self.assert_single_output();
@@ -269,6 +306,7 @@ macro_rules! impl_binary_node_ops {
     ($name:ident, $std_op:ident, $proc:ty, $doc:expr) => {
         impl StaticNode {
             #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
             pub fn $name(&self, other: impl IntoStaticNode) -> StaticNode {
                 let other = other.into_static_node(self.graph());
                 self.assert_single_output();
@@ -333,6 +371,7 @@ macro_rules! impl_unary_node_ops {
     ($name:ident, $proc:ty, $doc:expr) => {
         impl StaticNode {
             #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
             pub fn $name(&self) -> StaticNode {
                 self.assert_single_output();
 

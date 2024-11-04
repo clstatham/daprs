@@ -12,20 +12,16 @@ pub struct LuaNode(pub(crate) StaticNode);
 
 impl LuaUserData for LuaNode {
     fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("input", |_, this, input: u32| {
-            Ok(LuaInput(this.0.input(input)))
+        methods.add_method("input", |_, this, input: LuaValue| match input {
+            LuaValue::Integer(index) => Ok(LuaInput(this.0.input(index as u32))),
+            LuaValue::String(name) => Ok(LuaInput(this.0.input(&*name.to_string_lossy()))),
+            _ => Err(mlua::Error::external("Invalid input type")),
         });
 
-        methods.add_method("input_named", |_, this, input: String| {
-            Ok(LuaInput(this.0.input(input.as_str())))
-        });
-
-        methods.add_method("output", |_, this, output: u32| {
-            Ok(LuaOutput(this.0.output(output)))
-        });
-
-        methods.add_method("output_named", |_, this, output: String| {
-            Ok(LuaOutput(this.0.output(output.as_str())))
+        methods.add_method("output", |_, this, output: LuaValue| match output {
+            LuaValue::Integer(index) => Ok(LuaOutput(this.0.output(index as u32))),
+            LuaValue::String(name) => Ok(LuaOutput(this.0.output(&*name.to_string_lossy()))),
+            _ => Err(mlua::Error::external("Invalid output type")),
         });
 
         methods.add_method("m2s", |_, this, _args: ()| Ok(LuaNode(this.0.m2s())));

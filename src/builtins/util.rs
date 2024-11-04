@@ -1,3 +1,5 @@
+//! Utility processors.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -7,10 +9,14 @@ use crate::{
     signal::{Sample, Signal, SignalBuffer},
 };
 
+/// A processor that sends a message when triggered.
+///
+/// See also: [message](crate::builder::graph_builder::GraphBuilder::message).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MessageProc(Message);
 
 impl MessageProc {
+    /// Creates a new `MessageProc` with the given message.
     pub fn new(message: Message) -> Self {
         Self(message)
     }
@@ -89,10 +95,14 @@ impl StaticGraphBuilder {
     }
 }
 
+/// A processor that sends a constant message every sample.
+///
+/// See also: [constant_message](crate::builder::graph_builder::GraphBuilder::constant_message).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConstantMessageProc(Message);
 
 impl ConstantMessageProc {
+    /// Creates a new `ConstantMessageProc` with the given message.
     pub fn new(message: Message) -> Self {
         Self(message)
     }
@@ -151,13 +161,17 @@ impl StaticGraphBuilder {
     }
 }
 
+/// A processor that prints a message when triggered.
+///
+/// See also: [print](crate::builder::graph_builder::GraphBuilder::print).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PrintProc {
-    pub name: Option<String>,
-    pub msg: Option<String>,
+    name: Option<String>,
+    msg: Option<String>,
 }
 
 impl PrintProc {
+    /// Creates a new `PrintProc`, optionally with a name and message.
     pub fn new(name: Option<&str>, msg: Option<&str>) -> Self {
         Self {
             name: name.map(String::from),
@@ -165,6 +179,7 @@ impl PrintProc {
         }
     }
 
+    /// Creates a new `PrintProc` with the given name.
     pub fn with_name(name: &str) -> Self {
         Self {
             name: Some(String::from(name)),
@@ -172,6 +187,7 @@ impl PrintProc {
         }
     }
 
+    /// Creates a new `PrintProc` with the given message.
     pub fn with_msg(msg: &str) -> Self {
         Self {
             msg: Some(String::from(msg)),
@@ -179,6 +195,7 @@ impl PrintProc {
         }
     }
 
+    /// Creates a new `PrintProc` with the given name and message.
     pub fn with_name_and_msg(name: &str, msg: &str) -> Self {
         Self {
             name: Some(String::from(name)),
@@ -250,7 +267,7 @@ impl GraphBuilder {
     ///
     /// | Index | Name | Type | Default | Description |
     /// | --- | --- | --- | --- | --- |
-    /// | `0` | `trig` | `Bang` | | Triggers the print. |
+    /// | `0` | `trig` | `Message(Bang)` | | Triggers the print. |
     /// | `1` | `message` | `Message` | | The message to print. |
     pub fn print<'a>(
         &self,
@@ -268,7 +285,7 @@ impl StaticGraphBuilder {
     ///
     /// | Index | Name | Type | Default | Description |
     /// | --- | --- | --- | --- | --- |
-    /// | `0` | `trig` | `Bang` | | Triggers the print. |
+    /// | `0` | `trig` | `Message(Bang)` | | Triggers the print. |
     /// | `1` | `message` | `Message` | | The message to print. |
     pub fn print<'a>(
         &self,
@@ -279,6 +296,9 @@ impl StaticGraphBuilder {
     }
 }
 
+/// A processor that converts a message to a sample.
+///
+/// See also: [m2s](crate::builder::graph_builder::GraphBuilder::m2s).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MessageToSampleProc;
 
@@ -319,7 +339,7 @@ impl Process for MessageToSampleProc {
 impl GraphBuilder {
     /// A processor that converts a message to a sample.
     ///
-    /// Non-f64 messages are ignored.
+    /// Messages that are not castable to a float are ignored.
     ///
     /// # Inputs
     ///
@@ -337,6 +357,30 @@ impl GraphBuilder {
     }
 }
 
+impl StaticGraphBuilder {
+    /// A processor that converts a message to a sample.
+    ///
+    /// Messages that are not castable to a float are ignored.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `message` | `Message` | | The message to convert. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `sample` | `Sample` | The sample value. |
+    pub fn m2s(&self) -> StaticNode {
+        self.add_processor(MessageToSampleProc)
+    }
+}
+
+/// A processor that converts a sample to an f64 message.
+///
+/// See also: [s2m](crate::builder::graph_builder::GraphBuilder::s2m).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SampleToMessageProc;
 
@@ -383,12 +427,34 @@ impl GraphBuilder {
     ///
     /// | Index | Name | Type | Description |
     /// | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message` | The message value. |
+    /// | `0` | `message` | `Message(f64)` | The message value. |
     pub fn s2m(&self) -> Node {
         self.add_processor(SampleToMessageProc)
     }
 }
 
+impl StaticGraphBuilder {
+    /// A processor that converts a sample to an f64 message.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `sample` | `Sample` | | The sample to convert. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `message` | `Message(f64)` | The message value. |
+    pub fn s2m(&self) -> StaticNode {
+        self.add_processor(SampleToMessageProc)
+    }
+}
+
+/// A processor that outputs the sample rate that the graph is running at.
+///
+/// See also: [sample_rate](crate::builder::graph_builder::GraphBuilder::sample_rate).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SampleRateProc {
     sample_rate: f64,
@@ -438,11 +504,29 @@ impl GraphBuilder {
     }
 }
 
+impl StaticGraphBuilder {
+    /// A processor that outputs the sample rate that the graph is running at.
+    ///
+    /// This processor outputs `Sample`s for convenience in connecting to other audio-rate processors.
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `sample_rate` | `Sample` | The sample rate of the graph. |
+    pub fn sample_rate(&self) -> StaticNode {
+        self.add_processor(SampleRateProc::default())
+    }
+}
+
 #[inline(always)]
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + (b - a) * t
 }
 
+/// A processor that smoothly ramps between values over time.
+///
+/// See also: [smooth](crate::builder::graph_builder::GraphBuilder::smooth).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct SmoothProc {
     current: f64,
@@ -513,6 +597,29 @@ impl GraphBuilder {
     }
 }
 
+impl StaticGraphBuilder {
+    /// A processor that smoothly ramps between values over time.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `target` | `Sample` | | The target value. |
+    /// | `1` | `rate` | `Sample` | | The rate of smoothing. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Sample` | The current value of the ramp. |
+    pub fn smooth(&self) -> StaticNode {
+        self.add_processor(SmoothProc::default())
+    }
+}
+
+/// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
+///
+/// See also: [changed](crate::builder::graph_builder::GraphBuilder::changed).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ChangedProc {
     last: f64,
@@ -580,13 +687,36 @@ impl GraphBuilder {
     ///
     /// | Index | Name | Type | Description |
     /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message` | A bang message when a change is detected. |
+    /// | `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
     pub fn changed(&self) -> Node {
         self.add_processor(ChangedProc::default())
     }
 }
 
+impl StaticGraphBuilder {
+    /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `in` | `Sample` | | The input signal to detect changes on. |
+    /// | `1` | `threshold` | `Sample` | | The threshold for a change to be detected. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
+    pub fn changed(&self) -> StaticNode {
+        self.add_processor(ChangedProc::default())
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+/// A processor that sends a bang message when a zero crossing is detected.
+///
+/// See also: [zero_crossing](crate::builder::graph_builder::GraphBuilder::zero_crossing).
 pub struct ZeroCrossingProc {
     last: f64,
 }
@@ -643,8 +773,27 @@ impl GraphBuilder {
     ///
     /// | Index | Name | Type | Description |
     /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message` | A bang message when a zero crossing is detected. |
+    /// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
     pub fn zero_crossing(&self) -> Node {
+        self.add_processor(ZeroCrossingProc::default())
+    }
+}
+
+impl StaticGraphBuilder {
+    /// A processor that sends a bang message when a zero crossing is detected.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `in` | `Sample` | | The input signal to detect zero crossings on. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
+    pub fn zero_crossing(&self) -> StaticNode {
         self.add_processor(ZeroCrossingProc::default())
     }
 }

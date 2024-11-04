@@ -1,3 +1,5 @@
+//! A directed graph of [`GraphNode`]s connected by [`Edge`]s.
+
 use edge::Edge;
 use node::GraphNode;
 use petgraph::{
@@ -14,45 +16,71 @@ use crate::{
 pub mod edge;
 pub mod node;
 
-pub type GraphIx = u32;
-pub type NodeIndex = petgraph::graph::NodeIndex<GraphIx>;
-pub type EdgeIndex = petgraph::graph::EdgeIndex<GraphIx>;
+pub(crate) type GraphIx = u32;
+pub(crate) type NodeIndex = petgraph::graph::NodeIndex<GraphIx>;
+pub(crate) type EdgeIndex = petgraph::graph::EdgeIndex<GraphIx>;
 
-pub type DiGraph = StableDiGraph<GraphNode, Edge, GraphIx>;
+pub(crate) type DiGraph = StableDiGraph<GraphNode, Edge, GraphIx>;
 
+/// An error that can occur during graph processing.
 #[derive(Debug, thiserror::Error)]
 #[error("Graph run error at node {node_index:?} ({node_processor:?}): {kind:?}")]
 pub struct GraphRunError {
+    /// The index of the node that caused the error.
     pub node_index: NodeIndex,
+    /// The name of the processor that caused the error.
     pub node_processor: String,
+    /// The kind of error that occurred.
     pub kind: GraphRunErrorKind,
 }
 
+/// The kind of error that occurred during graph processing.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum GraphRunErrorKind {
+    /// Miscellaneous error.
     #[error("{0}")]
     Other(&'static str),
+
+    /// An error occurred in a processor.
     #[error("Processor error: {0}")]
     ProcessorError(#[from] ProcessorError),
 }
 
+/// An error that can occur during graph construction.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum GraphConstructionError {
+    /// An error for when a node is attempted to be connected to itself.
     #[error("Cannot connect node to itself directly")]
     FeedbackLoop,
+
+    /// An error for when a graph is attempted to be modified after it has been finalized.
     #[error("Graph has already been constructed and cannot be modified; use `Graph::into_builder()` to get a new builder")]
     GraphAlreadyFinished,
+
+    /// An error for when a node is attempted to be connected to a node from a different graph.
     #[error("Cannot connect nodes from different graphs")]
     MismatchedGraphs,
+
+    /// An error for when a node is attempted to be connected to a node that does not exist.
     #[error("Operation `{op}` invalid: Node type `{kind}` has multiple outputs")]
-    NodeHasMultipleOutputs { op: String, kind: String },
+    NodeHasMultipleOutputs {
+        /// The operation that caused the error.
+        op: String,
+        /// The type of node that caused the error.
+        kind: String,
+    },
+
+    /// An error occurred while attempting to read or write to the filesystem.
     #[error("Filesystem error: {0}")]
     FilesystemError(#[from] std::io::Error),
 }
 
+/// A result type for graph run operations.
 pub type GraphRunResult<T> = Result<T, GraphRunError>;
+
+/// A result type for graph construction operations.
 pub type GraphConstructionResult<T> = Result<T, GraphConstructionError>;
 
 /// A directed graph of [`GraphNode`]s connected by [`Edge`]s.
@@ -60,7 +88,7 @@ pub type GraphConstructionResult<T> = Result<T, GraphConstructionError>;
 /// The graph is responsible for managing the processing of its nodes and edges, and can be used to build complex signal processing networks.
 ///
 /// This struct is meant for the actual management of processing the audio graph, or for building custom graphs using a more direct API.
-/// See also the [`builder`] module, which provides a more ergonomic way to construct graphs.
+/// See also the [`builder`](crate::builder) module, which provides a more ergonomic way to construct graphs.
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct Graph {
     digraph: DiGraph,
@@ -121,7 +149,7 @@ impl Graph {
         idx
     }
 
-    /// Adds a new [`GraphNode`] with the given [`Processor`](node::Processor) to the graph.
+    /// Adds a new [`GraphNode`] with the given [`Processor`] to the graph.
     pub fn add_processor_object(&mut self, processor: Processor) -> NodeIndex {
         self.needs_reset = true;
         self.needs_prepare = true;
@@ -137,7 +165,7 @@ impl Graph {
         self.digraph.add_node(GraphNode::new_processor(processor))
     }
 
-    /// Replaces the [`GraphNode`] at the given [`NodeIndex`] in-place with a new [`Processor`](node::Processor).
+    /// Replaces the [`GraphNode`] at the given index in-place with a new [`Processor`].
     pub fn replace_processor(&mut self, node: NodeIndex, processor: impl Process) -> GraphNode {
         self.needs_reset = true;
         self.needs_prepare = true;
@@ -193,25 +221,25 @@ impl Graph {
         self.output_nodes.len()
     }
 
-    /// Returns the [`NodeIndex`] of the input [`GraphNode`] at the given index.
+    /// Returns the index of the input [`GraphNode`] at the given index.
     #[inline]
     pub fn node_for_input_index(&self, index: usize) -> Option<NodeIndex> {
         self.input_nodes.get(index).copied()
     }
 
-    /// Returns the [`NodeIndex`] of the output [`GraphNode`] at the given index.
+    /// Returns the index of the output [`GraphNode`] at the given index.
     #[inline]
     pub fn node_for_output_index(&self, index: usize) -> Option<NodeIndex> {
         self.output_nodes.get(index).copied()
     }
 
-    /// Returns a slice of the input [`NodeIndex`]es in the graph.
+    /// Returns a slice of the input indexes in the graph.
     #[inline]
     pub fn input_indices(&self) -> &[NodeIndex] {
         &self.input_nodes
     }
 
-    /// Returns a slice of the output [`NodeIndex`]es in the graph.
+    /// Returns a slice of the output indexes in the graph.
     #[inline]
     pub fn output_indices(&self) -> &[NodeIndex] {
         &self.output_nodes
@@ -247,6 +275,7 @@ impl Graph {
         }
     }
 
+    /// Returns an iterator over the input [`SignalBuffer`]s of the input [`GraphNode`]s in the graph.
     #[inline]
     pub fn inputs(&self) -> impl Iterator<Item = &SignalBuffer> {
         self.input_nodes.iter().map(|&idx| {
@@ -290,7 +319,7 @@ impl Graph {
         self.visit_path.reverse();
     }
 
-    /// Visits each [`GraphNode`] in the graph in breadth-first order, calling the given closuure with a mutable reference to the graph alongside each [`NodeIndex`].
+    /// Visits each [`GraphNode`] in the graph in breadth-first order, calling the given closure with a mutable reference to the graph alongside each index.
     #[inline]
     pub fn visit<F, E>(&mut self, mut f: F) -> Result<(), E>
     where
@@ -362,7 +391,7 @@ impl Graph {
         Ok(())
     }
 
-    /// Returns a mutable reference to the input [`SignalBuffer`] of the [`GraphNode`] at the given [`NodeIndex`] and input index.
+    /// Returns a mutable reference to the input [`SignalBuffer`] of the [`GraphNode`] at the given index and input index.
     #[inline]
     pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut SignalBuffer {
         match &mut self.digraph[node] {
@@ -376,7 +405,7 @@ impl Graph {
         }
     }
 
-    /// Returns a reference to the output [`SignalBuffer`] of the [`GraphNode`] at the given [`NodeIndex`] and output index.
+    /// Returns a reference to the output [`SignalBuffer`] of the [`GraphNode`] at the given index and output index.
     #[inline]
     pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &SignalBuffer {
         match &self.digraph[node] {

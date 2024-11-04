@@ -1,3 +1,5 @@
+//! Signal types and operations.
+
 use std::{
     fmt::{Debug, Display},
     ops::{
@@ -17,76 +19,98 @@ use crate::{message::Message, prelude::SignalSpec};
 pub struct Sample(f64);
 
 impl Sample {
+    /// The maximum value of a sample.
     pub const MAX: Self = Sample(f64::MAX);
+    /// The minimum value of a sample.
     pub const MIN: Self = Sample(f64::MIN);
+    /// The value `1.0`.
     pub const ONE: Self = Sample(1.0);
+    /// The value `0.0`.
     pub const ZERO: Self = Sample(0.0);
+    /// The value `-1.0`.
     pub const NEG_ONE: Self = Sample(-1.0);
+    /// The value `e` (Euler's number).
     pub const E: Self = Sample(std::f64::consts::E);
+    /// The value `π` (pi).
     pub const PI: Self = Sample(std::f64::consts::PI);
+    /// The value `τ` (tau).
     pub const TAU: Self = Sample(std::f64::consts::TAU);
+    /// The value `2π`.
     pub const TWO_PI: Self = Sample(std::f64::consts::TAU);
 
+    /// Creates a new sample with the given value.
     #[inline]
     pub const fn new(value: f64) -> Self {
         Sample(value)
     }
 
+    /// Returns the floating-point value of the sample.
     #[inline]
     pub const fn value(self) -> f64 {
         self.0
     }
 
+    /// Returns `true` if the sample is greater than zero.
     #[inline]
     pub fn is_truthy(self) -> bool {
         self.0 > 0.0
     }
 
+    /// Returns `true` if the sample is less than or equal to zero.
     #[inline]
     pub fn is_falsy(self) -> bool {
         self.0 <= 0.0
     }
 
+    /// Returns the absolute value of the sample.
     #[inline]
     pub fn abs(self) -> Self {
         Sample(self.0.abs())
     }
 
+    /// Returns the sine of the value.
     #[inline]
     pub fn sin(self) -> Self {
         Sample(self.0.sin())
     }
 
+    /// Returns the cosine of the value.
     #[inline]
     pub fn cos(self) -> Self {
         Sample(self.0.cos())
     }
 
+    /// Returns the tangent of the value.
     #[inline]
     pub fn tan(self) -> Self {
         Sample(self.0.tan())
     }
 
+    /// Returns the arcsine sine of the value.
     #[inline]
     pub fn asin(self) -> Self {
         Sample(self.0.asin())
     }
 
+    /// Returns the arccosine of the value.
     #[inline]
     pub fn acos(self) -> Self {
         Sample(self.0.acos())
     }
 
+    /// Returns the arctangent of the value.
     #[inline]
     pub fn atan(self) -> Self {
         Sample(self.0.atan())
     }
 
+    /// Returns the arctangent of the ratio of the two values.
     #[inline]
     pub fn atan2(self, other: Self) -> Self {
         Sample(self.0.atan2(other.0))
     }
 
+    /// Converts an amplitude value to a decibel value.
     #[inline]
     pub fn amp_to_db(self) -> Self {
         if self.0 <= 0.0 {
@@ -96,6 +120,7 @@ impl Sample {
         }
     }
 
+    /// Converts a decibel value to an amplitude value.
     #[inline]
     pub fn db_to_amp(self) -> Self {
         Self(10.0f64.powf(self.0 / 20.0))
@@ -312,6 +337,7 @@ impl<T> Buffer<T> {
         }
     }
 
+    /// Clones the given slice into a new buffer.
     #[inline]
     pub fn from_slice(value: &[T]) -> Self
     where
@@ -575,27 +601,34 @@ impl<'a, T> IntoIterator for &'a mut Buffer<T> {
 /// A signal that can be either a single sample or a message.
 #[derive(Debug, Clone)]
 pub enum Signal {
+    /// A single sample.
     Sample(Sample),
+    /// A single message.
     Message(Option<Message>),
 }
 
 impl Signal {
+    /// Creates a new sample signal with the given value.
     pub const fn new_sample(value: f64) -> Self {
         Self::Sample(Sample(value))
     }
 
+    /// Creates a new message signal with the given message.
     pub fn new_message_some(message: Message) -> Self {
         Self::Message(Some(message))
     }
 
+    /// Creates a new message signal with no message.
     pub fn new_message_none() -> Self {
         Self::Message(None)
     }
 
+    /// Returns `true` if this is a sample.
     pub const fn is_sample(&self) -> bool {
         matches!(self, Self::Sample(_))
     }
 
+    /// Returns `true` if this is a message.
     pub const fn is_message(&self) -> bool {
         matches!(self, Self::Message(_))
     }
@@ -615,23 +648,29 @@ impl Into<Signal> for f64 {
     }
 }
 
+/// A buffer that can contain either samples or messages.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SignalBuffer {
+    /// A buffer of samples.
     Sample(Buffer<Sample>),
+    /// A buffer of messages.
     Message(Buffer<Option<Message>>),
 }
 
 impl SignalBuffer {
+    /// Creates a new sample buffer of size `length`, filled with zeros.
     pub fn new_sample(length: usize) -> Self {
         Self::Sample(Buffer::zeros(length))
     }
 
+    /// Creates a new message buffer of size `length`, filled with `None`.
     pub fn new_message(length: usize) -> Self {
         Self::Message(Buffer {
             buf: vec![None; length].into_boxed_slice(),
         })
     }
 
+    /// Creates a new buffer from a [`SignalSpec`], filling it with the default value.
     pub fn from_spec_default(spec: &SignalSpec, length: usize) -> Self {
         match &spec.default_value {
             Signal::Sample(default_value) => Self::Sample(Buffer {
@@ -643,14 +682,17 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns `true` if this is a sample buffer.
     pub fn is_sample(&self) -> bool {
         matches!(self, Self::Sample(_))
     }
 
+    /// Returns `true` if this is a message buffer.
     pub fn is_message(&self) -> bool {
         matches!(self, Self::Message(_))
     }
 
+    /// Returns a reference to the sample buffer, if this is a sample buffer.
     pub fn as_sample(&self) -> Option<&Buffer<Sample>> {
         match self {
             Self::Sample(buffer) => Some(buffer),
@@ -658,6 +700,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a reference to the message buffer, if this is a message buffer.
     pub fn as_message(&self) -> Option<&Buffer<Option<Message>>> {
         match self {
             Self::Sample(_) => None,
@@ -665,6 +708,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a mutable reference to the sample buffer, if this is a sample buffer.
     pub fn as_sample_mut(&mut self) -> Option<&mut Buffer<Sample>> {
         match self {
             Self::Sample(buffer) => Some(buffer),
@@ -672,6 +716,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a mutable reference to the message buffer, if this is a message buffer.
     pub fn as_message_mut(&mut self) -> Option<&mut Buffer<Option<Message>>> {
         match self {
             Self::Sample(_) => None,
@@ -679,6 +724,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns the length of the buffer.
     pub fn len(&self) -> usize {
         match self {
             Self::Sample(buffer) => buffer.len(),
@@ -686,6 +732,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns `true` if the buffer is empty.
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Sample(buffer) => buffer.is_empty(),
@@ -693,6 +740,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Resizes the buffer to the given length, filling any new elements with the given value.
     pub fn resize(&mut self, length: usize, value: Signal) {
         match self {
             Self::Sample(buffer) => {
@@ -712,6 +760,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Fills the buffer with the given value.
     pub fn fill(&mut self, value: impl Into<Signal>) {
         let value = value.into();
         match self {
@@ -732,6 +781,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Copies the contents of `other` into `self`.
     pub fn copy_from(&mut self, other: &Self) {
         match (self, other) {
             (Self::Sample(this), Self::Sample(other)) => {

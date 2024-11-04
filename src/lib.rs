@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+#![cfg_attr(doc, warn(missing_docs))]
 
 use cpal::traits::{DeviceTrait, HostTrait};
 use runtime::Backend;
@@ -11,6 +12,7 @@ pub mod processor;
 pub mod runtime;
 pub mod signal;
 
+/// Re-exports of the most commonly used types and traits.
 #[allow(unused_imports)]
 pub mod prelude {
     pub use crate::builder::{
@@ -29,6 +31,7 @@ pub mod prelude {
     pub use typetag;
 }
 
+/// Lists the available backends.
 pub fn available_backends() -> Vec<Backend> {
     let mut backends = vec![Backend::Default];
     for host in cpal::available_hosts() {
@@ -53,10 +56,7 @@ pub fn available_backends() -> Vec<Backend> {
     backends
 }
 
-pub fn default_backend() -> Backend {
-    Backend::Default
-}
-
+/// Prints the available backends.
 pub fn list_backends() {
     println!("Listing available backends:");
     for (i, backend) in available_backends().into_iter().enumerate() {
@@ -64,6 +64,7 @@ pub fn list_backends() {
     }
 }
 
+/// Lists the available devices for the given backend.
 pub fn list_devices(backend: Backend) {
     println!("Listing devices for backend: {:?}", backend);
     let host = match backend {

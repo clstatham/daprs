@@ -1,14 +1,20 @@
+//! Mathematical processors.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{prelude::*, processor::ProcessorError, signal::SignalBuffer};
 use std::ops::*;
 
+/// A processor that outputs a constant value.
+///
+/// See also: [`GraphBuilder::constant`](crate::builder::graph_builder::GraphBuilder::constant).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConstantProc {
     value: f64,
 }
 
 impl ConstantProc {
+    /// Creates a new constant processor with the given value.
     pub fn new(value: f64) -> Self {
         Self { value }
     }
@@ -72,6 +78,7 @@ impl StaticGraphBuilder {
 macro_rules! impl_binary_proc {
     ($name:ident, $method:ident, $doc:expr) => {
         #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+        #[doc = $doc]
         pub struct $name;
 
         #[typetag::serde]
@@ -324,6 +331,7 @@ A processor that calculates the minimum of two signals.
 macro_rules! impl_unary_proc {
     ($name:ident, $method:ident, $doc:expr) => {
         #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+        #[doc = $doc]
         pub struct $name;
 
         #[typetag::serde]
@@ -434,7 +442,6 @@ A processor that calculates the cube root of a signal.
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
 | `0` | `out` | `Sample` | The cube root of the input signal. |
-```
     "#
 );
 impl_unary_proc!(
@@ -473,7 +480,6 @@ A processor that rounds a signal down to the nearest integer.
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
 | `0` | `out` | `Sample` | The input signal rounded down to the nearest integer. |
-```
     "#
 );
 impl_unary_proc!(

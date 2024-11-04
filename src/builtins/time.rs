@@ -1,12 +1,17 @@
+//! Time-related processors.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
     message::Message,
-    prelude::{GraphBuilder, Node, Process, SignalSpec},
+    prelude::{GraphBuilder, Node, Process, SignalSpec, StaticGraphBuilder, StaticNode},
     processor::ProcessorError,
     signal::Signal,
 };
 
+/// A metronome processor.
+///
+/// See also: [`GraphBuilder::metro`](crate::builder::graph_builder::GraphBuilder::metro).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetroProc {
     period: f64,
@@ -17,6 +22,7 @@ pub struct MetroProc {
 }
 
 impl MetroProc {
+    /// Creates a new metronome processor with the given period.
     pub fn new(period: f64) -> Self {
         Self {
             period,
@@ -27,7 +33,7 @@ impl MetroProc {
         }
     }
 
-    pub fn next_sample(&mut self) -> bool {
+    fn next_sample(&mut self) -> bool {
         let out = if self.time >= self.next_time {
             self.last_time = self.time;
             self.next_time = self.time + self.period;
@@ -102,6 +108,25 @@ impl GraphBuilder {
     /// | --- | --- | --- | --- |
     /// | `0` | `out` | `Bang` | Emits a bang at the given period. |
     pub fn metro(&self, period: f64) -> Node {
+        self.add_processor(MetroProc::new(period))
+    }
+}
+
+impl StaticGraphBuilder {
+    /// A metronome that emits a bang at the given period.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `period` | `Message(f64)` | | The period of the metronome in seconds. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Bang` | Emits a bang at the given period. |
+    pub fn metro(&self, period: f64) -> StaticNode {
         self.add_processor(MetroProc::new(period))
     }
 }

@@ -1,7 +1,12 @@
+//! Storage-related processors.
+
 use serde::{Deserialize, Serialize};
 
 use crate::prelude::*;
 
+/// A processor that reads a sample from a buffer.
+///
+/// See also: [`GraphBuilder::buffer_reader`](crate::builder::graph_builder::GraphBuilder::buffer_reader).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BufferReaderProc {
     buffer: SignalBuffer,
@@ -10,6 +15,7 @@ pub struct BufferReaderProc {
 }
 
 impl BufferReaderProc {
+    /// Creates a new buffer reader processor.
     pub fn new(buffer: Buffer<Sample>) -> Self {
         Self {
             buffer: SignalBuffer::Sample(buffer),
@@ -90,6 +96,27 @@ impl GraphBuilder {
     /// | --- | --- | --- | --- |
     /// | `0` | `out` | `Sample` | The sample value read from the buffer. |
     pub fn buffer_reader(&self, buffer: impl Into<Buffer<Sample>>) -> Node {
+        self.add_processor(BufferReaderProc::new(buffer.into()))
+    }
+}
+
+impl StaticGraphBuilder {
+    /// A processor that reads a sample from a buffer.
+    ///
+    /// If the index is out of bounds, it will wrap around.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `position` | `Message(i64)` | `0` | The sample index to read from the buffer. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Sample` | The sample value read from the buffer. |
+    pub fn buffer_reader(&self, buffer: impl Into<Buffer<Sample>>) -> StaticNode {
         self.add_processor(BufferReaderProc::new(buffer.into()))
     }
 }
