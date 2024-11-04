@@ -730,48 +730,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "daprs"
-version = "0.1.0"
-dependencies = [
- "cpal",
- "downcast-rs",
- "env_logger",
- "erased-serde",
- "hound",
- "itertools",
- "log",
- "petgraph",
- "serde",
- "thiserror",
- "typetag",
-]
-
-[[package]]
-name = "daprs-iced"
-version = "0.1.0"
-dependencies = [
- "crossbeam-channel",
- "daprs",
- "derive_more",
- "env_logger",
- "iced",
- "iced_audio",
- "iced_native",
- "itertools",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "daprs-lua"
-version = "0.1.0"
-dependencies = [
- "daprs",
- "mlua",
- "serde",
-]
-
-[[package]]
 name = "darling"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2624,6 +2582,48 @@ name = "range-alloc"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8a99fddc9f0ba0a85884b8d14e3592853e787d581ca1816c91349b10e4eeab"
+
+[[package]]
+name = "raug"
+version = "0.1.0"
+dependencies = [
+ "cpal",
+ "downcast-rs",
+ "env_logger",
+ "erased-serde",
+ "hound",
+ "itertools",
+ "log",
+ "petgraph",
+ "serde",
+ "thiserror",
+ "typetag",
+]
+
+[[package]]
+name = "raug-iced"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "derive_more",
+ "env_logger",
+ "iced",
+ "iced_audio",
+ "iced_native",
+ "itertools",
+ "raug",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "raug-lua"
+version = "0.1.0"
+dependencies = [
+ "mlua",
+ "raug",
+ "serde",
+]
 
 [[package]]
 name = "raw-window-handle"

@@ -1,5 +1,5 @@
-use daprs::prelude::*;
-use daprs_iced::prelude::*;
+use raug::prelude::*;
+use raug_iced::prelude::*;
 
 fn main() {
     // initialize logging

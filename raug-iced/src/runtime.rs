@@ -1,4 +1,4 @@
-use daprs::{
+use raug::{
     prelude::*,
     runtime::{RuntimeError, RuntimeHandle},
 };
@@ -84,7 +84,7 @@ impl<T: Widget> Application for IcedRuntimeApp<T> {
     }
 
     fn title(&self) -> String {
-        "DAPRS".to_string()
+        "raug".to_string()
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {

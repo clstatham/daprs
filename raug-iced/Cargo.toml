@@ -1,5 +1,5 @@
 [package]
-name = "daprs-iced"
+name = "raug-iced"
 version = "0.1.0"
 edition = "2021"
 
@@ -13,7 +13,7 @@ derive_more = { version = "1", features = ["display"] }
 thiserror = "1.0"
 serde = { version = "1", features = ["derive"] }
 
-[dependencies.daprs]
+[dependencies.raug]
 path = "../"
 
 [dev-dependencies]

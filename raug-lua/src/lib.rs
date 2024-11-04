@@ -18,7 +18,7 @@ pub fn bang(_: &Lua, _: ()) -> LuaResult<LuaBang> {
 }
 
 #[mlua::lua_module]
-fn daprs(lua: &Lua) -> LuaResult<LuaTable> {
+fn raug(lua: &Lua) -> LuaResult<LuaTable> {
     let exports = lua.create_table()?;
     exports.set("bang", lua.create_function(bang)?)?;
     exports.set("graph_builder", lua.create_function(graph_builder)?)?;

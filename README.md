@@ -1,6 +1,6 @@
-# daprs
+# raug
 
-**daprs** is a library for writing and running digital audio processors in Rust.
+**raug** is a library for writing and running digital audio processors and signal flow graphs in Rust.
 
 ## Design Goals
 

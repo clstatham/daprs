@@ -4,7 +4,7 @@ use crate::{
     builder::IcedGraphBuilder,
     channel::{GuiChannel, GuiRx},
 };
-use daprs::prelude::*;
+use raug::prelude::*;
 use iced::{widget::*, Element};
 use iced_audio::{Normal, NormalParam};
 
