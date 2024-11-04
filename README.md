@@ -20,9 +20,9 @@
 
 ## Examples
 
-See [examples/processor.rs](examples/processor.rs) for a simple example of writing a raw audio processor.
+See [examples/processor.rs](https://github.com/clstatham/raug/blob/master/examples/processor.rs) for a simple example of writing a raw audio processor.
 
-See [examples/demo.rs](examples/demo.rs) for a simple example of building a signal flow graph.
+See [examples/demo.rs](https://github.com/clstatham/raug/blob/master/examples/demo.rs) for a simple example of building a signal flow graph.
 
 ## Related Projects
 
