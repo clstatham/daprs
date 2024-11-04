@@ -127,7 +127,7 @@ impl Graph {
         self.needs_reset
     }
 
-    /// Returns `true` if [`prepare_nodes`](Graph::prepare_nodes) must be called before the next [`process`](Graph::process) call.
+    /// Returns `true` if [`prepare_nodes`](Graph::prepare) must be called before the next [`process`](Graph::process) call.
     #[inline]
     pub fn needs_prepare(&self) -> bool {
         self.needs_prepare
