@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../raug-lua"
+		},
+		{
+			"path": "../raug-iced"
+		}
+	],
+	"settings": {}
+}
