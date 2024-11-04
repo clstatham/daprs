@@ -795,3 +795,22 @@ impl Default for Param {
         Self::new()
     }
 }
+
+impl GraphBuilder {
+    /// A processor that can be used to send/receive messages from outside the graph.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `set` | `Message` | | The message to set the parameter to. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `get` | `Message` | The current value of the parameter. |
+    pub fn param(&self) -> Node {
+        self.add_processor(Param::new())
+    }
+}

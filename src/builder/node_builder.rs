@@ -179,7 +179,14 @@ impl Input {
     pub fn set(&self, value: impl IntoNode) {
         let value = value.into_node(self.node.graph());
         value.assert_single_output();
-        self.node.connect_input(value, 0, self.input_index);
+        match self.kind() {
+            SignalKind::Message => self
+                .node
+                .connect_input(value.to_message(), 0, self.input_index),
+            SignalKind::Sample => self
+                .node
+                .connect_input(value.to_audio(), 0, self.input_index),
+        }
     }
 
     /// Returns the signal type of the input.
@@ -267,11 +274,14 @@ impl Output {
 }
 
 mod sealed {
+    use super::Param;
+
     pub trait Sealed {}
     impl Sealed for crate::graph::NodeIndex {}
     impl Sealed for super::Node {}
     impl Sealed for &super::Node {}
     impl Sealed for super::Message {}
+    impl Sealed for Param {}
     impl Sealed for f64 {}
     impl Sealed for u32 {}
     impl Sealed for &str {}
@@ -298,6 +308,12 @@ impl IntoNode for &Node {
             graph: graph.clone(),
             node_id: self.node_id,
         }
+    }
+}
+
+impl IntoNode for Param {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
+        graph.add_processor(self)
     }
 }
 
@@ -397,8 +413,8 @@ macro_rules! impl_binary_node_ops {
 
                 let processor = <$proc>::default();
                 let node = self.graph().add_processor(processor);
-                node.connect_input(self, 0, 0);
-                node.connect_input(other, 0, 1);
+                node.input(0).connect(&self.output(0));
+                node.input(1).connect(&other.output(0));
 
                 node
             }
@@ -415,8 +431,8 @@ macro_rules! impl_binary_node_ops {
 
                 let processor = <$proc>::default();
                 let node = self.graph().add_processor(processor);
-                node.connect_input(self, 0, 0);
-                node.connect_input(other, 0, 1);
+                node.input(0).connect(&self.output(0));
+                node.input(1).connect(&other.output(0));
 
                 node
             }
@@ -505,7 +521,7 @@ macro_rules! impl_unary_node_ops {
 
                 let processor = <$proc>::default();
                 let node = self.graph().add_processor(processor);
-                node.connect_input(self, 0, 0);
+                node.input(0).connect(&self.output(0));
 
                 node
             }
