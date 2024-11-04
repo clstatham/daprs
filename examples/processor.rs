@@ -39,8 +39,8 @@ fn main() {
 
     let graph = GraphBuilder::new();
 
-    let out1 = graph.output();
-    let out2 = graph.output();
+    let out1 = graph.add_output();
+    let out2 = graph.add_output();
 
     let sine = graph.sine_osc();
     sine.input("frequency").set(440.0);

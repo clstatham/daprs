@@ -160,7 +160,7 @@ impl Node {
         self.assert_single_output();
         let proc = self.graph.add_processor(SmoothProc::default());
         proc.input("factor").set(0.1);
-        proc.connect_input(self, 0, 0);
+        proc.input(0).connect(&self.output(0));
         proc
     }
 }

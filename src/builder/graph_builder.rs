@@ -23,7 +23,7 @@ impl GraphBuilder {
     }
 
     /// Adds an input node to the graph.
-    pub fn input(&self) -> Node {
+    pub fn add_input(&self) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
             node_id: graph.add_input(),
@@ -31,7 +31,7 @@ impl GraphBuilder {
     }
 
     /// Adds an output node to the graph.
-    pub fn output(&self) -> Node {
+    pub fn add_output(&self) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
             node_id: graph.add_output(),
