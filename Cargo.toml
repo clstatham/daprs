@@ -12,9 +12,6 @@ name = "raug"
 default = []
 jack = ["cpal/jack"]
 serde = ["dep:serde", "petgraph/serde-1", "dep:typetag"]
-mem2g = []
-mem4g = []
-mem8g = []
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }
