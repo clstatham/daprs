@@ -54,7 +54,7 @@ impl Node {
     pub fn input(&self, index: impl IntoInputIdx) -> Input {
         Input {
             node: self.clone(),
-            input_index: index.into_static_input_idx(self),
+            input_index: index.into_input_idx(self),
         }
     }
 
@@ -63,14 +63,14 @@ impl Node {
     pub fn output(&self, index: impl IntoOutputIdx) -> Output {
         Output {
             node: self.clone(),
-            output_index: index.into_static_output_idx(self),
+            output_index: index.into_output_idx(self),
         }
     }
 
     /// Returns the signal type of the input at the given index.
     #[inline]
     pub fn input_kind(&self, index: impl IntoInputIdx) -> SignalKind {
-        let index = index.into_static_input_idx(self);
+        let index = index.into_input_idx(self);
         self.graph
             .with_graph(|graph| graph.digraph()[self.id()].input_spec()[index as usize].kind())
     }
@@ -78,7 +78,7 @@ impl Node {
     /// Returns the signal type of the output at the given index.
     #[inline]
     pub fn output_kind(&self, index: impl IntoOutputIdx) -> SignalKind {
-        let index = index.into_static_output_idx(self);
+        let index = index.into_output_idx(self);
         self.graph
             .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].kind())
     }
@@ -92,9 +92,9 @@ impl Node {
         source_output: impl IntoOutputIdx,
         target_input: impl IntoInputIdx,
     ) {
-        let output = source.into_static_node(&self.graph);
-        let source_output = source_output.into_static_output_idx(&output);
-        let target_input = target_input.into_static_input_idx(self);
+        let output = source.into_node(&self.graph);
+        let source_output = source_output.into_output_idx(&output);
+        let target_input = target_input.into_input_idx(self);
         self.graph
             .connect(output.id(), source_output, self.id(), target_input);
     }
@@ -108,9 +108,9 @@ impl Node {
         target: impl IntoNode,
         target_input: impl IntoInputIdx,
     ) {
-        let target = target.into_static_node(&self.graph);
-        let output_index = output.into_static_output_idx(self);
-        let target_input = target_input.into_static_input_idx(&target);
+        let target = target.into_node(&self.graph);
+        let output_index = output.into_output_idx(self);
+        let target_input = target_input.into_input_idx(&target);
         self.graph
             .connect(self.id(), output_index, target.id(), target_input);
     }
@@ -171,7 +171,7 @@ impl Input {
     /// Sets the value of the input.
     #[inline]
     pub fn set(&self, value: impl IntoNode) {
-        let value = value.into_static_node(self.node.graph());
+        let value = value.into_node(self.node.graph());
         value.assert_single_output();
         self.node.connect_input(value, 0, self.input_index);
     }
@@ -232,14 +232,14 @@ mod sealed {
     impl Sealed for &str {}
 }
 
-/// Trait for converting a value into a static node.
+/// Trait for converting a value into a node.
 pub trait IntoNode: sealed::Sealed {
-    /// Converts the value into a static node.
-    fn into_static_node(self, graph: &GraphBuilder) -> Node;
+    /// Converts the value into a node.
+    fn into_node(self, graph: &GraphBuilder) -> Node;
 }
 
 impl IntoNode for Node {
-    fn into_static_node(self, graph: &GraphBuilder) -> Node {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
         Node {
             graph: graph.clone(),
             node_id: self.node_id,
@@ -248,7 +248,7 @@ impl IntoNode for Node {
 }
 
 impl IntoNode for &Node {
-    fn into_static_node(self, graph: &GraphBuilder) -> Node {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
         Node {
             graph: graph.clone(),
             node_id: self.node_id,
@@ -257,7 +257,7 @@ impl IntoNode for &Node {
 }
 
 impl IntoNode for NodeIndex {
-    fn into_static_node(self, graph: &GraphBuilder) -> Node {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
         Node {
             graph: graph.clone(),
             node_id: self,
@@ -266,13 +266,13 @@ impl IntoNode for NodeIndex {
 }
 
 impl IntoNode for f64 {
-    fn into_static_node(self, graph: &GraphBuilder) -> Node {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.constant(self)
     }
 }
 
 impl IntoNode for Message {
-    fn into_static_node(self, graph: &GraphBuilder) -> Node {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.constant_message(self)
     }
 }
@@ -280,25 +280,25 @@ impl IntoNode for Message {
 /// Trait for converting a value into an input index for a node.
 pub trait IntoOutputIdx: sealed::Sealed {
     /// Converts the value into an input index for the given node.
-    fn into_static_output_idx(self, node: &Node) -> u32;
+    fn into_output_idx(self, node: &Node) -> u32;
 }
 
 /// Trait for converting a value into an output index for a node.
 pub trait IntoInputIdx: sealed::Sealed {
     /// Converts the value into an output index for the given node.
-    fn into_static_input_idx(self, node: &Node) -> u32;
+    fn into_input_idx(self, node: &Node) -> u32;
 }
 
 impl IntoOutputIdx for u32 {
     #[inline]
-    fn into_static_output_idx(self, _: &Node) -> u32 {
+    fn into_output_idx(self, _: &Node) -> u32 {
         self
     }
 }
 
 impl IntoInputIdx for u32 {
     #[inline]
-    fn into_static_input_idx(self, _: &Node) -> u32 {
+    fn into_input_idx(self, _: &Node) -> u32 {
         self
     }
 }
@@ -306,7 +306,7 @@ impl IntoInputIdx for u32 {
 impl IntoInputIdx for &str {
     #[track_caller]
     #[inline]
-    fn into_static_input_idx(self, node: &Node) -> u32 {
+    fn into_input_idx(self, node: &Node) -> u32 {
         let Some(idx) = node.graph().with_graph(|graph| {
             graph.digraph()[node.id()]
                 .input_spec()
@@ -322,7 +322,7 @@ impl IntoInputIdx for &str {
 impl IntoOutputIdx for &str {
     #[track_caller]
     #[inline]
-    fn into_static_output_idx(self, node: &Node) -> u32 {
+    fn into_output_idx(self, node: &Node) -> u32 {
         let Some(idx) = node.graph().with_graph(|graph| {
             graph.digraph()[node.id()]
                 .output_spec()
@@ -341,7 +341,7 @@ macro_rules! impl_binary_node_ops {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
             pub fn $name(&self, other: impl IntoNode) -> Node {
-                let other = other.into_static_node(self.graph());
+                let other = other.into_node(self.graph());
                 self.assert_single_output();
                 other.assert_single_output();
 
@@ -359,7 +359,7 @@ macro_rules! impl_binary_node_ops {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
             pub fn $name(&self, other: impl IntoNode) -> Node {
-                let other = other.into_static_node(self.graph());
+                let other = other.into_node(self.graph());
                 self.assert_single_output();
                 other.assert_single_output();
 
