@@ -1,4 +1,4 @@
-//! Contains the [`StaticGraphBuilder`] struct for constructing audio graphs.
+//! Contains the [`GraphBuilder`] struct for constructing audio graphs.
 
 use std::sync::{Arc, Mutex};
 
@@ -10,9 +10,7 @@ use crate::{
 
 use super::node_builder::Node;
 
-/// A graph builder that produces [`StaticNode`]s.
-///
-/// These nodes have no lifetime constraints and can be used in any context.
+/// A builder for constructing audio graphs.
 #[derive(Clone, Default)]
 pub struct GraphBuilder {
     graph: Arc<Mutex<Graph>>,

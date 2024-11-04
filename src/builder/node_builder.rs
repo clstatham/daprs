@@ -1,4 +1,4 @@
-//! Contains the [`StaticNode`] type and related types and traits.
+//! Contains the [`Node`] type and related types and traits.
 
 use petgraph::prelude::*;
 
@@ -6,7 +6,7 @@ use crate::{prelude::*, signal::SignalKind};
 
 use super::graph_builder::GraphBuilder;
 
-/// A node in a [`StaticGraphBuilder`].
+/// A node in a [`GraphBuilder`].
 ///
 /// This type has no lifetime parameter, so it can be used in any context.
 #[derive(Clone)]
