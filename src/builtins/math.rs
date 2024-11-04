@@ -1,14 +1,13 @@
 //! Mathematical processors.
 
-use serde::{Deserialize, Serialize};
-
 use crate::{prelude::*, processor::ProcessorError, signal::SignalBuffer};
 use std::ops::*;
 
 /// A processor that outputs a constant value.
 ///
 /// See also: [`GraphBuilder::constant`](crate::builder::graph_builder::GraphBuilder::constant).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConstantProc {
     value: f64,
 }
@@ -26,7 +25,7 @@ impl Default for ConstantProc {
     }
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for ConstantProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -77,11 +76,12 @@ impl StaticGraphBuilder {
 
 macro_rules! impl_binary_proc {
     ($name:ident, $method:ident, $doc:expr) => {
-        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+        #[derive(Clone, Debug, Default)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[doc = $doc]
         pub struct $name;
 
-        #[typetag::serde]
+        #[cfg_attr(feature = "serde", typetag::serde)]
         impl Process for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![
@@ -330,11 +330,12 @@ A processor that calculates the minimum of two signals.
 
 macro_rules! impl_unary_proc {
     ($name:ident, $method:ident, $doc:expr) => {
-        #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+        #[derive(Clone, Debug, Default)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[doc = $doc]
         pub struct $name;
 
-        #[typetag::serde]
+        #[cfg_attr(feature = "serde", typetag::serde)]
         impl Process for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![SignalSpec::unbounded("in", 0.0)]

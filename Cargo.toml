@@ -11,24 +11,21 @@ name = "raug"
 [features]
 default = []
 jack = ["cpal/jack"]
+serde = ["dep:serde", "petgraph/serde-1", "dep:typetag"]
 mem2g = []
 mem4g = []
 mem8g = []
-
-[workspace]
-members = ["raug-iced", "raug-lua"]
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }
 itertools = "0.13.0"
 log = "0.4.22"
-petgraph = { version = "0.6.5", features = ["serde-1"] }
+petgraph = { version = "0.6.5", features = [] }
 hound = "3.5"
 thiserror = "1.0"
 downcast-rs = "1.2.1"
-serde = { version = "1", features = ["derive"] }
-erased-serde = "0.4.5"
-typetag = "0.2.18"
+serde = { version = "1", features = ["derive"], optional = true }
+typetag = { version = "0.2", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11"

@@ -28,7 +28,6 @@ pub mod prelude {
     pub use crate::runtime::{Backend, Device, Runtime};
     pub use crate::signal::{Buffer, Sample, Signal, SignalBuffer};
     pub use std::time::Duration;
-    pub use typetag;
 }
 
 /// Returns a Vec of available backends.

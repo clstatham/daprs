@@ -1,13 +1,12 @@
 //! Contains the [`Node`] struct and related types and traits.
 
-use serde::Serialize;
-
 use super::graph_builder::GraphBuilder;
 use crate::builtins::*;
 use crate::graph::NodeIndex;
 
 /// A node in a [`GraphBuilder`].
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Node<'a> {
     pub(crate) graph_builder: &'a GraphBuilder,
     pub(crate) node_id: NodeIndex,

@@ -2,10 +2,9 @@
 
 use std::fmt::{Debug, Display};
 
-use serde::{Deserialize, Serialize};
-
 /// A message that can be sent between processors.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Message {
     /// A bang message ("do whatever it is you do").
     Bang,

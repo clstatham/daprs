@@ -2,8 +2,6 @@
 
 use std::sync::{Arc, Mutex};
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
     graph::{Graph, NodeIndex},
     prelude::Process,
@@ -96,7 +94,8 @@ impl StaticGraphBuilder {
     }
 }
 
-impl Serialize for StaticGraphBuilder {
+#[cfg(feature = "serde")]
+impl serde::Serialize for StaticGraphBuilder {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -105,7 +104,8 @@ impl Serialize for StaticGraphBuilder {
     }
 }
 
-impl<'de> Deserialize<'de> for StaticGraphBuilder {
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for StaticGraphBuilder {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

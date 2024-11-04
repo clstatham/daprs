@@ -1,7 +1,6 @@
 //! Contains the [`StaticNode`] type and related types and traits.
 
 use petgraph::prelude::*;
-use serde::Serialize;
 
 use crate::prelude::*;
 
@@ -10,7 +9,8 @@ use super::static_graph_builder::StaticGraphBuilder;
 /// A node in a [`StaticGraphBuilder`].
 ///
 /// This type has no lifetime parameter, so it can be used in any context.
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct StaticNode {
     pub(crate) graph: StaticGraphBuilder,
     pub(crate) node_id: NodeIndex,
@@ -129,7 +129,8 @@ impl StaticNode {
 }
 
 /// An input of a node in the graph.
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct StaticInput {
     pub(crate) node: StaticNode,
     pub(crate) input_index: u32,
@@ -154,7 +155,8 @@ impl StaticInput {
 }
 
 /// An output of a node in the graph.
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct StaticOutput {
     pub(crate) node: StaticNode,
     pub(crate) output_index: u32,

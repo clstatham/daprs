@@ -1,9 +1,8 @@
 //! Contains the definition of the `Edge` struct, which represents an edge in the graph.
 
-use serde::{Deserialize, Serialize};
-
 /// An edge in the graph, connecting an output of one node to an input of another.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Edge {
     /// The output of the source node that this edge connects.
     pub source_output: u32,

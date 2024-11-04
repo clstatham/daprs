@@ -1,7 +1,5 @@
 //! Utility processors.
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
     message::Message,
     prelude::{GraphBuilder, Node, Process, SignalSpec, StaticGraphBuilder, StaticNode},
@@ -12,7 +10,8 @@ use crate::{
 /// A processor that sends a message when triggered.
 ///
 /// See also: [message](crate::builder::graph_builder::GraphBuilder::message).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MessageProc(Message);
 
 impl MessageProc {
@@ -22,7 +21,7 @@ impl MessageProc {
     }
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for MessageProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("trig", Signal::new_message_none())]
@@ -98,7 +97,8 @@ impl StaticGraphBuilder {
 /// A processor that sends a constant message every sample.
 ///
 /// See also: [constant_message](crate::builder::graph_builder::GraphBuilder::constant_message).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConstantMessageProc(Message);
 
 impl ConstantMessageProc {
@@ -108,7 +108,7 @@ impl ConstantMessageProc {
     }
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for ConstantMessageProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -164,7 +164,8 @@ impl StaticGraphBuilder {
 /// A processor that prints a message when triggered.
 ///
 /// See also: [print](crate::builder::graph_builder::GraphBuilder::print).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrintProc {
     name: Option<String>,
     msg: Option<String>,
@@ -204,7 +205,7 @@ impl PrintProc {
     }
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for PrintProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -299,10 +300,11 @@ impl StaticGraphBuilder {
 /// A processor that converts a message to a sample.
 ///
 /// See also: [m2s](crate::builder::graph_builder::GraphBuilder::m2s).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MessageToSampleProc;
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for MessageToSampleProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("message", Signal::new_message_none())]
@@ -381,10 +383,11 @@ impl StaticGraphBuilder {
 /// A processor that converts a sample to an f64 message.
 ///
 /// See also: [s2m](crate::builder::graph_builder::GraphBuilder::s2m).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SampleToMessageProc;
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for SampleToMessageProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("sample", 0.0)]
@@ -455,12 +458,13 @@ impl StaticGraphBuilder {
 /// A processor that outputs the sample rate that the graph is running at.
 ///
 /// See also: [sample_rate](crate::builder::graph_builder::GraphBuilder::sample_rate).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SampleRateProc {
     sample_rate: f64,
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for SampleRateProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -527,12 +531,13 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
 /// A processor that smoothly ramps between values over time.
 ///
 /// See also: [smooth](crate::builder::graph_builder::GraphBuilder::smooth).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SmoothProc {
     current: f64,
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for SmoothProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -620,12 +625,13 @@ impl StaticGraphBuilder {
 /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
 ///
 /// See also: [changed](crate::builder::graph_builder::GraphBuilder::changed).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChangedProc {
     last: f64,
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for ChangedProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -713,15 +719,16 @@ impl StaticGraphBuilder {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 /// A processor that sends a bang message when a zero crossing is detected.
 ///
 /// See also: [zero_crossing](crate::builder::graph_builder::GraphBuilder::zero_crossing).
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ZeroCrossingProc {
     last: f64,
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for ZeroCrossingProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("in", 0.0)]

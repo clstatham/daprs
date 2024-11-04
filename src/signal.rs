@@ -9,12 +9,14 @@ use std::{
     path::Path,
 };
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::{message::Message, prelude::SignalSpec};
 
 /// A single 64-bit floating-point sample of signal data.
-#[derive(Default, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Default, Clone, Copy, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(transparent)]
 pub struct Sample(f64);
 
@@ -269,7 +271,8 @@ impl Display for Sample {
 /// An owning, fixed-length array of [`Sample`]s.
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
 /// It can also be [`collected`](std::iter::Iterator::collect) from an iterator of [`Sample`]s.
-#[derive(PartialEq, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Buffer<T> {
     buf: Box<[T]>,
 }
@@ -649,7 +652,8 @@ impl Into<Signal> for f64 {
 }
 
 /// A buffer that can contain either samples or messages.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SignalBuffer {
     /// A buffer of samples.
     Sample(Buffer<Sample>),

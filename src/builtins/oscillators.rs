@@ -1,13 +1,12 @@
 //! Oscillator processors.
 
-use serde::{Deserialize, Serialize};
-
 use crate::{add_to_builders, prelude::*};
 
 /// A free-running sine wave oscillator.
 ///
 /// See also: [`GraphBuilder::sine_osc`](crate::builder::graph_builder::GraphBuilder::sine_osc).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SineOscillator {
     // phase accumulator
     t: f64,
@@ -17,7 +16,7 @@ pub struct SineOscillator {
     sample_rate: f64,
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for SineOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -99,7 +98,8 @@ A free-running sine wave oscillator.
 /// A free-running sawtooth wave oscillator.
 ///
 /// See also: [`GraphBuilder::saw_osc`](crate::builder::graph_builder::GraphBuilder::saw_osc).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SawOscillator {
     // phase accumulator
     t: f64,
@@ -109,7 +109,7 @@ pub struct SawOscillator {
     sample_rate: f64,
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for SawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![

@@ -2,6 +2,7 @@
 
 use std::sync::Mutex;
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -13,7 +14,7 @@ use crate::{
 use super::node_builder::Node;
 
 /// A builder for constructing audio graphs.
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GraphBuilder {
     graph: Mutex<Graph>,
 }

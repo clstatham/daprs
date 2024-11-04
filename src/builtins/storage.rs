@@ -1,13 +1,12 @@
 //! Storage-related processors.
 
-use serde::{Deserialize, Serialize};
-
 use crate::prelude::*;
 
 /// A processor that reads a sample from a buffer.
 ///
 /// See also: [`GraphBuilder::buffer_reader`](crate::builder::graph_builder::GraphBuilder::buffer_reader).
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BufferReaderProc {
     buffer: SignalBuffer,
     sample_rate: f64,
@@ -25,7 +24,7 @@ impl BufferReaderProc {
     }
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for BufferReaderProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded(

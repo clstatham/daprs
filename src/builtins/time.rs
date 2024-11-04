@@ -1,7 +1,5 @@
 //! Time-related processors.
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
     message::Message,
     prelude::{GraphBuilder, Node, Process, SignalSpec, StaticGraphBuilder, StaticNode},
@@ -12,7 +10,8 @@ use crate::{
 /// A metronome processor.
 ///
 /// See also: [`GraphBuilder::metro`](crate::builder::graph_builder::GraphBuilder::metro).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MetroProc {
     period: f64,
     last_time: f64,
@@ -48,7 +47,7 @@ impl MetroProc {
     }
 }
 
-#[typetag::serde]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for MetroProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("period", Signal::new_message_none())]
