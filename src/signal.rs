@@ -635,6 +635,14 @@ impl Signal {
     pub const fn is_message(&self) -> bool {
         matches!(self, Self::Message(_))
     }
+
+    /// Returns the type of signal this is.
+    pub const fn kind(&self) -> SignalKind {
+        match self {
+            Self::Sample(_) => SignalKind::Sample,
+            Self::Message(_) => SignalKind::Message,
+        }
+    }
 }
 
 #[allow(clippy::from_over_into)]
@@ -649,6 +657,15 @@ impl Into<Signal> for f64 {
     fn into(self) -> Signal {
         Signal::Sample(Sample(self))
     }
+}
+
+/// A signal kind, which can be either a sample or a message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SignalKind {
+    /// A sample signal.
+    Sample,
+    /// A message signal.
+    Message,
 }
 
 /// A buffer that can contain either samples or messages.

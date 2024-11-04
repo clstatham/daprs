@@ -1,5 +1,9 @@
 //! Utility processors.
 
+use std::sync::{Arc, Mutex};
+
+use crossbeam_channel::{Receiver, Sender};
+
 use crate::{
     message::Message,
     prelude::{GraphBuilder, Node, Process, SignalSpec, StaticGraphBuilder, StaticNode},
@@ -802,5 +806,148 @@ impl StaticGraphBuilder {
     /// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
     pub fn zero_crossing(&self) -> StaticNode {
         self.add_processor(ZeroCrossingProc::default())
+    }
+}
+
+/// A sender for a `Param`.
+#[derive(Clone, Debug)]
+pub struct ParamTx {
+    tx: Sender<Message>,
+}
+
+impl ParamTx {
+    pub(crate) fn new(tx: Sender<Message>) -> Self {
+        Self { tx }
+    }
+
+    /// Sends a message to the `Param`.
+    pub fn send(&self, message: Message) {
+        self.tx.try_send(message).unwrap();
+    }
+}
+
+/// A receiver for a `Param`.
+#[derive(Clone, Debug)]
+pub struct ParamRx {
+    rx: Receiver<Message>,
+    last: Arc<Mutex<Option<Message>>>,
+}
+
+impl ParamRx {
+    pub(crate) fn new(rx: Receiver<Message>) -> Self {
+        Self {
+            rx,
+            last: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Receives a message, returning the last message if there are no new messages.
+    pub fn recv(&mut self) -> Option<Message> {
+        let mut last = self.last.try_lock().ok()?;
+        if let Ok(msg) = self.rx.try_recv() {
+            *last = Some(msg.clone());
+            Some(msg)
+        } else {
+            last.clone()
+        }
+    }
+}
+
+fn param_channels() -> (ParamTx, ParamRx) {
+    let (tx, rx) = crossbeam_channel::unbounded();
+    (ParamTx::new(tx), ParamRx::new(rx))
+}
+
+#[cfg(feature = "serde")]
+fn deserialize_param_channels<'de, D>(_deserializer: D) -> Result<(ParamTx, ParamRx), D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let (tx, rx) = param_channels();
+    Ok((tx, rx))
+}
+
+/// A processor that can be used to send/receive messages from outside the graph.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Param {
+    #[cfg_attr(
+        feature = "serde",
+        serde(skip_serializing, deserialize_with = "deserialize_param_channels")
+    )]
+    channels: (ParamTx, ParamRx),
+}
+
+impl Param {
+    /// Creates a new `Param`.
+    pub fn new() -> Self {
+        Self {
+            channels: param_channels(),
+        }
+    }
+
+    /// Returns the sender for this `Param`.
+    pub fn tx(&self) -> &ParamTx {
+        &self.channels.0
+    }
+
+    /// Returns the receiver for this `Param`.
+    pub fn rx_mut(&mut self) -> &mut ParamRx {
+        &mut self.channels.1
+    }
+
+    /// Sets the `Param`'s value.
+    pub fn set(&self, message: impl Into<Message>) {
+        self.tx().send(message.into());
+    }
+
+    /// Gets the `Param`'s value.
+    pub fn get(&mut self) -> Option<Message> {
+        self.rx_mut().recv()
+    }
+}
+
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Process for Param {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("set", Signal::new_message_none())]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("get", Signal::new_message_none())]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let set = inputs[0]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let get = outputs[0]
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (set, get) in itertools::izip!(set, get) {
+            if let Some(set) = set {
+                self.tx().send(set.clone());
+            }
+
+            if let Some(msg) = self.rx_mut().recv() {
+                *get = Some(msg);
+            } else {
+                *get = None;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Default for Param {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -170,3 +170,33 @@ impl Message {
         }
     }
 }
+
+impl From<i64> for Message {
+    fn from(i: i64) -> Self {
+        Message::Int(i)
+    }
+}
+
+impl From<f64> for Message {
+    fn from(x: f64) -> Self {
+        Message::Float(x)
+    }
+}
+
+impl From<&str> for Message {
+    fn from(s: &str) -> Self {
+        Message::String(s.to_string())
+    }
+}
+
+impl From<String> for Message {
+    fn from(s: String) -> Self {
+        Message::String(s)
+    }
+}
+
+impl From<Vec<Message>> for Message {
+    fn from(list: Vec<Message>) -> Self {
+        Message::List(list)
+    }
+}

@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use thiserror::Error;
 
-use crate::signal::{Signal, SignalBuffer};
+use crate::signal::{Signal, SignalBuffer, SignalKind};
 
 /// An error that can occur when processing signals.
 #[derive(Debug, Clone, Error)]
@@ -79,6 +79,11 @@ impl SignalSpec {
             max: None,
             default_value: default_value.into(),
         }
+    }
+
+    /// Returns the type of signal this [`SignalSpec`] represents.
+    pub fn kind(&self) -> SignalKind {
+        self.default_value.kind()
     }
 }
 

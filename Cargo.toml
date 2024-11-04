@@ -23,6 +23,7 @@ thiserror = "1.0"
 downcast-rs = "1.2.1"
 serde = { version = "1", features = ["derive"], optional = true }
 typetag = { version = "0.2", optional = true }
+crossbeam-channel = "0.5"
 
 [dev-dependencies]
 env_logger = "0.11"

@@ -412,6 +412,7 @@ impl Runtime {
 }
 
 /// A handle to a running runtime. Can be used to stop the runtime.
+#[must_use = "The runtime handle must be kept alive for the runtime to continue running"]
 pub struct RuntimeHandle {
     kill_tx: mpsc::Sender<()>,
 }
@@ -420,5 +421,11 @@ impl RuntimeHandle {
     /// Stops the running runtime.
     pub fn stop(&self) {
         self.kill_tx.send(()).ok();
+    }
+}
+
+impl Drop for RuntimeHandle {
+    fn drop(&mut self) {
+        self.stop();
     }
 }

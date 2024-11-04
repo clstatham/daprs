@@ -3,6 +3,7 @@
 use super::graph_builder::GraphBuilder;
 use crate::builtins::*;
 use crate::graph::NodeIndex;
+use crate::signal::SignalKind;
 
 /// A node in a [`GraphBuilder`].
 #[derive(Clone, Copy)]
@@ -42,6 +43,22 @@ impl<'a> Node<'a> {
     pub fn num_outputs(self) -> usize {
         self.graph()
             .with_graph(|graph| graph.digraph()[self.id()].outputs().len())
+    }
+
+    /// Returns the type of signal that the node expects at the given input.
+    #[inline]
+    pub fn input_kind(self, index: impl IntoInputIdx) -> SignalKind {
+        let index = index.into_input_idx(self);
+        self.graph()
+            .with_graph(|graph| graph.digraph()[self.id()].input_spec()[index as usize].kind())
+    }
+
+    /// Returns the type of signal that the node produces at the given output.
+    #[inline]
+    pub fn output_kind(self, index: impl IntoOutputIdx) -> SignalKind {
+        let index = index.into_output_idx(self);
+        self.graph()
+            .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].kind())
     }
 
     /// Asserts that the node has a single output.
@@ -98,6 +115,7 @@ impl<'a> Node<'a> {
     /// Returns the input of the node with the given index.
     #[inline]
     pub fn input(self, index: impl IntoInputIdx) -> Input<'a> {
+        let index = index.into_input_idx(self);
         Input {
             node: self,
             input_index: index.into_input_idx(self),
@@ -147,6 +165,7 @@ impl<'a> Node<'a> {
 }
 
 /// An input of a node.
+#[derive(Clone, Copy)]
 pub struct Input<'a> {
     pub(crate) node: Node<'a>,
     pub(crate) input_index: u32,
@@ -173,6 +192,12 @@ impl<'a> Input<'a> {
             .connect_input(output.node, output.output_index, self.input_index)
     }
 
+    /// Returns the kind of signal that the input expects.
+    #[inline]
+    pub fn kind(self) -> SignalKind {
+        self.node.input_kind(self.input_index)
+    }
+
     /// Sets the input to the given value.
     #[inline]
     #[track_caller]
@@ -181,9 +206,28 @@ impl<'a> Input<'a> {
         value.assert_single_output();
         self.node.connect_input(value, 0, self.input_index)
     }
+
+    /// Creates a [`Param`] node and connects it to the input. The [`Param`] node can be used to control the input value remotely at runtime.
+    #[inline]
+    pub fn param(self) -> Param {
+        let param = Param::new();
+        let param_node = self.node.graph().add_processor(param.clone());
+
+        match self.kind() {
+            SignalKind::Message => {
+                param_node.output(0).connect(self);
+            }
+            SignalKind::Sample => {
+                param_node.m2s().output(0).connect(self);
+            }
+        }
+
+        param
+    }
 }
 
 /// An output of a node.
+#[derive(Clone, Copy)]
 pub struct Output<'a> {
     pub(crate) node: Node<'a>,
     pub(crate) output_index: u32,
