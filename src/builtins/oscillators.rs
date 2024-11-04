@@ -2,6 +2,88 @@
 
 use crate::{add_to_builders, prelude::*};
 
+/// A phase accumulator.
+///
+/// See also: [`GraphBuilder::phase_accum`](crate::builder::graph_builder::GraphBuilder::phase_accum).
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PhaseAccumulator {
+    // phase accumulator
+    t: f64,
+    // phase increment per sample
+    t_step: f64,
+}
+
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Process for PhaseAccumulator {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::unbounded("increment", 0.0),
+            SignalSpec::unbounded("reset", Signal::new_message_none()),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", 0.0)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let increment = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let reset = inputs[1]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(1))?;
+
+        let out = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (out, increment, reset) in itertools::izip!(out, increment, reset) {
+            if reset.is_some() {
+                self.t = 0.0;
+            }
+
+            // output the phase accumulator value
+            **out = self.t;
+
+            // increment the phase accumulator
+            self.t_step = **increment;
+            self.t += self.t_step;
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A phase accumulator.
+    ///
+    /// The phase accumulator is a simple processor that generates a phase signal that increments linearly over time.
+    /// It can be used to drive oscillators, or to generate control signals.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `increment` | `Sample` | `0.0` | The phase increment per sample. |
+    /// | `1` | `reset` | `Message(Bang)` |  | A message to reset the phase accumulator. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Sample` | The output phase signal. |
+    pub fn phase_accum(&self) -> Node {
+        self.add_processor(PhaseAccumulator::default())
+    }
+}
+
 /// A free-running sine wave oscillator.
 ///
 /// See also: [`GraphBuilder::sine_osc`](crate::builder::graph_builder::GraphBuilder::sine_osc).
