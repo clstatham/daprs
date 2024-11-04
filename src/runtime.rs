@@ -413,6 +413,7 @@ impl Runtime {
 
 /// A handle to a running runtime. Can be used to stop the runtime.
 #[must_use = "The runtime handle must be kept alive for the runtime to continue running"]
+#[derive(Clone)]
 pub struct RuntimeHandle {
     kill_tx: mpsc::Sender<()>,
 }
