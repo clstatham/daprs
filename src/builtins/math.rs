@@ -104,7 +104,12 @@ macro_rules! impl_binary_proc {
             }
         }
 
-        $crate::add_to_builders!($method, $name, $doc);
+        impl GraphBuilder {
+            #[doc = $doc]
+            pub fn $method(&self) -> Node {
+                self.add_processor($name)
+            }
+        }
     };
 }
 
@@ -352,7 +357,12 @@ macro_rules! impl_unary_proc {
             }
         }
 
-        $crate::add_to_builders!($method, $name, $doc);
+        impl GraphBuilder {
+            #[doc = $doc]
+            pub fn $method(&self) -> Node {
+                self.add_processor($name)
+            }
+        }
     };
 }
 

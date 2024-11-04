@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex};
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::{
-    add_to_builders,
     message::Message,
     prelude::{GraphBuilder, Node, Process, SignalSpec},
     processor::ProcessorError,
@@ -293,27 +292,24 @@ impl Process for MessageToSampleProc {
     }
 }
 
-add_to_builders!(
-    to_audio,
-    MessageToSampleProc,
-    r#"
-A processor that converts a message to a sample.
-
-Messages that are not castable to a float are ignor
-
-# Inputs
-
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `message` | `Message` | | The message to co
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `sample` | `Sample` | The sample value. |
-"#
-);
+impl GraphBuilder {
+    /// A processor that converts a message to a sample.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `message` | `Message` | | The message to convert. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `sample` | `Sample` | The sample value. |
+    pub fn to_audio(&self) -> Node {
+        self.add_processor(MessageToSampleProc)
+    }
+}
 
 /// A processor that converts a sample to an f64 message.
 ///
@@ -352,25 +348,24 @@ impl Process for SampleToMessageProc {
     }
 }
 
-add_to_builders!(
-    to_message,
-    SampleToMessageProc,
-    r#"
-A processor that converts a sample to an f64 message.
-
-# Inputs
-
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `sample` | `Sample` | | The sample to convert. |
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `message` | `Message(f64)` | The message value. |
-"#
-);
+impl GraphBuilder {
+    /// A processor that converts a sample to a float message.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `sample` | `Sample` | | The sample to convert. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `message` | `Message(Float)` | The message value. |
+    pub fn to_message(&self) -> Node {
+        self.add_processor(SampleToMessageProc)
+    }
+}
 
 /// A processor that outputs the sample rate that the graph is running at.
 ///
@@ -410,21 +405,18 @@ impl Process for SampleRateProc {
     }
 }
 
-add_to_builders!(
-    sample_rate,
-    SampleRateProc,
-    r#"
-A processor that outputs the sample rate that the graph is running at.
-
-This processor outputs `Sample`s for convenience in connecting to other 
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `sample_rate` | `Sample` | The sample rate of the graph. |
-"#
-);
+impl GraphBuilder {
+    /// A processor that outputs the sample rate that the graph is running at.
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `sample_rate` | `Sample` | The sample rate. |
+    pub fn sample_rate(&self) -> Node {
+        self.add_processor(SampleRateProc::default())
+    }
+}
 
 #[inline(always)]
 fn lerp(a: f64, b: f64, t: f64) -> f64 {
@@ -485,26 +477,25 @@ impl Process for SmoothProc {
     }
 }
 
-add_to_builders!(
-    smooth,
-    SmoothProc,
-    r#"
-A processor that smoothly ramps between values over time.
-
-# Inputs
-
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `target` | `Sample` | 0.0 | The target value. |
-| `1` | `factor` | `Sample` | 1.0  | The factor of smoothing (0 <= factor <= 1). |
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The current value of the ramp. |
-"#
-);
+impl GraphBuilder {
+    /// A processor that smoothly interpolates between values over time.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `target` | `Sample` | 0.0 | The target value. |
+    /// | `1` | `factor` | `Sample` | 1.0  | The factor of smoothing (0 <= factor <= 1). |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Sample` | The current value of the interpolation. |
+    pub fn smooth(&self) -> Node {
+        self.add_processor(SmoothProc::default())
+    }
+}
 
 /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
 ///
@@ -563,22 +554,25 @@ impl Process for ChangedProc {
     }
 }
 
-add_to_builders!(
-    changed,
-    ChangedProc,
-    r#"
-A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
-# Inputs
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | | The input signal to detect changes on. |
-| `1` | `threshold` | `Sample` | | The threshold for a change to be detected. |
-# Outputs
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
-"#
-);
+impl GraphBuilder {
+    /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `in` | `Sample` | | The input signal to detect changes on. |
+    /// | `1` | `threshold` | `Sample` | | The threshold for a change to be detected. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
+    pub fn changed(&self) -> Node {
+        self.add_processor(ChangedProc::default())
+    }
+}
 
 /// A processor that sends a bang message when a zero crossing is detected.
 ///
@@ -628,21 +622,24 @@ impl Process for ZeroCrossingProc {
     }
 }
 
-add_to_builders!(
-    zero_crossing,
-    ZeroCrossingProc,
-    r#"
-A processor that sends a bang message when a zero crossing is detected.
-# Inputs
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | | The input signal to detect zero crossings on. |
-# Outputs
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
-"#
-);
+impl GraphBuilder {
+    /// A processor that sends a bang message when a zero crossing is detected.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `in` | `Sample` | | The input signal to detect zero crossings on. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
+    pub fn zero_crossing(&self) -> Node {
+        self.add_processor(ZeroCrossingProc::default())
+    }
+}
 
 /// A sender for a `Param`.
 #[derive(Clone, Debug)]
