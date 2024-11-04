@@ -122,8 +122,11 @@ impl Node {
     /// Panics if the node has more than one output.
     #[inline]
     #[track_caller]
-    pub fn m2s(&self) -> Node {
+    pub fn to_audio(&self) -> Node {
         self.assert_single_output();
+        if self.output_kind(0) == SignalKind::Sample {
+            return self.clone();
+        }
         let proc = self.graph.add_processor(MessageToSampleProc);
         proc.connect_input(self, 0, 0);
         proc
@@ -136,8 +139,11 @@ impl Node {
     /// Panics if the node has more than one output.
     #[inline]
     #[track_caller]
-    pub fn s2m(&self) -> Node {
+    pub fn to_message(&self) -> Node {
         self.assert_single_output();
+        if self.output_kind(0) == SignalKind::Message {
+            return self.clone();
+        }
         let proc = self.graph.add_processor(SampleToMessageProc);
         proc.connect_input(self, 0, 0);
         proc
@@ -186,6 +192,7 @@ impl Input {
     #[inline]
     #[track_caller]
     pub fn connect(&self, output: &Output) {
+        let output = output.to_kind(self.kind());
         self.node
             .connect_input(&output.node, output.output_index, self.input_index);
     }
@@ -197,7 +204,7 @@ impl Input {
         let proc = self.node.graph().add_processor(param.clone());
         match self.kind() {
             SignalKind::Message => proc.output(0).connect(self),
-            SignalKind::Sample => proc.m2s().output(0).connect(self),
+            SignalKind::Sample => proc.to_audio().output(0).connect(self),
         }
         param
     }
@@ -216,8 +223,42 @@ impl Output {
     #[inline]
     #[track_caller]
     pub fn connect(&self, input: &Input) {
-        self.node
+        let this = self.to_kind(input.kind());
+        this.node
             .connect_output(self.output_index, &input.node, input.input_index);
+    }
+
+    #[inline]
+    pub fn kind(&self) -> SignalKind {
+        self.node.output_kind(self.output_index)
+    }
+
+    #[inline]
+    pub fn to_audio(&self) -> Output {
+        if self.kind() == SignalKind::Sample {
+            return self.clone();
+        }
+        let proc = self.node.graph().add_processor(MessageToSampleProc);
+        proc.input(0).connect(self);
+        proc.output(0)
+    }
+
+    #[inline]
+    pub fn to_message(&self) -> Output {
+        if self.kind() == SignalKind::Message {
+            return self.clone();
+        }
+        let proc = self.node.graph().add_processor(SampleToMessageProc);
+        proc.input(0).connect(self);
+        proc.output(0)
+    }
+
+    #[inline]
+    pub fn to_kind(&self, kind: SignalKind) -> Output {
+        match kind {
+            SignalKind::Message => self.to_message(),
+            SignalKind::Sample => self.to_audio(),
+        }
     }
 }
 
@@ -291,14 +332,19 @@ pub trait IntoInputIdx: sealed::Sealed {
 
 impl IntoOutputIdx for u32 {
     #[inline]
-    fn into_output_idx(self, _: &Node) -> u32 {
+    fn into_output_idx(self, node: &Node) -> u32 {
+        assert!(
+            self < node.num_outputs() as u32,
+            "output index out of bounds"
+        );
         self
     }
 }
 
 impl IntoInputIdx for u32 {
     #[inline]
-    fn into_input_idx(self, _: &Node) -> u32 {
+    fn into_input_idx(self, node: &Node) -> u32 {
+        assert!(self < node.num_inputs() as u32, "input index out of bounds");
         self
     }
 }
@@ -391,6 +437,22 @@ macro_rules! impl_binary_node_ops {
 
             fn $name(self, other: T) -> Node {
                 Node::$name(self, other)
+            }
+        }
+
+        impl std::ops::$std_op<Node> for f64 {
+            type Output = Node;
+
+            fn $name(self, other: Node) -> Node {
+                Node::$name(&other, self)
+            }
+        }
+
+        impl std::ops::$std_op<&Node> for f64 {
+            type Output = Node;
+
+            fn $name(self, other: &Node) -> Node {
+                Node::$name(other, self)
             }
         }
     };

@@ -17,9 +17,6 @@ fn main() {
     // make the sine only output positive values
     let sine = sine.abs();
 
-    // convert the sine oscillator to output a message
-    let sine = sine.s2m();
-
     // connect the sine oscillator to the metronome
     // sine.connect_output(0, bang, "period");
     sine.output(0).connect(&bang.input("period"));

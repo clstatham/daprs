@@ -18,7 +18,7 @@ fn main() {
     sine.input("frequency").set(440.0);
 
     // set the amplitude of the sine oscillator
-    let sine = &sine * 0.2;
+    let sine = sine * 0.2;
 
     // connect the sine oscillator to the outputs
     sine.output(0).connect(&out1.input(0));

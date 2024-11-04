@@ -254,7 +254,7 @@ impl GraphBuilder {
 
 /// A processor that converts a message to a sample.
 ///
-/// See also: [m2s](crate::builder::graph_builder::GraphBuilder::m2s).
+/// See also: [to_audio](crate::builder::graph_builder::GraphBuilder::to_audio).
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MessageToSampleProc;
@@ -294,7 +294,7 @@ impl Process for MessageToSampleProc {
 }
 
 add_to_builders!(
-    m2s,
+    to_audio,
     MessageToSampleProc,
     r#"
 A processor that converts a message to a sample.
@@ -317,7 +317,7 @@ Messages that are not castable to a float are ignor
 
 /// A processor that converts a sample to an f64 message.
 ///
-/// See also: [s2m](crate::builder::graph_builder::GraphBuilder::s2m).
+/// See also: [to_message](crate::builder::graph_builder::GraphBuilder::to_message).
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SampleToMessageProc;
@@ -353,7 +353,7 @@ impl Process for SampleToMessageProc {
 }
 
 add_to_builders!(
-    s2m,
+    to_message,
     SampleToMessageProc,
     r#"
 A processor that converts a sample to an f64 message.
