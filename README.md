@@ -24,7 +24,7 @@ See [examples/processor.rs](examples/processor.rs) for a simple example of writi
 
 See [examples/demo.rs](examples/demo.rs) for a simple example of building a signal flow graph.
 
-## Related crates
+## Related Projects
 
 - Lua bindings: [raug-lua](https://github.com/clstatham/raug-lua)
 - GUI using [iced](https://github.com/iced-rs/iced): [raug-iced](https://github.com/clstatham/raug-iced)
