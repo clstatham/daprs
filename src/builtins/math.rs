@@ -7,7 +7,7 @@ use std::ops::*;
 ///
 /// See also: [`GraphBuilder::constant`](crate::builder::graph_builder::GraphBuilder::constant).
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct ConstantProc {
     value: f64,
 }
@@ -25,7 +25,7 @@ impl Default for ConstantProc {
     }
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
+
 impl Process for ConstantProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -64,11 +64,10 @@ impl GraphBuilder {
 macro_rules! impl_binary_proc {
     ($name:ident, $method:ident, $doc:expr) => {
         #[derive(Clone, Debug, Default)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[doc = $doc]
         pub struct $name;
 
-        #[cfg_attr(feature = "serde", typetag::serde)]
+        
         impl Process for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![
@@ -323,11 +322,10 @@ A processor that calculates the minimum of two signals.
 macro_rules! impl_unary_proc {
     ($name:ident, $method:ident, $doc:expr) => {
         #[derive(Clone, Debug, Default)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[doc = $doc]
         pub struct $name;
 
-        #[cfg_attr(feature = "serde", typetag::serde)]
+        
         impl Process for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![SignalSpec::unbounded("in", 0.0)]

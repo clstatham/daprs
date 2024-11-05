@@ -6,7 +6,7 @@ use crate::prelude::*;
 ///
 /// See also: [`GraphBuilder::buffer_reader`](crate::builder::graph_builder::GraphBuilder::buffer_reader).
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct BufferReaderProc {
     buffer: SignalBuffer,
     sample_rate: f64,
@@ -24,7 +24,7 @@ impl BufferReaderProc {
     }
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
+
 impl Process for BufferReaderProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded(

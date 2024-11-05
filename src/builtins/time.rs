@@ -11,7 +11,7 @@ use crate::{
 ///
 /// See also: [`GraphBuilder::metro`](crate::builder::graph_builder::GraphBuilder::metro).
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct MetroProc {
     period: f64,
     last_time: f64,
@@ -53,7 +53,6 @@ impl Default for MetroProc {
     }
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for MetroProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("period", Signal::new_message_none())]

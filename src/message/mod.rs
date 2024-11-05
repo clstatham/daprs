@@ -4,7 +4,7 @@ use std::fmt::{Debug, Display};
 
 /// A message that can be sent between processors.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum Message {
     /// A bang message ("do whatever it is you do").
     Bang,

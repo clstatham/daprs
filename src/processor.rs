@@ -90,7 +90,6 @@ impl SignalSpec {
 /// A trait for processing audio or control signals.
 ///
 /// This is usually used as part of a [`Processor`], operating on its internal input/output buffers.
-#[cfg_attr(feature = "serde", typetag::serde(tag = "type"))]
 pub trait Process: 'static + Send + Sync + ProcessClone {
     /// Returns the name of this [`Process`].
     fn name(&self) -> &str {
@@ -190,7 +189,7 @@ impl Debug for dyn Process {
 ///
 /// This is a wrapper around a [`Box<dyn Process>`](Process) that provides input and output buffers for the processor to use.
 #[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct Processor {
     processor: Box<dyn Process>,
     inputs: Box<[SignalBuffer]>,

@@ -89,7 +89,7 @@ pub type GraphConstructionResult<T> = Result<T, GraphConstructionError>;
 /// This struct is meant for the actual management of processing the audio graph, or for building custom graphs using a more direct API.
 /// See also the [`builder`](crate::builder) module, which provides a more ergonomic way to construct graphs.
 #[derive(Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct Graph {
     digraph: DiGraph,
 

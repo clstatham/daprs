@@ -93,7 +93,7 @@ pub enum Device {
 ///
 /// In offline mode, the runtime will render audio samples as fast as possible and return the rendered output channels.
 #[derive(Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct Runtime {
     graph: Graph,
 }

@@ -106,24 +106,3 @@ impl GraphBuilder {
         self.with_graph(|graph| graph.write_dot(writer)).unwrap();
     }
 }
-
-#[cfg(feature = "serde")]
-impl serde::Serialize for GraphBuilder {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.graph.lock().unwrap().serialize(serializer)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for GraphBuilder {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let graph = Graph::deserialize(deserializer)?;
-        Ok(Self::from_graph(graph))
-    }
-}

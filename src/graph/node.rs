@@ -9,7 +9,7 @@ use crate::{
 
 /// A node in the audio graph.
 #[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub enum GraphNode {
     /// A passthrough node that simply forwards its input to its output.
     Passthrough(SignalBuffer),

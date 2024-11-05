@@ -15,7 +15,6 @@ use crate::{
 ///
 /// See also: [message](crate::builder::graph_builder::GraphBuilder::message).
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MessageProc(Message);
 
 impl MessageProc {
@@ -25,7 +24,6 @@ impl MessageProc {
     }
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for MessageProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("trig", Signal::new_message_none())]
@@ -83,7 +81,6 @@ impl GraphBuilder {
 ///
 /// See also: [constant_message](crate::builder::graph_builder::GraphBuilder::constant_message).
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConstantMessageProc(Message);
 
 impl ConstantMessageProc {
@@ -93,7 +90,6 @@ impl ConstantMessageProc {
     }
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for ConstantMessageProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -137,7 +133,7 @@ impl GraphBuilder {
 ///
 /// See also: [print](crate::builder::graph_builder::GraphBuilder::print).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct PrintProc {
     name: Option<String>,
     msg: Option<String>,
@@ -177,7 +173,6 @@ impl PrintProc {
     }
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for PrintProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -255,10 +250,9 @@ impl GraphBuilder {
 ///
 /// See also: [to_audio](crate::builder::graph_builder::GraphBuilder::to_audio).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct MessageToSampleProc;
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for MessageToSampleProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("message", Signal::new_message_none())]
@@ -315,10 +309,9 @@ impl GraphBuilder {
 ///
 /// See also: [to_message](crate::builder::graph_builder::GraphBuilder::to_message).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct SampleToMessageProc;
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for SampleToMessageProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("sample", 0.0)]
@@ -371,12 +364,11 @@ impl GraphBuilder {
 ///
 /// See also: [sample_rate](crate::builder::graph_builder::GraphBuilder::sample_rate).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct SampleRateProc {
     sample_rate: f64,
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for SampleRateProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -427,12 +419,11 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
 ///
 /// See also: [smooth](crate::builder::graph_builder::GraphBuilder::smooth).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct SmoothProc {
     current: f64,
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for SmoothProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -501,12 +492,11 @@ impl GraphBuilder {
 ///
 /// See also: [changed](crate::builder::graph_builder::GraphBuilder::changed).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct ChangedProc {
     last: f64,
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for ChangedProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -578,12 +568,11 @@ impl GraphBuilder {
 ///
 /// See also: [zero_crossing](crate::builder::graph_builder::GraphBuilder::zero_crossing).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct ZeroCrossingProc {
     last: f64,
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for ZeroCrossingProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("in", 0.0)]
@@ -690,15 +679,6 @@ fn param_channels() -> (ParamTx, ParamRx) {
     (ParamTx::new(tx), ParamRx::new(rx))
 }
 
-#[cfg(feature = "serde")]
-fn deserialize_param_channels<'de, D>(_deserializer: D) -> Result<(ParamTx, ParamRx), D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let (tx, rx) = param_channels();
-    Ok((tx, rx))
-}
-
 /// A processor that can be used to send/receive messages from outside the graph.
 ///
 /// # Inputs
@@ -713,13 +693,9 @@ where
 /// | --- | --- | --- | --- |
 /// | `0` | `get` | `Message` | The current value of the parameter. |
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Param {
-    #[cfg_attr(
-        feature = "serde",
-        serde(skip_serializing, deserialize_with = "deserialize_param_channels")
-    )]
     channels: (ParamTx, ParamRx),
+    value: Arc<Mutex<Option<Message>>>,
 }
 
 impl Param {
@@ -727,6 +703,7 @@ impl Param {
     pub fn new() -> Self {
         Self {
             channels: param_channels(),
+            value: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -742,16 +719,20 @@ impl Param {
 
     /// Sets the `Param`'s value.
     pub fn set(&self, message: impl Into<Message>) {
-        self.tx().send(message.into());
+        let message = message.into();
+        *self.value.try_lock().unwrap() = Some(message.clone());
+        self.tx().send(message);
     }
 
     /// Gets the `Param`'s value.
     pub fn get(&mut self) -> Option<Message> {
-        self.rx_mut().recv()
+        let message = self.rx_mut().recv();
+        let mut value = self.value.try_lock().unwrap();
+        *value = message.clone();
+        value.clone()
     }
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for Param {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("set", Signal::new_message_none())]
@@ -779,7 +760,7 @@ impl Process for Param {
                 self.tx().send(set.clone());
             }
 
-            if let Some(msg) = self.rx_mut().recv() {
+            if let Some(msg) = self.get() {
                 *get = Some(msg);
             } else {
                 *get = None;
@@ -819,7 +800,7 @@ impl GraphBuilder {
 ///
 /// See also: [select](crate::builder::graph_builder::GraphBuilder::select).
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct Select {
     num_outputs: usize,
     last_index: i64,
@@ -841,7 +822,6 @@ impl Default for Select {
     }
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for Select {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -919,7 +899,7 @@ impl GraphBuilder {
 ///
 /// See also: [merge](crate::builder::graph_builder::GraphBuilder::merge).
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct Merge {
     num_inputs: usize,
 }
@@ -937,7 +917,6 @@ impl Default for Merge {
     }
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for Merge {
     fn input_spec(&self) -> Vec<SignalSpec> {
         (0..self.num_inputs)
@@ -1003,12 +982,11 @@ impl GraphBuilder {
 ///
 /// See also: [counter](crate::builder::graph_builder::GraphBuilder::counter).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct CounterProc {
     count: i64,
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
 impl Process for CounterProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![

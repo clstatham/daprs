@@ -6,7 +6,7 @@ use crate::prelude::*;
 ///
 /// See also: [`GraphBuilder::phase_accum`](crate::builder::graph_builder::GraphBuilder::phase_accum).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct PhaseAccumulator {
     // phase accumulator
     t: f64,
@@ -14,7 +14,7 @@ pub struct PhaseAccumulator {
     t_step: f64,
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
+
 impl Process for PhaseAccumulator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -88,7 +88,7 @@ impl GraphBuilder {
 ///
 /// See also: [`GraphBuilder::sine_osc`](crate::builder::graph_builder::GraphBuilder::sine_osc).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct SineOscillator {
     // phase accumulator
     t: f64,
@@ -98,7 +98,7 @@ pub struct SineOscillator {
     sample_rate: f64,
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
+
 impl Process for SineOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -180,7 +180,7 @@ impl GraphBuilder {
 ///
 /// See also: [`GraphBuilder::saw_osc`](crate::builder::graph_builder::GraphBuilder::saw_osc).
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct SawOscillator {
     // phase accumulator
     t: f64,
@@ -190,7 +190,7 @@ pub struct SawOscillator {
     sample_rate: f64,
 }
 
-#[cfg_attr(feature = "serde", typetag::serde)]
+
 impl Process for SawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![

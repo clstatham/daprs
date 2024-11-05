@@ -10,7 +10,6 @@ use super::graph_builder::GraphBuilder;
 ///
 /// This type has no lifetime parameter, so it can be used in any context.
 #[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Node {
     pub(crate) graph: GraphBuilder,
     pub(crate) node_id: NodeIndex,
@@ -167,7 +166,6 @@ impl Node {
 
 /// An input of a node in the graph.
 #[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Input {
     pub(crate) node: Node,
     pub(crate) input_index: u32,
@@ -225,7 +223,6 @@ impl Input {
 
 /// An output of a node in the graph.
 #[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Output {
     pub(crate) node: Node,
     pub(crate) output_index: u32,

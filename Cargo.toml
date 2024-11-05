@@ -11,7 +11,7 @@ name = "raug"
 [features]
 default = []
 jack = ["cpal/jack"]
-serde = ["dep:serde", "petgraph/serde-1", "dep:typetag"]
+# serde = ["dep:serde", "petgraph/serde-1", "dep:typetag"]
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }
@@ -21,8 +21,8 @@ petgraph = { version = "0.6.5", features = [] }
 hound = "3.5"
 thiserror = "1.0"
 downcast-rs = "1.2.1"
-serde = { version = "1", features = ["derive"], optional = true }
-typetag = { version = "0.2", optional = true }
+# serde = { version = "1", features = ["derive"], optional = true }
+# typetag = { version = "0.2", optional = true }
 crossbeam-channel = "0.5"
 
 [dev-dependencies]
