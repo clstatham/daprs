@@ -22,9 +22,9 @@ pub struct MetroProc {
 
 impl MetroProc {
     /// Creates a new metronome processor with the given period.
-    pub fn new(period: f64) -> Self {
+    pub fn new() -> Self {
         Self {
-            period,
+            period: 1.0,
             last_time: 0.0,
             next_time: 0.0,
             time: 0.0,
@@ -44,6 +44,12 @@ impl MetroProc {
         self.time += self.sample_rate.recip();
 
         out
+    }
+}
+
+impl Default for MetroProc {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -106,7 +112,7 @@ impl GraphBuilder {
     /// | Index | Name | Type | Description |
     /// | --- | --- | --- | --- |
     /// | `0` | `out` | `Bang` | Emits a bang at the given period. |
-    pub fn metro(&self, period: f64) -> Node {
-        self.add_processor(MetroProc::new(period))
+    pub fn metro(&self) -> Node {
+        self.add_processor(MetroProc::new())
     }
 }

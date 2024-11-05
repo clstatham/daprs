@@ -8,7 +8,8 @@ fn main() {
     let graph = GraphBuilder::new();
 
     // add a metronome node with an initial period of 0.5 seconds
-    let bang = graph.metro(0.5);
+    let bang = graph.metro();
+    bang.input("period").set(0.5);
 
     // add a sine oscillator node with a frequency of 1 Hz
     let sine = graph.sine_osc();

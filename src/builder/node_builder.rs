@@ -189,6 +189,12 @@ impl Input {
         }
     }
 
+    /// Returns the node that the input belongs to.
+    #[inline]
+    pub fn node(&self) -> Node {
+        self.node.clone()
+    }
+
     /// Returns the signal type of the input.
     #[inline]
     pub fn kind(&self) -> SignalKind {
@@ -233,6 +239,12 @@ impl Output {
         let this = self.to_kind(input.kind());
         this.node
             .connect_output(self.output_index, &input.node, input.input_index);
+    }
+
+    /// Returns the node that the output belongs to.
+    #[inline]
+    pub fn node(&self) -> Node {
+        self.node.clone()
     }
 
     /// Returns the signal type of the output.

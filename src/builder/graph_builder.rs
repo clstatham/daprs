@@ -1,6 +1,9 @@
 //! Contains the [`GraphBuilder`] struct for constructing audio graphs.
 
-use std::sync::{Arc, Mutex};
+use std::{
+    io::Write,
+    sync::{Arc, Mutex},
+};
 
 use crate::{graph::Graph, prelude::Process, runtime::Runtime};
 
@@ -95,6 +98,12 @@ impl GraphBuilder {
         let to_input = to_input.into_input_idx(&to);
         self.with_graph_mut(|graph| graph.connect(from.id(), from_output, to.id(), to_input))
             .unwrap();
+    }
+
+    /// Writes the graph to the given writer in the DOT format.
+    /// This is useful for visualizing the graph.
+    pub fn write_dot(&self, writer: &mut impl Write) {
+        self.with_graph(|graph| graph.write_dot(writer)).unwrap();
     }
 }
 

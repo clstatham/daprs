@@ -74,8 +74,8 @@ impl GraphBuilder {
     /// | Index | Name | Type | Description |
     /// | --- | --- | --- | --- |
     /// | `0` | `message` | `Message` | The message to send. |
-    pub fn message(&self, message: Message) -> Node {
-        self.add_processor(MessageProc::new(message))
+    pub fn message(&self, message: impl Into<Message>) -> Node {
+        self.add_processor(MessageProc::new(message.into()))
     }
 }
 
@@ -810,7 +810,266 @@ impl GraphBuilder {
     /// | Index | Name | Type | Description |
     /// | --- | --- | --- | --- |
     /// | `0` | `get` | `Message` | The current value of the parameter. |
-    pub fn param(&self) -> Node {
-        self.add_processor(Param::new())
+    pub fn param(&self, param: &Param) -> Node {
+        self.add_processor(param.clone())
+    }
+}
+
+/// A processor that routes a message to one of its outputs.
+///
+/// See also: [select](crate::builder::graph_builder::GraphBuilder::select).
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Select {
+    num_outputs: usize,
+    last_index: i64,
+}
+
+impl Select {
+    /// Creates a new `Select` with the given number of outputs.
+    pub fn new(num_outputs: usize) -> Self {
+        Self {
+            last_index: 0,
+            num_outputs,
+        }
+    }
+}
+
+impl Default for Select {
+    fn default() -> Self {
+        Self::new(2)
+    }
+}
+
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Process for Select {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::unbounded("in", Signal::new_message_none()),
+            SignalSpec::unbounded("index", Signal::new_message_some(Message::Int(0))),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        (0..self.num_outputs)
+            .map(|i| SignalSpec::unbounded(format!("{}", i), Signal::new_message_none()))
+            .collect()
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let in_signal = inputs[0]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let index = inputs[1]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(1))?;
+
+        for (sample_index, (in_signal, index)) in itertools::izip!(in_signal, index).enumerate() {
+            let index = index
+                .as_ref()
+                .and_then(|index| index.cast_to_int())
+                .unwrap_or(0);
+            if index != self.last_index {
+                self.last_index = index;
+            }
+
+            if index >= 0 && index < self.num_outputs as i64 {
+                let out_signal = outputs[index as usize]
+                    .as_message_mut()
+                    .ok_or(ProcessorError::OutputSpecMismatch(index as usize))?;
+
+                out_signal[sample_index] = in_signal.clone();
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that routes a message to one of its outputs.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `in` | `Message` | | The message to route. |
+    /// | `1` | `index` | `Message(int)` | `0` | The index of the output to route to. |
+    ///
+    /// # Outputs
+    ///
+    /// Note that the number of outputs is determined by the number specified at construction.
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `0` | `Message` | The message, if routed to output `0`. |
+    /// | `1` | `1` | `Message` | The message, if routed to output `1`. |
+    /// | `...` | `...` | `...` | etc... |
+    pub fn select(&self, num_outputs: usize) -> Node {
+        self.add_processor(Select::new(num_outputs))
+    }
+}
+
+/// A processor that outputs any messages it receives on any of its inputs.
+///
+/// See also: [merge](crate::builder::graph_builder::GraphBuilder::merge).
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Merge {
+    num_inputs: usize,
+}
+
+impl Merge {
+    /// Creates a new `Merge` with the given number of inputs.
+    pub fn new(num_inputs: usize) -> Self {
+        Self { num_inputs }
+    }
+}
+
+impl Default for Merge {
+    fn default() -> Self {
+        Self::new(2)
+    }
+}
+
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Process for Merge {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        (0..self.num_inputs)
+            .map(|i| SignalSpec::unbounded(format!("{}", i), Signal::new_message_none()))
+            .collect()
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", Signal::new_message_none())]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        for (i, input) in inputs.iter().enumerate() {
+            let in_signal = input
+                .as_message()
+                .ok_or(ProcessorError::InputSpecMismatch(i))?;
+
+            let out_signal = outputs[0]
+                .as_message_mut()
+                .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+            for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
+                if let Some(in_signal) = in_signal {
+                    *out_signal = Some(in_signal.clone());
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that outputs any messages it receives on any of its inputs.
+    ///
+    /// If a message is received on multiple inputs, the message from the input with the lowest index is output.
+    ///
+    /// # Inputs
+    ///
+    /// Note that the number of inputs is determined by the number specified at construction.
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `0` | `Message` | | The message to merge. |
+    /// | `1` | `1` | `Message` | | The message to merge. |
+    /// | `...` | `...` | `...` | | etc... |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Message` | The merged message. |
+    pub fn merge(&self, num_inputs: usize) -> Node {
+        self.add_processor(Merge::new(num_inputs))
+    }
+}
+
+/// A processor that counts the number of times it receives a bang message.
+///
+/// See also: [counter](crate::builder::graph_builder::GraphBuilder::counter).
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CounterProc {
+    count: i64,
+}
+
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Process for CounterProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::unbounded("trig", Signal::new_message_none()),
+            SignalSpec::unbounded("reset", Signal::new_message_none()),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("count", Signal::new_message_none())]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let trig = inputs[0]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let reset = inputs[1]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(1))?;
+
+        let count = outputs[0]
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (trig, reset, count) in itertools::izip!(trig, reset, count) {
+            if reset.is_some() {
+                self.count = 0;
+            }
+
+            *count = Some(Message::Int(self.count));
+
+            if trig.is_some() {
+                self.count += 1;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that counts the number of times it receives a bang message.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `trig` | `Message(Bang)` | | Triggers the counter. |
+    /// | `1` | `reset` | `Message(Bang)` | | Resets the counter. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `count` | `Message(Int)` | The current count. |
+    pub fn counter(&self) -> Node {
+        self.add_processor(CounterProc::default())
     }
 }

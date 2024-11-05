@@ -34,7 +34,7 @@ pub enum ProcessorError {
 #[derive(Debug)]
 pub struct SignalSpec {
     /// The name of the signal.
-    pub name: &'static str,
+    pub name: String,
     /// The minimum value of the signal, if any.
     pub min: Option<Signal>,
     /// The maximum value of the signal, if any.
@@ -47,7 +47,7 @@ impl Default for SignalSpec {
     /// Creates a new unnamed and unbounded [`SignalSpec`] (min/max are `None`, default value is `0.0`).
     fn default() -> Self {
         Self {
-            name: "",
+            name: "".into(),
             min: None,
             max: None,
             default_value: Signal::Sample(0.0.into()),
@@ -58,13 +58,13 @@ impl Default for SignalSpec {
 impl SignalSpec {
     /// Creates a new bounded [`SignalSpec`] with the given name, minimum, maximum, and default value.
     pub fn new(
-        name: &'static str,
+        name: impl Into<String>,
         min: Option<impl Into<Signal>>,
         max: Option<impl Into<Signal>>,
         default_value: impl Into<Signal>,
     ) -> Self {
         Self {
-            name,
+            name: name.into(),
             min: min.map(Into::into),
             max: max.map(Into::into),
             default_value: default_value.into(),
@@ -72,9 +72,9 @@ impl SignalSpec {
     }
 
     /// Creates a new unbounded [`SignalSpec`] with the given name and default value.
-    pub fn unbounded(name: &'static str, default_value: impl Into<Signal>) -> Self {
+    pub fn unbounded(name: impl Into<String>, default_value: impl Into<Signal>) -> Self {
         Self {
-            name,
+            name: name.into(),
             min: None,
             max: None,
             default_value: default_value.into(),
