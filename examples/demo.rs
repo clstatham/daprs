@@ -29,6 +29,6 @@ fn main() {
 
     // run the runtime for 1 second and output to the default audio device
     runtime
-        .run_for(Duration::from_secs(1), Backend::Default, Device::Default)
+        .run_for(Duration::from_secs(10), Backend::Default, Device::Default)
         .unwrap();
 }

@@ -695,7 +695,6 @@ fn param_channels() -> (ParamTx, ParamRx) {
 #[derive(Clone, Debug)]
 pub struct Param {
     channels: (ParamTx, ParamRx),
-    value: Arc<Mutex<Option<Message>>>,
 }
 
 impl Param {
@@ -703,7 +702,6 @@ impl Param {
     pub fn new() -> Self {
         Self {
             channels: param_channels(),
-            value: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -720,16 +718,12 @@ impl Param {
     /// Sets the `Param`'s value.
     pub fn set(&self, message: impl Into<Message>) {
         let message = message.into();
-        *self.value.lock().unwrap() = Some(message.clone());
         self.tx().send(message);
     }
 
     /// Gets the `Param`'s value.
     pub fn get(&mut self) -> Option<Message> {
-        let message = self.rx_mut().recv();
-        let mut value = self.value.lock().unwrap();
-        *value = message.clone();
-        value.clone()
+        self.rx_mut().recv()
     }
 }
 
@@ -854,9 +848,8 @@ impl Process for Select {
                 .as_ref()
                 .and_then(|index| index.cast_to_int())
                 .unwrap_or(0);
-            if index != self.last_index {
-                self.last_index = index;
-            }
+
+            self.last_index = index;
 
             if index >= 0 && index < self.num_outputs as i64 {
                 let out_signal = outputs[index as usize]

@@ -796,6 +796,10 @@ impl SignalBuffer {
         }
     }
 
+    pub fn fill_with_spec_default(&mut self, spec: &SignalSpec) {
+        self.fill(spec.default_value.clone());
+    }
+
     /// Copies the contents of `other` into `self`.
     pub fn copy_from(&mut self, other: &Self) {
         match (self, other) {

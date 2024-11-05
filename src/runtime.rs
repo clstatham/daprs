@@ -107,6 +107,16 @@ impl NodeBuffers {
             output.resize(block_size, spec.default_value.clone());
         }
     }
+
+    /// Clears the input and output buffers.
+    pub fn clear_buffers(&mut self) {
+        for (input, spec) in self.inputs.iter_mut().zip(&self.input_spec) {
+            input.fill_with_spec_default(spec);
+        }
+        for (output, spec) in self.outputs.iter_mut().zip(&self.output_spec) {
+            output.fill_with_spec_default(spec);
+        }
+    }
 }
 
 /// The audio graph processing runtime.
@@ -259,6 +269,10 @@ impl Runtime {
     /// Renders the next block of audio.
     #[inline]
     pub fn process(&mut self) -> RuntimeResult<()> {
+        for buffer in self.buffer_cache.values_mut() {
+            buffer.clear_buffers();
+        }
+
         self.graph.visit(|graph, node_id| -> RuntimeResult<()> {
             self.edge_cache.extend(
                 graph
