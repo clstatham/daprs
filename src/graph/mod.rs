@@ -7,10 +7,7 @@ use petgraph::{
     visit::DfsPostOrder,
 };
 
-use crate::{
-    processor::{Process, Processor, ProcessorError},
-    signal::SignalBuffer,
-};
+use crate::processor::{Process, Processor, ProcessorError};
 
 pub mod edge;
 pub mod node;
@@ -23,7 +20,7 @@ pub(crate) type DiGraph = StableDiGraph<GraphNode, Edge, GraphIx>;
 
 /// An error that can occur during graph processing.
 #[derive(Debug, thiserror::Error)]
-#[error("Graph run error at node {node_index:?} ({node_processor:?}): {kind:?}")]
+#[error("Graph run error at node {} ({}): {kind:?}", node_index.index(), node_processor)]
 pub struct GraphRunError {
     /// The index of the node that caused the error.
     pub node_index: NodeIndex,
@@ -62,7 +59,7 @@ pub enum GraphConstructionError {
     #[error("Cannot connect nodes from different graphs")]
     MismatchedGraphs,
 
-    /// An error for when a node is attempted to be connected to a node that does not exist.
+    /// An error for when an operation that expects a single output is attempted on a node that has multiple outputs.
     #[error("Operation `{op}` invalid: Node type `{kind}` has multiple outputs")]
     NodeHasMultipleOutputs {
         /// The operation that caused the error.
@@ -98,12 +95,8 @@ pub struct Graph {
     output_nodes: Vec<NodeIndex>,
 
     // internal flags for various states of the graph
-    needs_reset: bool,
     needs_prepare: bool,
     needs_visitor_alloc: bool,
-
-    // cached internal state to avoid allocations in `process()`
-    edge_cache: Vec<(NodeIndex, Edge)>,
 
     // cached visitor state for graph traversal
     visit_path: Vec<NodeIndex>,
@@ -116,15 +109,15 @@ impl Graph {
     }
 
     #[inline]
-    /// Returns the inner [`StableDiGraph`] of the graph.
+    /// Returns a reference to the inner [`StableDiGraph`] of the graph.
     pub fn digraph(&self) -> &DiGraph {
         &self.digraph
     }
 
-    /// Returns `true` if [`reset`](Graph::reset) must be called before the next [`process`](Graph::process) call.
     #[inline]
-    pub fn needs_reset(&self) -> bool {
-        self.needs_reset
+    /// Returns a mutable reference tothe inner [`StableDiGraph`] of the graph.
+    pub fn digraph_mut(&mut self) -> &mut DiGraph {
+        &mut self.digraph
     }
 
     /// Returns `true` if [`prepare_nodes`](Graph::prepare) must be called before the next [`process`](Graph::process) call.
@@ -133,9 +126,14 @@ impl Graph {
         self.needs_prepare
     }
 
+    #[inline]
+    /// Returns `true` if the graph's visitor needs to be reallocated.
+    pub fn needs_visitor_alloc(&self) -> bool {
+        self.needs_visitor_alloc
+    }
+
     /// Adds a new input [`Passthrough`](GraphNode::Passthrough) node to the graph.
     pub fn add_input(&mut self) -> NodeIndex {
-        self.needs_reset = true;
         let idx = self.digraph.add_node(GraphNode::new_input());
         self.input_nodes.push(idx);
         idx
@@ -143,7 +141,6 @@ impl Graph {
 
     /// Adds a new output [`Passthrough`](GraphNode::Passthrough) node to the graph.
     pub fn add_output(&mut self) -> NodeIndex {
-        self.needs_reset = true;
         let idx = self.digraph.add_node(GraphNode::new_output());
         self.output_nodes.push(idx);
         idx
@@ -151,7 +148,6 @@ impl Graph {
 
     /// Adds a new [`GraphNode`] with the given [`Processor`] to the graph.
     pub fn add_processor_object(&mut self, processor: Processor) -> NodeIndex {
-        self.needs_reset = true;
         self.needs_prepare = true;
         self.needs_visitor_alloc = true;
         self.digraph.add_node(GraphNode::Processor(processor))
@@ -159,7 +155,6 @@ impl Graph {
 
     /// Adds a new [`GraphNode`] with the given [`Process`] functionality to the graph.
     pub fn add_processor(&mut self, processor: impl Process) -> NodeIndex {
-        self.needs_reset = true;
         self.needs_prepare = true;
         self.needs_visitor_alloc = true;
         self.digraph.add_node(GraphNode::new_processor(processor))
@@ -167,7 +162,6 @@ impl Graph {
 
     /// Replaces the [`GraphNode`] at the given index in-place with a new [`Processor`].
     pub fn replace_processor(&mut self, node: NodeIndex, processor: impl Process) -> GraphNode {
-        self.needs_reset = true;
         self.needs_prepare = true;
         std::mem::replace(&mut self.digraph[node], GraphNode::new_processor(processor))
     }
@@ -211,7 +205,6 @@ impl Graph {
             self.digraph.remove_edge(edge.id()).unwrap();
         }
 
-        self.needs_reset = true;
         self.needs_prepare = true;
         self.needs_visitor_alloc = true;
 
@@ -257,61 +250,7 @@ impl Graph {
         &self.output_nodes
     }
 
-    /// Copies the given data into the input [`SignalBuffer`] of the input [`GraphNode`] at the given index.
-    #[inline]
-    pub fn copy_input(&mut self, input_index: usize, data: &SignalBuffer) {
-        let input_index = self
-            .input_nodes
-            .get(input_index)
-            .expect("Input index out of bounds");
-        let input = &mut self.digraph[*input_index];
-        if let GraphNode::Passthrough(input) = input {
-            input.copy_from(data);
-        } else {
-            panic!("Node at input index is not an input node");
-        }
-    }
-
-    /// Returns a reference to the output [`SignalBuffer`] of the output [`GraphNode`] at the given index.
-    #[inline]
-    pub fn get_output(&self, output_index: usize) -> &SignalBuffer {
-        let output_index = self
-            .output_nodes
-            .get(output_index)
-            .expect("Output index out of bounds");
-        let output = &self.digraph[*output_index];
-        if let GraphNode::Passthrough(output) = output {
-            output
-        } else {
-            panic!("Node at output index is not an output node");
-        }
-    }
-
-    /// Returns an iterator over the input [`SignalBuffer`]s of the input [`GraphNode`]s in the graph.
-    #[inline]
-    pub fn inputs(&self) -> impl Iterator<Item = &SignalBuffer> {
-        self.input_nodes.iter().map(|&idx| {
-            if let GraphNode::Passthrough(input) = &self.digraph[idx] {
-                input
-            } else {
-                panic!("Node at input index is not an input node");
-            }
-        })
-    }
-
-    /// Returns an iterator over the output [`SignalBuffer`]s of the output [`GraphNode`]s in the graph.
-    #[inline]
-    pub fn outputs(&self) -> impl Iterator<Item = &SignalBuffer> {
-        self.output_nodes.iter().map(|&idx| {
-            if let GraphNode::Passthrough(output) = &self.digraph[idx] {
-                output
-            } else {
-                panic!("Node at output index is not an output node");
-            }
-        })
-    }
-
-    fn allocate_visitor(&mut self) {
+    pub(crate) fn allocate_visitor(&mut self) {
         self.visit_path = Vec::with_capacity(self.digraph.node_count());
         self.reset_visitor();
 
@@ -319,7 +258,7 @@ impl Graph {
     }
 
     #[inline]
-    fn reset_visitor(&mut self) {
+    pub(crate) fn reset_visitor(&mut self) {
         self.visit_path.clear();
         let mut visitor = DfsPostOrder::empty(&self.digraph);
         for node in self.digraph.externals(Direction::Incoming) {
@@ -359,35 +298,6 @@ impl Graph {
         })
     }
 
-    /// Allocates all [`GraphNode`]s' internal input and output buffers, along with various internal resources to the graph.
-    ///
-    /// This should be run at least once before the audio thread starts running, and again anytime the buffer size or sample rate change or the graph structure is modified.
-    pub fn reset(&mut self, sample_rate: f64, block_size: usize) -> GraphRunResult<()> {
-        let mut max_edges = 0;
-
-        self.allocate_visitor();
-        self.visit(|graph, node| -> GraphRunResult<()> {
-            // allocate the node's inputs and outputs
-            graph.digraph[node].resize_buffers(sample_rate, block_size);
-
-            let num_inputs = graph
-                .digraph
-                .edges_directed(node, Direction::Incoming)
-                .count();
-            max_edges = max_edges.max(num_inputs);
-
-            Ok(())
-        })?;
-
-        // preallocate the edge cache used in `process()`
-        // the number of edges per node is likely relatively small, so we round up the cache size just to be sure that no allocations happen in `process()`
-        self.edge_cache = Vec::with_capacity((max_edges * 2).next_power_of_two());
-
-        self.needs_reset = false;
-
-        Ok(())
-    }
-
     /// Prepares all [`GraphNode`]s in the graph for processing.
     ///
     /// This should be run at least once before the audio thread starts running, and again anytime the graph structure is modified.
@@ -399,96 +309,6 @@ impl Graph {
         })?;
 
         self.needs_prepare = false;
-
-        Ok(())
-    }
-
-    /// Returns a mutable reference to the input [`SignalBuffer`] of the [`GraphNode`] at the given index and input index.
-    #[inline]
-    pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut SignalBuffer {
-        match &mut self.digraph[node] {
-            GraphNode::Passthrough(buffer) => {
-                if input_index != 0 {
-                    panic!("Input node has only one input buffer");
-                }
-                buffer
-            }
-            GraphNode::Processor(processor) => processor.input_mut(input_index),
-        }
-    }
-
-    /// Returns a reference to the output [`SignalBuffer`] of the [`GraphNode`] at the given index and output index.
-    #[inline]
-    pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &SignalBuffer {
-        match &self.digraph[node] {
-            GraphNode::Passthrough(buffer) => {
-                if output_index != 0 {
-                    panic!("Output node has only one output buffer");
-                }
-                buffer
-            }
-            GraphNode::Processor(processor) => processor.output(output_index),
-        }
-    }
-
-    /// Processes all [`GraphNode`]s in the graph.
-    /// This should be called once per audio block.
-    ///
-    /// The results of the processing can be read from the output [`SignalBuffer`]s of the output [`GraphNode`]s via [`Graph::get_output`] or [`Graph::outputs`].
-    #[inline]
-    pub fn process(&mut self) -> GraphRunResult<()> {
-        assert!(
-            !self.needs_reset,
-            "Graph nodes need reset; call `reset()` first"
-        );
-        assert!(
-            !self.needs_prepare,
-            "Graph nodes need preparation; call `prepare_nodes()` first"
-        );
-        assert!(
-            !self.needs_visitor_alloc,
-            "Graph's cached visitor needs allocation; call `allocate_visitor()` first"
-        );
-
-        self.visit(|graph: &mut Graph, node_id| -> GraphRunResult<()> {
-            // copy the inputs from the source nodes to the target node
-            graph.edge_cache.extend(
-                graph
-                    .digraph
-                    .edges_directed(node_id, Direction::Incoming)
-                    .map(|edge| (edge.source(), *edge.weight())),
-            );
-            for (source_id, edge) in graph.edge_cache.drain(..) {
-                let Edge {
-                    source_output,
-                    target_input,
-                } = edge;
-
-                let (source, target) = graph.digraph.index_twice_mut(source_id, node_id);
-
-                let source_buffer = match source {
-                    GraphNode::Processor(processor) => processor.output(source_output as usize),
-                    GraphNode::Passthrough(buffer) => buffer,
-                };
-
-                let target_buffer = match target {
-                    GraphNode::Processor(processor) => processor.input_mut(target_input as usize),
-                    GraphNode::Passthrough(buffer) => buffer,
-                };
-                target_buffer.copy_from(source_buffer);
-            }
-
-            // process the node
-            graph.digraph[node_id]
-                .process()
-                .map_err(|err| GraphRunError {
-                    node_index: node_id,
-                    node_processor: graph.digraph[node_id].name().to_string(),
-                    kind: GraphRunErrorKind::ProcessorError(err),
-                })?;
-
-            Ok(())
-        })?;
 
         Ok(())
     }

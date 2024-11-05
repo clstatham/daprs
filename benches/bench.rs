@@ -25,7 +25,7 @@ fn bench_demo(c: &mut Criterion) {
         group.throughput(criterion::Throughput::Elements(buffer_size as u64));
         group.bench_function(format!("buffer_size_{}", buffer_size), |b| {
             b.iter(|| {
-                criterion::black_box(runtime.next_buffer().unwrap().count());
+                runtime.process().unwrap();
             });
         });
     }

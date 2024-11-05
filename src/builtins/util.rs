@@ -720,14 +720,14 @@ impl Param {
     /// Sets the `Param`'s value.
     pub fn set(&self, message: impl Into<Message>) {
         let message = message.into();
-        *self.value.try_lock().unwrap() = Some(message.clone());
+        *self.value.lock().unwrap() = Some(message.clone());
         self.tx().send(message);
     }
 
     /// Gets the `Param`'s value.
     pub fn get(&mut self) -> Option<Message> {
         let message = self.rx_mut().recv();
-        let mut value = self.value.try_lock().unwrap();
+        let mut value = self.value.lock().unwrap();
         *value = message.clone();
         value.clone()
     }

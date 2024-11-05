@@ -38,14 +38,14 @@ impl Node {
     #[inline]
     pub fn num_inputs(&self) -> usize {
         self.graph
-            .with_graph(|graph| graph.digraph()[self.id()].inputs().len())
+            .with_graph(|graph| graph.digraph()[self.id()].input_spec().len())
     }
 
     /// Returns the number of outputs of the node.
     #[inline]
     pub fn num_outputs(&self) -> usize {
         self.graph
-            .with_graph(|graph| graph.digraph()[self.id()].outputs().len())
+            .with_graph(|graph| graph.digraph()[self.id()].output_spec().len())
     }
 
     /// Returns the input of the node at the given index.

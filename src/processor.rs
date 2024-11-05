@@ -192,8 +192,6 @@ impl Debug for dyn Process {
 
 pub struct Processor {
     processor: Box<dyn Process>,
-    inputs: Box<[SignalBuffer]>,
-    outputs: Box<[SignalBuffer]>,
 }
 
 impl Debug for Processor {
@@ -210,11 +208,7 @@ impl Processor {
 
     /// Creates a new [`Processor`] from the given boxed [`Process`] object.
     pub fn new_from_boxed(processor: Box<dyn Process>) -> Self {
-        Self {
-            inputs: processor.make_default_input_buffers(0).into_boxed_slice(),
-            outputs: processor.make_default_output_buffers(0).into_boxed_slice(),
-            processor,
-        }
+        Self { processor }
     }
 
     /// Returns the name of this [`Processor`].
@@ -234,51 +228,7 @@ impl Processor {
 
     /// Resizes the input and output buffers to match the given sample rates and block size.
     pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
-        let input_spec = self.input_spec();
-        for (input, spec) in self.inputs.iter_mut().zip(input_spec) {
-            *input = SignalBuffer::from_spec_default(&spec, block_size);
-        }
-        let output_spec = self.output_spec();
-        for (output, spec) in self.outputs.iter_mut().zip(output_spec) {
-            *output = SignalBuffer::from_spec_default(&spec, block_size);
-        }
         self.processor.resize_buffers(sample_rate, block_size);
-    }
-
-    /// Returns a slice of the input buffers.
-    #[inline]
-    pub fn inputs(&self) -> &[SignalBuffer] {
-        &self.inputs[..]
-    }
-
-    /// Returns a mutable slice of the input buffers.
-    #[inline]
-    pub fn inputs_mut(&mut self) -> &mut [SignalBuffer] {
-        &mut self.inputs[..]
-    }
-
-    /// Returns a reference to the input buffer at the given index.
-    #[inline]
-    pub fn input(&self, index: usize) -> &SignalBuffer {
-        &self.inputs()[index]
-    }
-
-    /// Returns a mutable reference to the input buffer at the given index.
-    #[inline]
-    pub fn input_mut(&mut self, index: usize) -> &mut SignalBuffer {
-        &mut self.inputs_mut()[index]
-    }
-
-    /// Returns a slice of the output buffers.
-    #[inline]
-    pub fn outputs(&self) -> &[SignalBuffer] {
-        &self.outputs[..]
-    }
-
-    /// Returns a reference to the output buffer at the given index.
-    #[inline]
-    pub fn output(&self, index: usize) -> &SignalBuffer {
-        &self.outputs()[index]
     }
 
     /// Prepares the processor for processing. This is called before the first [`Processor::process`] call, and anytime the graph changes.
@@ -289,14 +239,18 @@ impl Processor {
 
     /// Processes the input buffers and writes the results to the output buffers.
     #[inline]
-    pub fn process(&mut self) -> Result<(), ProcessorError> {
-        if self.inputs.len() != self.processor.num_inputs() {
+    pub fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        if inputs.len() != self.processor.num_inputs() {
             return Err(ProcessorError::NumInputsMismatch);
         }
-        if self.outputs.len() != self.processor.num_outputs() {
+        if outputs.len() != self.processor.num_outputs() {
             return Err(ProcessorError::NumOutputsMismatch);
         }
-        self.processor.process(&self.inputs, &mut self.outputs)?;
+        self.processor.process(inputs, outputs)?;
         Ok(())
     }
 }

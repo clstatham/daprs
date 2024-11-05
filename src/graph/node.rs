@@ -12,7 +12,7 @@ use crate::{
 
 pub enum GraphNode {
     /// A passthrough node that simply forwards its input to its output.
-    Passthrough(SignalBuffer),
+    Passthrough,
     /// A processor node that processes its input buffers and writes the results to its output buffers.
     Processor(Processor),
 }
@@ -20,7 +20,7 @@ pub enum GraphNode {
 impl Debug for GraphNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Passthrough(_) => f.write_str("Passthrough"),
+            Self::Passthrough => f.write_str("Passthrough"),
             Self::Processor(processor) => Debug::fmt(processor, f),
         }
     }
@@ -29,7 +29,7 @@ impl Debug for GraphNode {
 impl GraphNode {
     /// Creates a new input node.
     pub fn new_input() -> Self {
-        Self::Passthrough(SignalBuffer::new_sample(0))
+        Self::Passthrough
     }
 
     /// Creates a new processor node from the given [`Processor`] object.
@@ -37,20 +37,20 @@ impl GraphNode {
         Self::Processor(processor)
     }
 
-    /// Creates a new processor node from the given [`Process`] object.
+    /// Creates a new processor node from the given [`Process`] implementor.
     pub fn new_processor(processor: impl Process) -> Self {
         Self::Processor(Processor::new(processor))
     }
 
     /// Creates a new output node.
     pub fn new_output() -> Self {
-        Self::Passthrough(SignalBuffer::new_sample(0))
+        Self::Passthrough
     }
 
     /// Returns information about the inputs this [`GraphNode`] expects.
     pub fn input_spec(&self) -> Vec<SignalSpec> {
         match self {
-            Self::Passthrough(_) => vec![SignalSpec::unbounded("in", 0.0)],
+            Self::Passthrough => vec![SignalSpec::unbounded("in", 0.0)],
             Self::Processor(processor) => processor.input_spec(),
         }
     }
@@ -58,7 +58,7 @@ impl GraphNode {
     /// Returns information about the outputs this [`GraphNode`] produces.
     pub fn output_spec(&self) -> Vec<SignalSpec> {
         match self {
-            Self::Passthrough(_) => vec![SignalSpec::unbounded("out", 0.0)],
+            Self::Passthrough => vec![SignalSpec::unbounded("out", 0.0)],
             Self::Processor(processor) => processor.output_spec(),
         }
     }
@@ -66,39 +66,15 @@ impl GraphNode {
     /// Returns the name of the processor in this [`GraphNode`].
     pub fn name(&self) -> &str {
         match self {
-            Self::Passthrough(_) => "Passthrough",
+            Self::Passthrough => "Passthrough",
             Self::Processor(processor) => processor.name(),
-        }
-    }
-
-    /// Returns a slice of the input buffers of this [`GraphNode`].
-    pub fn inputs(&self) -> &[SignalBuffer] {
-        match self {
-            Self::Passthrough(buffer) => std::slice::from_ref(buffer),
-            Self::Processor(processor) => processor.inputs(),
-        }
-    }
-
-    /// Returns a mutable slice of the input buffers of this [`GraphNode`].
-    pub fn inputs_mut(&mut self) -> &mut [SignalBuffer] {
-        match self {
-            Self::Passthrough(buffer) => std::slice::from_mut(buffer),
-            Self::Processor(processor) => processor.inputs_mut(),
-        }
-    }
-
-    /// Returns a slice of the output buffers of this [`GraphNode`].
-    pub fn outputs(&self) -> &[SignalBuffer] {
-        match self {
-            Self::Passthrough(buffer) => std::slice::from_ref(buffer),
-            Self::Processor(processor) => processor.outputs(),
         }
     }
 
     /// Resizes the input and output buffers to match the given sample rate and block size.
     pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
         match self {
-            Self::Passthrough(buffer) => buffer.resize(block_size, 0.0.into()),
+            Self::Passthrough => {}
             Self::Processor(processor) => processor.resize_buffers(sample_rate, block_size),
         }
     }
@@ -112,9 +88,13 @@ impl GraphNode {
 
     /// Processes the node's input buffers and writes the results to the node's output buffers.
     /// This is a no-op for passthrough nodes.
-    pub fn process(&mut self) -> Result<(), crate::processor::ProcessorError> {
+    pub fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), crate::processor::ProcessorError> {
         if let Self::Processor(processor) = self {
-            processor.process()?;
+            processor.process(inputs, outputs)?;
         }
 
         Ok(())

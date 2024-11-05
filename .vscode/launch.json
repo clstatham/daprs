@@ -31,16 +31,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'pypapr'",
+            "name": "Debug unit tests in library 'raug'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=pypapr"
+                    "--package=raug"
                 ],
                 "filter": {
-                    "name": "pypapr",
+                    "name": "raug",
                     "kind": "lib"
                 }
             },
