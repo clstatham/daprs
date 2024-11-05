@@ -2,6 +2,7 @@
 
 use std::fmt::Debug;
 
+use downcast_rs::{impl_downcast, DowncastSync};
 use thiserror::Error;
 
 use crate::signal::{Signal, SignalBuffer, SignalKind};
@@ -90,7 +91,7 @@ impl SignalSpec {
 /// A trait for processing audio or control signals.
 ///
 /// This is usually used as part of a [`Processor`], operating on its internal input/output buffers.
-pub trait Process: 'static + Send + Sync + ProcessClone {
+pub trait Process: 'static + Send + Sync + ProcessClone + DowncastSync {
     /// Returns the name of this [`Process`].
     fn name(&self) -> &str {
         std::any::type_name::<Self>()
@@ -153,6 +154,7 @@ pub trait Process: 'static + Send + Sync + ProcessClone {
         Processor::new_from_boxed(self.clone_boxed())
     }
 }
+impl_downcast!(sync Process);
 
 mod sealed {
     pub trait Sealed {}
@@ -191,7 +193,7 @@ impl Debug for dyn Process {
 #[derive(Clone)]
 
 pub struct Processor {
-    processor: Box<dyn Process>,
+    pub(crate) processor: Box<dyn Process>,
 }
 
 impl Debug for Processor {

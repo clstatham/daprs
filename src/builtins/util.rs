@@ -15,22 +15,29 @@ use crate::{
 ///
 /// See also: [message](crate::builder::graph_builder::GraphBuilder::message).
 #[derive(Clone, Debug)]
-pub struct MessageProc(Message);
+pub struct MessageProc {
+    message: Option<Message>,
+}
 
 impl MessageProc {
-    /// Creates a new `MessageProc` with the given message.
+    /// Creates a new `MessageProc` with the given initial message.
     pub fn new(message: Message) -> Self {
-        Self(message)
+        Self {
+            message: Some(message),
+        }
     }
 }
 
 impl Process for MessageProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("trig", Signal::new_message_none())]
+        vec![
+            SignalSpec::unbounded("trig", Signal::new_message_none()),
+            SignalSpec::unbounded("message", Signal::new_message_none()),
+        ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("message", Signal::new_message_none())]
+        vec![SignalSpec::unbounded("out", Signal::new_message_none())]
     }
 
     fn process(
@@ -42,15 +49,23 @@ impl Process for MessageProc {
             .as_message()
             .ok_or(ProcessorError::InputSpecMismatch(0))?;
 
-        let message = outputs[0]
+        let message = inputs[1]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(1))?;
+
+        let out = outputs[0]
             .as_message_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
-        for (bang, message) in itertools::izip!(bang, message) {
+        for (bang, message, out) in itertools::izip!(bang, message, out) {
+            if let Some(message) = message {
+                self.message = Some(message.clone());
+            }
+
             if bang.is_some() {
-                *message = Some(self.0.clone());
+                *out = self.message.clone();
             } else {
-                *message = None;
+                *out = None;
             }
         }
 
@@ -66,12 +81,13 @@ impl GraphBuilder {
     /// | Index | Name | Type | Default | Description |
     /// | --- | --- | --- | --- | --- |
     /// | `0` | `trig` | `Bang` | | Triggers the message. |
+    /// | `1` | `message` | `Message` | | The message to send. |
     ///
     /// # Outputs
     ///
     /// | Index | Name | Type | Description |
     /// | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message` | The message to send. |
+    /// | `0` | `out` | `Message` | The message to send. |
     pub fn message(&self, message: impl Into<Message>) -> Node {
         self.add_processor(MessageProc::new(message.into()))
     }
@@ -694,15 +710,22 @@ fn param_channels() -> (ParamTx, ParamRx) {
 /// | `0` | `get` | `Message` | The current value of the parameter. |
 #[derive(Clone, Debug)]
 pub struct Param {
+    name: String,
     channels: (ParamTx, ParamRx),
 }
 
 impl Param {
     /// Creates a new `Param`.
-    pub fn new() -> Self {
+    pub fn new(name: impl Into<String>) -> Self {
         Self {
+            name: name.into(),
             channels: param_channels(),
         }
+    }
+
+    /// Returns the name of this `Param`.
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     /// Returns the sender for this `Param`.
@@ -765,12 +788,6 @@ impl Process for Param {
     }
 }
 
-impl Default for Param {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl GraphBuilder {
     /// A processor that can be used to send/receive messages from outside the graph.
     ///
@@ -786,7 +803,7 @@ impl GraphBuilder {
     /// | --- | --- | --- | --- |
     /// | `0` | `get` | `Message` | The current value of the parameter. |
     pub fn param(&self, param: &Param) -> Node {
-        self.add_processor(param.clone())
+        self.add_param(param.clone())
     }
 }
 

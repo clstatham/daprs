@@ -4,10 +4,11 @@ use std::{sync::mpsc, time::Duration};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use petgraph::prelude::*;
+use rustc_hash::FxBuildHasher;
 
 use crate::{
     graph::{edge::Edge, node::GraphNode, Graph, GraphRunError, NodeIndex},
-    prelude::SignalSpec,
+    prelude::{Param, SignalSpec},
     processor::ProcessorError,
     signal::{Sample, Signal, SignalBuffer},
 };
@@ -130,7 +131,7 @@ impl NodeBuffers {
 #[derive(Clone, Default)]
 pub struct Runtime {
     graph: Graph,
-    buffer_cache: hashbrown::HashMap<NodeIndex, NodeBuffers, rustc_hash::FxBuildHasher>,
+    buffer_cache: hashbrown::HashMap<NodeIndex, NodeBuffers, FxBuildHasher>,
     inputs: Vec<SignalBuffer>,
     outputs: Vec<SignalBuffer>,
     input_ids: Vec<NodeIndex>,
@@ -245,29 +246,37 @@ impl Runtime {
     }
 
     /// Runs the preparation phase for every node in the graph.
+    #[inline]
     pub fn prepare(&mut self) -> RuntimeResult<()> {
         self.graph.prepare()?;
         Ok(())
     }
 
     /// Returns a reference to the audio graph.
+    #[inline]
     pub fn graph(&self) -> &Graph {
         &self.graph
     }
 
     /// Returns a mutable reference to the audio graph.
+    #[inline]
     pub fn graph_mut(&mut self) -> &mut Graph {
         &mut self.graph
     }
 
+    /// Returns a copy of the [`Param`] with the given name.
+    #[inline]
+    pub fn param_named(&self, name: impl AsRef<str>) -> Option<Param> {
+        self.graph.param_named(name)
+    }
+
     /// Returns an iterator over the output channels of the runtime.
+    #[inline]
     pub fn outputs(&mut self) -> impl Iterator<Item = &SignalBuffer> + '_ {
-        let num_outputs = self.graph.num_outputs();
-        (0..num_outputs).map(|i| &self.outputs[i])
+        self.outputs.iter()
     }
 
     /// Renders the next block of audio.
-    #[inline]
     pub fn process(&mut self) -> RuntimeResult<()> {
         for buffer in self.buffer_cache.values_mut() {
             buffer.clear_buffers();

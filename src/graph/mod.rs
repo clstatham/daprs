@@ -6,8 +6,12 @@ use petgraph::{
     prelude::{Direction, EdgeRef, StableDiGraph},
     visit::DfsPostOrder,
 };
+use rustc_hash::FxBuildHasher;
 
-use crate::processor::{Process, Processor, ProcessorError};
+use crate::{
+    prelude::Param,
+    processor::{Process, Processor, ProcessorError},
+};
 
 pub mod edge;
 pub mod node;
@@ -90,6 +94,9 @@ pub type GraphConstructionResult<T> = Result<T, GraphConstructionError>;
 pub struct Graph {
     digraph: DiGraph,
 
+    // parameters for the graph
+    params: hashbrown::HashMap<String, NodeIndex, FxBuildHasher>,
+
     // cached input/output nodes
     input_nodes: Vec<NodeIndex>,
     output_nodes: Vec<NodeIndex>,
@@ -149,6 +156,14 @@ impl Graph {
     pub fn add_processor(&mut self, processor: impl Process) -> NodeIndex {
         self.needs_visitor_alloc = true;
         self.digraph.add_node(GraphNode::new_processor(processor))
+    }
+
+    /// Adds a new [`GraphNode`] representing a [`Param`] to the graph.
+    pub fn add_param(&mut self, param: Param) -> NodeIndex {
+        let name = param.name().to_string();
+        let index = self.add_processor(param);
+        self.params.insert(name, index);
+        index
     }
 
     /// Replaces the [`GraphNode`] at the given index in-place with a new [`Processor`].
@@ -213,6 +228,32 @@ impl Graph {
     #[inline]
     pub fn num_outputs(&self) -> usize {
         self.output_nodes.len()
+    }
+
+    /// Returns the number of [`Param`]s in the graph.
+    #[inline]
+    pub fn num_params(&self) -> usize {
+        self.params.len()
+    }
+
+    /// Returns the index of the [`Param`] with the given name.
+    #[inline]
+    pub fn param_index(&self, name: &str) -> Option<NodeIndex> {
+        self.params.get(name).copied()
+    }
+
+    /// Returns a reference to the [`Param`] with the given name.
+    #[inline]
+    pub fn param_named(&self, name: impl AsRef<str>) -> Option<Param> {
+        self.params
+            .get(name.as_ref())
+            .and_then(|&idx| match &self.digraph[idx] {
+                GraphNode::Processor(proc) => {
+                    (*proc.processor).downcast_ref::<Param>().cloned()
+                    // proc.processor.as_any().downcast_ref::<Param>().cloned()
+                }
+                _ => None,
+            })
     }
 
     /// Returns the index of the input [`GraphNode`] at the given index.

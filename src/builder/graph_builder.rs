@@ -5,7 +5,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{graph::Graph, prelude::Process, runtime::Runtime};
+use crate::{
+    graph::Graph,
+    prelude::{Param, Process},
+    runtime::Runtime,
+};
 
 use super::node_builder::{IntoInputIdx, IntoNode, IntoOutputIdx, Node};
 
@@ -42,6 +46,14 @@ impl GraphBuilder {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
             node_id: graph.add_processor(processor),
+        })
+    }
+
+    /// Adds a [`Param`] node to the graph.
+    pub fn add_param(&self, value: Param) -> Node {
+        self.with_graph_mut(|graph| Node {
+            graph: self.clone(),
+            node_id: graph.add_param(value),
         })
     }
 

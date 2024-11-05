@@ -127,6 +127,24 @@ impl Message {
         matches!(self, Message::List(_))
     }
 
+    /// Returns true if the message is truthy (can be reasonably interpreted as `true`).
+    #[inline]
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            Message::Bang => true,
+            Message::Int(i) => *i != 0,
+            Message::Float(x) => *x != 0.0,
+            Message::String(s) => !s.is_empty(),
+            Message::List(list) => !list.is_empty(),
+        }
+    }
+
+    /// Returns true if the message is falsy (can be reasonably interpreted as `false`).
+    #[inline]
+    pub fn is_falsy(&self) -> bool {
+        !self.is_truthy()
+    }
+
     /// Attempts to cast the message to an integer using whatever method is most appropriate.
     #[inline]
     pub fn cast_to_int(&self) -> Option<i64> {

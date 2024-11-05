@@ -210,9 +210,10 @@ impl Input {
 
     /// Creates a parameter for the input.
     #[inline]
-    pub fn param(&self) -> Param {
-        let param = Param::new();
-        let proc = self.node.graph().add_processor(param.clone());
+    pub fn param(&self, name: impl Into<String>) -> Param {
+        let name = name.into();
+        let param = Param::new(&name);
+        let proc = self.node.graph().add_param(param.clone());
         match self.kind() {
             SignalKind::Message => proc.output(0).connect(self),
             SignalKind::Sample => proc.to_audio().output(0).connect(self),
