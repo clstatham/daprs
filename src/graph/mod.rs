@@ -95,7 +95,6 @@ pub struct Graph {
     output_nodes: Vec<NodeIndex>,
 
     // internal flags for various states of the graph
-    needs_prepare: bool,
     needs_visitor_alloc: bool,
 
     // cached visitor state for graph traversal
@@ -120,12 +119,6 @@ impl Graph {
         &mut self.digraph
     }
 
-    /// Returns `true` if [`prepare_nodes`](Graph::prepare) must be called before the next [`process`](Graph::process) call.
-    #[inline]
-    pub fn needs_prepare(&self) -> bool {
-        self.needs_prepare
-    }
-
     #[inline]
     /// Returns `true` if the graph's visitor needs to be reallocated.
     pub fn needs_visitor_alloc(&self) -> bool {
@@ -148,21 +141,18 @@ impl Graph {
 
     /// Adds a new [`GraphNode`] with the given [`Processor`] to the graph.
     pub fn add_processor_object(&mut self, processor: Processor) -> NodeIndex {
-        self.needs_prepare = true;
         self.needs_visitor_alloc = true;
         self.digraph.add_node(GraphNode::Processor(processor))
     }
 
     /// Adds a new [`GraphNode`] with the given [`Process`] functionality to the graph.
     pub fn add_processor(&mut self, processor: impl Process) -> NodeIndex {
-        self.needs_prepare = true;
         self.needs_visitor_alloc = true;
         self.digraph.add_node(GraphNode::new_processor(processor))
     }
 
     /// Replaces the [`GraphNode`] at the given index in-place with a new [`Processor`].
     pub fn replace_processor(&mut self, node: NodeIndex, processor: impl Process) -> GraphNode {
-        self.needs_prepare = true;
         std::mem::replace(&mut self.digraph[node], GraphNode::new_processor(processor))
     }
 
@@ -205,7 +195,6 @@ impl Graph {
             self.digraph.remove_edge(edge.id()).unwrap();
         }
 
-        self.needs_prepare = true;
         self.needs_visitor_alloc = true;
 
         let edge = self
@@ -307,8 +296,6 @@ impl Graph {
             graph.digraph[node].prepare();
             Ok(())
         })?;
-
-        self.needs_prepare = false;
 
         Ok(())
     }

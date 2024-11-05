@@ -300,21 +300,25 @@ impl Runtime {
         Ok(())
     }
 
+    /// Returns the input buffer for the given node and input index.
     #[inline]
     pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut SignalBuffer {
         &mut self.buffer_cache.get_mut(&node).unwrap().inputs[input_index]
     }
 
+    /// Returns the output buffer for the given node and output index.
     #[inline]
     pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &SignalBuffer {
         &self.buffer_cache.get(&node).unwrap().outputs[output_index]
     }
 
+    /// Returns the input buffer for the given input index.
     #[inline]
     pub fn get_input_mut(&mut self, input_index: usize) -> &mut SignalBuffer {
         &mut self.inputs[input_index]
     }
 
+    /// Returns the output buffer for the given input index.
     #[inline]
     pub fn get_output(&self, output_index: usize) -> &SignalBuffer {
         &self.outputs[output_index]
