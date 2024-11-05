@@ -7,8 +7,9 @@ use petgraph::prelude::*;
 
 use crate::{
     graph::{edge::Edge, node::GraphNode, Graph, GraphRunError, NodeIndex},
+    prelude::SignalSpec,
     processor::ProcessorError,
-    signal::{Sample, SignalBuffer},
+    signal::{Sample, Signal, SignalBuffer},
 };
 
 /// An error that occurred during runtime operations.
@@ -90,8 +91,22 @@ pub enum Device {
 
 #[derive(Clone)]
 pub(crate) struct NodeBuffers {
+    input_spec: Vec<SignalSpec>,
+    output_spec: Vec<SignalSpec>,
     inputs: Vec<SignalBuffer>,
     outputs: Vec<SignalBuffer>,
+}
+
+impl NodeBuffers {
+    /// Resizes the input and output buffers to the given block size.
+    pub fn resize(&mut self, block_size: usize) {
+        for (input, spec) in self.inputs.iter_mut().zip(&self.input_spec) {
+            input.resize(block_size, spec.default_value.clone());
+        }
+        for (output, spec) in self.outputs.iter_mut().zip(&self.output_spec) {
+            output.resize(block_size, spec.default_value.clone());
+        }
+    }
 }
 
 /// The audio graph processing runtime.
@@ -118,16 +133,52 @@ pub struct Runtime {
 
 impl Runtime {
     /// Creates a new runtime with the given audio graph.
-    pub fn new(graph: Graph) -> Self {
+    pub fn new(mut graph: Graph) -> Self {
+        let mut buffer_cache = hashbrown::HashMap::default();
+
+        graph.allocate_visitor();
+        graph
+            .visit(|graph, node_id| -> RuntimeResult<()> {
+                let node = &graph.digraph()[node_id];
+                let input_spec = node.input_spec();
+                let output_spec = node.output_spec();
+
+                let mut inputs = Vec::with_capacity(input_spec.len());
+                let mut outputs = Vec::with_capacity(output_spec.len());
+
+                for spec in input_spec.iter() {
+                    let buffer = SignalBuffer::from_spec_default(spec, 0);
+                    inputs.push(buffer);
+                }
+
+                for spec in output_spec.iter() {
+                    let buffer = SignalBuffer::from_spec_default(spec, 0);
+                    outputs.push(buffer);
+                }
+
+                buffer_cache.insert(
+                    node_id,
+                    NodeBuffers {
+                        input_spec,
+                        output_spec,
+                        inputs,
+                        outputs,
+                    },
+                );
+
+                Ok(())
+            })
+            .unwrap();
+
         Runtime {
-            inputs: Vec::with_capacity(graph.num_inputs()),
-            outputs: Vec::with_capacity(graph.num_outputs()),
+            inputs: vec![SignalBuffer::new_sample(0); graph.num_inputs()],
+            outputs: vec![SignalBuffer::new_sample(0); graph.num_outputs()],
             input_ids: graph.input_indices().to_vec(),
             output_ids: graph.output_indices().to_vec(),
-            buffer_cache: hashbrown::HashMap::default(),
+            buffer_cache,
+            edge_cache: Vec::with_capacity(graph.digraph().edge_count().next_power_of_two()),
+            visit_path: Vec::with_capacity(graph.digraph().node_count()),
             graph,
-            edge_cache: Vec::new(),
-            visit_path: Vec::new(),
         }
     }
 
@@ -139,31 +190,20 @@ impl Runtime {
         let mut max_edges = 0;
 
         // allocate buffers
-        self.inputs = vec![SignalBuffer::new_sample(block_size); self.graph.num_inputs()];
-        self.outputs = vec![SignalBuffer::new_sample(block_size); self.graph.num_outputs()];
+        // self.inputs = vec![SignalBuffer::new_sample(block_size); self.graph.num_inputs()];
+        for input in self.inputs.iter_mut() {
+            input.resize(block_size, Signal::new_sample(0.0));
+        }
+        for output in self.outputs.iter_mut() {
+            output.resize(block_size, Signal::new_sample(0.0));
+        }
 
         self.graph.visit(|graph, node_id| -> RuntimeResult<()> {
             let node = &mut graph.digraph_mut()[node_id];
-            let input_spec = node.input_spec();
-            let output_spec = node.output_spec();
-
             node.resize_buffers(sample_rate, block_size);
 
-            let mut inputs = Vec::with_capacity(input_spec.len());
-            let mut outputs = Vec::with_capacity(output_spec.len());
-
-            for spec in input_spec {
-                let buffer = SignalBuffer::from_spec_default(&spec, block_size);
-                inputs.push(buffer);
-            }
-
-            for spec in output_spec {
-                let buffer = SignalBuffer::from_spec_default(&spec, block_size);
-                outputs.push(buffer);
-            }
-
-            self.buffer_cache
-                .insert(node_id, NodeBuffers { inputs, outputs });
+            let buffers = self.buffer_cache.get_mut(&node_id).unwrap();
+            buffers.resize(block_size);
 
             let num_inputs = graph
                 .digraph()
@@ -175,10 +215,12 @@ impl Runtime {
         })?;
 
         // allocate edge cache
-        self.edge_cache = Vec::with_capacity((max_edges * 2).next_power_of_two());
+        if self.edge_cache.capacity() < max_edges.next_power_of_two() {
+            let additional = max_edges.next_power_of_two() - self.edge_cache.capacity();
+            self.edge_cache.reserve(additional);
+        }
 
         // populate visitor path
-        self.visit_path = Vec::with_capacity(self.graph.digraph().node_count());
         self.visit_path.clear();
         let mut visitor = DfsPostOrder::empty(self.graph.digraph());
         for node in self.graph.digraph().externals(Direction::Incoming) {

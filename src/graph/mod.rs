@@ -240,7 +240,9 @@ impl Graph {
     }
 
     pub(crate) fn allocate_visitor(&mut self) {
-        self.visit_path = Vec::with_capacity(self.digraph.node_count());
+        if self.visit_path.capacity() < self.digraph.node_count() {
+            self.visit_path = Vec::with_capacity(self.digraph.node_count());
+        }
         self.reset_visitor();
 
         self.needs_visitor_alloc = false;

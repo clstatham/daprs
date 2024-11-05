@@ -31,7 +31,7 @@ pub enum ProcessorError {
 }
 
 /// Information about an input/output of a [`Process`] implementor.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SignalSpec {
     /// The name of the signal.
     pub name: String,
