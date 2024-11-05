@@ -162,6 +162,34 @@ impl Node {
         proc.input(0).connect(&self.output(0));
         proc
     }
+
+    /// Converts the output signal from a MIDI note to a frequency in Hz.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    #[track_caller]
+    pub fn midi2freq(&self) -> Node {
+        self.assert_single_output();
+        let proc = self.graph.add_processor(MidiToFreqProc);
+        proc.input(0).connect(&self.output(0));
+        proc
+    }
+
+    /// Converts the output signal from a frequency in Hz to a MIDI note.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    #[track_caller]
+    pub fn freq2midi(&self) -> Node {
+        self.assert_single_output();
+        let proc = self.graph.add_processor(FreqToMidiProc);
+        proc.input(0).connect(&self.output(0));
+        proc
+    }
 }
 
 /// An input of a node in the graph.

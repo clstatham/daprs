@@ -25,7 +25,6 @@ impl Default for ConstantProc {
     }
 }
 
-
 impl Process for ConstantProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -61,13 +60,120 @@ impl GraphBuilder {
     }
 }
 
+/// A processor that converts a MIDI note number to a frequency in Hz.
+///
+/// See also: [`GraphBuilder::midi2freq`](crate::builder::graph_builder::GraphBuilder::midi2freq).
+#[derive(Clone, Debug, Default)]
+pub struct MidiToFreqProc;
+
+impl Process for MidiToFreqProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("note", 69.0)]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("freq", 440.0)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let note = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+        let freq = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (note, freq) in itertools::izip!(note, freq) {
+            **freq = (2.0_f64).powf((**note - 69.0) / 12.0) * 440.0;
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that converts a MIDI note number to a frequency in Hz.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Default | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `note` | `69.0` | The MIDI note number to convert to a frequency. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Default | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `freq` | `440.0` | The frequency in Hz. |
+    pub fn midi2freq(&self) -> Node {
+        self.add_processor(MidiToFreqProc)
+    }
+}
+
+/// A processor that converts a frequency in Hz to a MIDI note number.
+///
+/// See also: [`GraphBuilder::freq2midi`](crate::builder::graph_builder::GraphBuilder::freq2midi).
+#[derive(Clone, Debug, Default)]
+pub struct FreqToMidiProc;
+
+impl Process for FreqToMidiProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("freq", 440.0)]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("note", 69.0)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let freq = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+        let note = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (freq, note) in itertools::izip!(freq, note) {
+            **note = 69.0 + 12.0 * (**freq / 440.0).log2();
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that converts a frequency in Hz to a MIDI note number.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Default | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `freq` | `440.0` | The frequency in Hz to convert to a MIDI note number. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Default | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `note` | `69.0` | The MIDI note number. |
+    pub fn freq2midi(&self) -> Node {
+        self.add_processor(FreqToMidiProc)
+    }
+}
+
 macro_rules! impl_binary_proc {
     ($name:ident, $method:ident, $doc:expr) => {
         #[derive(Clone, Debug, Default)]
         #[doc = $doc]
         pub struct $name;
 
-        
         impl Process for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![
@@ -325,7 +431,6 @@ macro_rules! impl_unary_proc {
         #[doc = $doc]
         pub struct $name;
 
-        
         impl Process for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![SignalSpec::unbounded("in", 0.0)]

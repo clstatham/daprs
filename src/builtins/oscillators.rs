@@ -1,5 +1,7 @@
 //! Oscillator processors.
 
+use rand::prelude::Distribution;
+
 use crate::prelude::*;
 
 /// A phase accumulator.
@@ -13,7 +15,6 @@ pub struct PhaseAccumulator {
     // phase increment per sample
     t_step: f64,
 }
-
 
 impl Process for PhaseAccumulator {
     fn input_spec(&self) -> Vec<SignalSpec> {
@@ -97,7 +98,6 @@ pub struct SineOscillator {
     // sample rate
     sample_rate: f64,
 }
-
 
 impl Process for SineOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
@@ -190,7 +190,6 @@ pub struct SawOscillator {
     sample_rate: f64,
 }
 
-
 impl Process for SawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -264,5 +263,71 @@ impl GraphBuilder {
     /// | `0` | `out` | `Sample` | The output sawtooth wave signal. |
     pub fn saw_osc(&self) -> Node {
         self.add_processor(SawOscillator::default())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct NoiseOscillator {
+    distribution: rand::distributions::Uniform<f64>,
+}
+
+impl NoiseOscillator {
+    pub fn new() -> Self {
+        NoiseOscillator {
+            distribution: rand::distributions::Uniform::new(0.0, 1.0),
+        }
+    }
+}
+
+impl Default for NoiseOscillator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Process for NoiseOscillator {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", 0.0)]
+    }
+
+    fn process(
+        &mut self,
+        _inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let out = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for out in itertools::izip!(out) {
+            // generate a random number
+            **out = self.distribution.sample(&mut rand::thread_rng());
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A free-running unipolar noise oscillator.
+    ///
+    /// The noise oscillator generates a random signal between 0 and 1 that changes every sample.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Sample` | The output noise signal. |
+    pub fn noise_osc(&self) -> Node {
+        self.add_processor(NoiseOscillator::new())
     }
 }

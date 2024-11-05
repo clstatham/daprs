@@ -213,10 +213,6 @@ impl Process for PrintProc {
             .as_message()
             .ok_or(ProcessorError::InputSpecMismatch(1))?;
 
-        if !print.is_all_bang() {
-            return Err(ProcessorError::InputSpecMismatch(0));
-        }
-
         for (bang, message) in itertools::izip!(print, message) {
             if let Some(message) = message {
                 self.msg = Some(format!("{}", message));
@@ -1059,5 +1055,80 @@ impl GraphBuilder {
     /// | `0` | `count` | `Message(Int)` | The current count. |
     pub fn counter(&self) -> Node {
         self.add_processor(CounterProc::default())
+    }
+}
+
+/// A sample-and-hold processor.
+#[derive(Clone, Debug, Default)]
+pub struct SampleAndHoldProc {
+    last: Option<Sample>,
+}
+
+impl Process for SampleAndHoldProc {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::unbounded("in", 0.0),
+            SignalSpec::unbounded("trig", Signal::new_message_none()),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", 0.0)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let in_signal = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let trig = inputs[1]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(1))?;
+
+        let out_signal = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (in_signal, trig, out_signal) in itertools::izip!(in_signal, trig, out_signal) {
+            let in_signal = **in_signal;
+
+            if trig.is_some() {
+                self.last = Some(Sample::new(in_signal));
+            }
+
+            if let Some(last) = self.last {
+                *out_signal = last;
+            } else {
+                *out_signal = Sample::new(0.0);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A sample-and-hold processor.
+    ///
+    /// The processor holds the last value it received when triggered.
+    ///
+    /// # Inputs
+    ///
+    /// | Index | Name | Type | Default | Description |
+    /// | --- | --- | --- | --- | --- |
+    /// | `0` | `in` | `Sample` | | The input signal to sample. |
+    /// | `1` | `trig` | `Message(Bang)` | | Triggers the sample-and-hold. |
+    ///
+    /// # Outputs
+    ///
+    /// | Index | Name | Type | Description |
+    /// | --- | --- | --- | --- |
+    /// | `0` | `out` | `Sample` | The sampled value. |
+    pub fn sample_and_hold(&self) -> Node {
+        self.add_processor(SampleAndHoldProc::default())
     }
 }
