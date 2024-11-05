@@ -264,9 +264,14 @@ impl Runtime {
         &mut self.graph
     }
 
+    #[inline]
+    pub fn param_iter(&self) -> impl Iterator<Item = (&str, &Param)> + '_ {
+        self.graph.param_iter()
+    }
+
     /// Returns a copy of the [`Param`] with the given name.
     #[inline]
-    pub fn param_named(&self, name: impl AsRef<str>) -> Option<Param> {
+    pub fn param_named(&self, name: impl AsRef<str>) -> Option<&Param> {
         self.graph.param_named(name)
     }
 

@@ -242,14 +242,21 @@ impl Graph {
         self.params.get(name).copied()
     }
 
+    #[inline]
+    pub fn param_iter(&self) -> impl Iterator<Item = (&str, &Param)> + '_ {
+        self.params
+            .keys()
+            .map(|name| (name.as_str(), self.param_named(name).unwrap()))
+    }
+
     /// Returns a reference to the [`Param`] with the given name.
     #[inline]
-    pub fn param_named(&self, name: impl AsRef<str>) -> Option<Param> {
+    pub fn param_named(&self, name: impl AsRef<str>) -> Option<&Param> {
         self.params
             .get(name.as_ref())
             .and_then(|&idx| match &self.digraph[idx] {
                 GraphNode::Processor(proc) => {
-                    (*proc.processor).downcast_ref::<Param>().cloned()
+                    (*proc.processor).downcast_ref::<Param>()
                     // proc.processor.as_any().downcast_ref::<Param>().cloned()
                 }
                 _ => None,
