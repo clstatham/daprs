@@ -264,6 +264,7 @@ impl Runtime {
         &mut self.graph
     }
 
+    /// Returns an iterator over the [`Param`]s in the graph.
     #[inline]
     pub fn param_iter(&self) -> impl Iterator<Item = (&str, &Param)> + '_ {
         self.graph.param_iter()

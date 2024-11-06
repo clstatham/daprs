@@ -87,7 +87,7 @@ impl Process for MessageSender {
 impl GraphBuilder {
     /// A processor that sends a message when triggered.
     ///
-    /// See also: [MessageSender](crate::builtins::util::MessageSender).
+    /// See also: [MessageSender].
     pub fn message(&self, message: impl Into<Message>) -> Node {
         self.add_processor(MessageSender::new(message.into()))
     }
@@ -139,7 +139,7 @@ impl Process for ConstantMessageSender {
 impl GraphBuilder {
     /// A processor that sends a constant message every sample.
     ///
-    /// See also: [ConstantMessageSender](crate::builtins::util::ConstantMessageSender).
+    /// See also: [ConstantMessageSender].
     pub fn constant_message(&self, message: impl Into<Message>) -> Node {
         self.add_processor(ConstantMessageSender::new(message.into()))
     }
@@ -247,7 +247,7 @@ impl Process for Print {
 impl GraphBuilder {
     /// A processor that prints a message when triggered.
     ///
-    /// See also: [Print](crate::builtins::util::Print).
+    /// See also: [Print].
     pub fn print<'a>(
         &self,
         name: impl Into<Option<&'a str>>,
@@ -308,6 +308,9 @@ impl Process for MessageToAudio {
 }
 
 impl GraphBuilder {
+    /// A processor that converts a message to an audio signal.
+    ///
+    /// See also: [MessageToAudio].
     pub fn message_to_audio(&self) -> Node {
         self.add_processor(MessageToAudio)
     }
@@ -362,7 +365,7 @@ impl Process for AudioToMessage {
 impl GraphBuilder {
     /// A processor that converts an audio sample to a float message.
     ///
-    /// See also: [AudioToMessage](crate::builtins::util::AudioToMessage).
+    /// See also: [AudioToMessage].
     pub fn audio_to_message(&self) -> Node {
         self.add_processor(AudioToMessage)
     }
@@ -411,7 +414,7 @@ impl Process for SampleRate {
 impl GraphBuilder {
     /// A processor that outputs the sample rate that the graph is running at.
     ///
-    /// See also: [SampleRate](crate::builtins::util::SampleRate).
+    /// See also: [SampleRate].
     pub fn sample_rate(&self) -> Node {
         self.add_processor(SampleRate::default())
     }
@@ -488,7 +491,7 @@ impl Process for Smooth {
 impl GraphBuilder {
     /// A processor that smoothly interpolates between values over time.
     ///
-    /// See also: [Smooth](crate::builtins::util::Smooth).
+    /// See also: [Smooth].
     pub fn smooth(&self) -> Node {
         self.add_processor(Smooth::default())
     }
@@ -563,7 +566,7 @@ impl Process for Changed {
 impl GraphBuilder {
     /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
     ///
-    /// See also: [Changed](crate::builtins::util::Changed).
+    /// See also: [Changed].
     pub fn changed(&self) -> Node {
         self.add_processor(Changed::default())
     }
@@ -628,7 +631,7 @@ impl Process for ZeroCrossing {
 impl GraphBuilder {
     /// A processor that sends a bang message when a zero crossing is detected on the input signal.
     ///
-    /// See also: [ZeroCrossing](crate::builtins::util::ZeroCrossing).
+    /// See also: [ZeroCrossing].
     pub fn zero_crossing(&self) -> Node {
         self.add_processor(ZeroCrossing::default())
     }
@@ -779,7 +782,7 @@ impl Process for Param {
 impl GraphBuilder {
     /// A processor that can be used to send/receive messages from outside the graph.
     ///
-    /// See also: [Param](crate::builtins::util::Param).
+    /// See also: [Param].
     pub fn param(&self, param: &Param) -> Node {
         self.add_param(param.clone())
     }
@@ -876,7 +879,7 @@ impl Process for Select {
 impl GraphBuilder {
     /// A processor that selects an output based on an index.
     ///
-    /// See also: [Select](crate::builtins::util::Select).
+    /// See also: [Select].
     pub fn select(&self, num_outputs: usize) -> Node {
         self.add_processor(Select::new(num_outputs))
     }
@@ -958,7 +961,7 @@ impl Process for Merge {
 impl GraphBuilder {
     /// A processor that outputs any messages it receives on any of its inputs.
     ///
-    /// See also: [Merge](crate::builtins::util::Merge).
+    /// See also: [Merge].
     pub fn merge(&self, num_inputs: usize) -> Node {
         self.add_processor(Merge::new(num_inputs))
     }
@@ -1031,7 +1034,7 @@ impl Process for Counter {
 impl GraphBuilder {
     /// A processor that counts the number of times it receives a bang message.
     ///
-    /// See also: [Counter](crate::builtins::util::Counter).
+    /// See also: [Counter].
     pub fn counter(&self) -> Node {
         self.add_processor(Counter::default())
     }
@@ -1108,7 +1111,7 @@ impl Process for SampleAndHold {
 impl GraphBuilder {
     /// A sample-and-hold processor.
     ///
-    /// See also: [SampleAndHold](crate::builtins::util::SampleAndHold).
+    /// See also: [SampleAndHold].
     pub fn sample_and_hold(&self) -> Node {
         self.add_processor(SampleAndHold::default())
     }

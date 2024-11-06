@@ -796,6 +796,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Fills the buffer with the default value of the given [`SignalSpec`].
     pub fn fill_with_spec_default(&mut self, spec: &SignalSpec) {
         self.fill(spec.default_value.clone());
     }

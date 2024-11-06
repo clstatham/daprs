@@ -14,24 +14,24 @@ use std::ops::{
 /// | `0` | `out` | `0.0` | The constant value. |
 #[derive(Clone, Debug)]
 
-pub struct ConstantProc {
+pub struct Constant {
     value: f64,
 }
 
-impl ConstantProc {
+impl Constant {
     /// Creates a new constant processor with the given value.
     pub fn new(value: f64) -> Self {
         Self { value }
     }
 }
 
-impl Default for ConstantProc {
+impl Default for Constant {
     fn default() -> Self {
         Self { value: 0.0 }
     }
 }
 
-impl Process for ConstantProc {
+impl Process for Constant {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
@@ -54,8 +54,11 @@ impl Process for ConstantProc {
 }
 
 impl GraphBuilder {
+    /// A processor that outputs a constant value.
+    ///
+    /// See also: [`Constant`].
     pub fn constant(&self, value: f64) -> Node {
-        self.add_processor(ConstantProc::new(value))
+        self.add_processor(Constant::new(value))
     }
 }
 
@@ -73,9 +76,9 @@ impl GraphBuilder {
 /// | --- | --- | --- | --- |
 /// | `0` | `freq` | `440.0` | The frequency in Hz. |
 #[derive(Clone, Debug, Default)]
-pub struct MidiToFreqProc;
+pub struct MidiToFreq;
 
-impl Process for MidiToFreqProc {
+impl Process for MidiToFreq {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("note", 69.0)]
     }
@@ -105,8 +108,11 @@ impl Process for MidiToFreqProc {
 }
 
 impl GraphBuilder {
+    /// A processor that converts a MIDI note number to a frequency in Hz.
+    ///
+    /// See also: [`MidiToFreq`].
     pub fn midi2freq(&self) -> Node {
-        self.add_processor(MidiToFreqProc)
+        self.add_processor(MidiToFreq)
     }
 }
 
@@ -156,6 +162,9 @@ impl Process for FreqToMidi {
 }
 
 impl GraphBuilder {
+    /// A processor that converts a frequency in Hz to a MIDI note number.
+    ///
+    /// See also: [`FreqToMidi`].
     pub fn freq2midi(&self) -> Node {
         self.add_processor(FreqToMidi)
     }

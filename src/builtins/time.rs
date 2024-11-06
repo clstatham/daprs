@@ -110,7 +110,7 @@ impl Process for Metro {
 impl GraphBuilder {
     /// A metronome processor.
     ///
-    /// See also: [`Metro`](crate::builtins::time::Metro).
+    /// See also: [`Metro`].
     pub fn metro(&self) -> Node {
         self.add_processor(Metro::new())
     }

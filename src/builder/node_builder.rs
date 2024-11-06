@@ -172,7 +172,7 @@ impl Node {
     #[track_caller]
     pub fn midi2freq(&self) -> Node {
         self.assert_single_output();
-        let proc = self.graph.add_processor(MidiToFreqProc);
+        let proc = self.graph.add_processor(MidiToFreq);
         proc.input(0).connect(&self.output(0));
         proc
     }

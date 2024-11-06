@@ -78,7 +78,7 @@ impl Process for PhaseAccumulator {
 impl GraphBuilder {
     /// A phase accumulator.
     ///
-    /// See also: [`PhaseAccumulator`](crate::builtins::oscillators::PhaseAccumulator).
+    /// See also: [`PhaseAccumulator`].
     pub fn phase_accum(&self) -> Node {
         self.add_processor(PhaseAccumulator::default())
     }
@@ -168,7 +168,7 @@ impl Process for SineOscillator {
 impl GraphBuilder {
     /// A free-running sine wave oscillator.
     ///
-    /// See also: [`SineOscillator`](crate::builtins::oscillators::SineOscillator).
+    /// See also: [`SineOscillator`].
     pub fn sine_osc(&self) -> Node {
         self.add_processor(SineOscillator::default())
     }
@@ -257,7 +257,7 @@ impl Process for SawOscillator {
 impl GraphBuilder {
     /// A free-running sawtooth wave oscillator.
     ///
-    /// See also: [`SawOscillator`](crate::builtins::oscillators::SawOscillator).
+    /// See also: [`SawOscillator`].
     pub fn saw_osc(&self) -> Node {
         self.add_processor(SawOscillator::default())
     }
@@ -283,6 +283,7 @@ pub struct NoiseOscillator {
 }
 
 impl NoiseOscillator {
+    /// Creates a new noise oscillator.
     pub fn new() -> Self {
         NoiseOscillator {
             distribution: rand::distributions::Uniform::new(0.0, 1.0),
@@ -326,7 +327,7 @@ impl Process for NoiseOscillator {
 impl GraphBuilder {
     /// A free-running unipolar noise oscillator.
     ///
-    /// See also: [`NoiseOscillator`](crate::builtins::oscillators::NoiseOscillator).
+    /// See also: [`NoiseOscillator`].
     pub fn noise_osc(&self) -> Node {
         self.add_processor(NoiseOscillator::new())
     }

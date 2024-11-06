@@ -91,7 +91,7 @@ impl Process for BufferReader {
 impl GraphBuilder {
     /// A processor that reads a sample from a buffer.
     ///
-    /// See also: [`BufferReader`](crate::builtins::storage::BufferReader).
+    /// See also: [`BufferReader`].
     pub fn buffer_reader(&self, buffer: impl Into<Buffer<Sample>>) -> Node {
         self.add_processor(BufferReader::new(buffer.into()))
     }
@@ -164,7 +164,7 @@ impl Process for Register {
 impl GraphBuilder {
     /// A processor that stores a message in a register.
     ///
-    /// See also: [`Register`](crate::builtins::storage::Register).
+    /// See also: [`Register`].
     pub fn register(&self) -> Node {
         self.add_processor(Register::default())
     }
