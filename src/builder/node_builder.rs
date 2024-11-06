@@ -186,7 +186,7 @@ impl Node {
     #[track_caller]
     pub fn freq2midi(&self) -> Node {
         self.assert_single_output();
-        let proc = self.graph.add_processor(FreqToMidiProc);
+        let proc = self.graph.add_processor(FreqToMidi);
         proc.input(0).connect(&self.output(0));
         proc
     }
@@ -517,38 +517,33 @@ macro_rules! impl_binary_node_ops {
     };
 }
 
-impl_binary_node_ops!(add, Add, math::AddProc, "Adds two signals together.");
-impl_binary_node_ops!(
-    sub,
-    Sub,
-    math::SubProc,
-    "Subtracts one signal from another."
-);
-impl_binary_node_ops!(mul, Mul, math::MulProc, "Multiplies two signals together.");
-impl_binary_node_ops!(div, Div, math::DivProc, "Divides one signal by another.");
+impl_binary_node_ops!(add, Add, math::Add, "Adds two signals together.");
+impl_binary_node_ops!(sub, Sub, math::Sub, "Subtracts one signal from another.");
+impl_binary_node_ops!(mul, Mul, math::Mul, "Multiplies two signals together.");
+impl_binary_node_ops!(div, Div, math::Div, "Divides one signal by another.");
 impl_binary_node_ops!(
     rem,
     Rem,
-    math::RemProc,
+    math::Rem,
     "Calculates the remainder of one signal divided by another."
 );
 impl_binary_node_ops!(
     powf,
-    math::PowfProc,
+    math::Powf,
     "Raises one signal to the power of another."
 );
 impl_binary_node_ops!(
     atan2,
-    math::Atan2Proc,
+    math::Atan2,
     "Calculates the arctangent of the ratio of two signals."
 );
 impl_binary_node_ops!(
     hypot,
-    math::HypotProc,
+    math::Hypot,
     "Calculates the hypotenuse of two signals."
 );
-impl_binary_node_ops!(max, math::MaxProc, "Returns the maximum of two signals.");
-impl_binary_node_ops!(min, math::MinProc, "Returns the minimum of two signals.");
+impl_binary_node_ops!(max, math::Max, "Returns the maximum of two signals.");
+impl_binary_node_ops!(min, math::Min, "Returns the minimum of two signals.");
 
 macro_rules! impl_unary_node_ops {
     ($name:ident, $proc:ty, $doc:expr) => {
@@ -568,7 +563,7 @@ macro_rules! impl_unary_node_ops {
     };
 }
 
-impl_unary_node_ops!(neg, math::NegProc, "Negates the input signal.");
+impl_unary_node_ops!(neg, math::Neg, "Negates the input signal.");
 
 impl std::ops::Neg for &Node {
     type Output = Node;
@@ -580,76 +575,54 @@ impl std::ops::Neg for &Node {
 
 impl_unary_node_ops!(
     abs,
-    math::AbsProc,
+    math::Abs,
     "Calculates the absolute value of the input signal."
 );
 impl_unary_node_ops!(
     sqrt,
-    math::SqrtProc,
+    math::Sqrt,
     "Calculates the square root of the input signal."
 );
 impl_unary_node_ops!(
     cbrt,
-    math::CbrtProc,
+    math::Cbrt,
     "Calculates the cube root of the input signal."
 );
 impl_unary_node_ops!(
     ceil,
-    math::CeilProc,
+    math::Ceil,
     "Rounds the input signal up to the nearest integer."
 );
 impl_unary_node_ops!(
     floor,
-    math::FloorProc,
+    math::Floor,
     "Rounds the input signal down to the nearest integer."
 );
 impl_unary_node_ops!(
     round,
-    math::RoundProc,
+    math::Round,
     "Rounds the input signal to the nearest integer."
 );
-impl_unary_node_ops!(
-    sin,
-    math::SinProc,
-    "Calculates the sine of the input signal."
-);
-impl_unary_node_ops!(
-    cos,
-    math::CosProc,
-    "Calculates the cosine of the input signal."
-);
+impl_unary_node_ops!(sin, math::Sin, "Calculates the sine of the input signal.");
+impl_unary_node_ops!(cos, math::Cos, "Calculates the cosine of the input signal.");
 impl_unary_node_ops!(
     tan,
-    math::TanProc,
+    math::Tan,
     "Calculates the tangent of the input signal."
 );
-impl_unary_node_ops!(
-    asin,
-    math::AsinProc,
-    "Calculates the arcsine of the input signal."
-);
-impl_unary_node_ops!(
-    acos,
-    math::AcosProc,
-    "Calculates the arccosine of the input signal."
-);
-impl_unary_node_ops!(
-    atan,
-    math::AtanProc,
-    "Calculates the arctangent of the input signal."
-);
+
 impl_unary_node_ops!(
     recip,
-    math::RecipProc,
+    math::Recip,
     "Calculates the reciprocal of the input signal."
 );
 impl_unary_node_ops!(
     signum,
-    math::SignumProc,
+    math::Signum,
     "Returns the sign of the input signal."
 );
 impl_unary_node_ops!(
     fract,
-    math::FractProc,
+    math::Fract,
     "Returns the fractional part of the input signal."
 );

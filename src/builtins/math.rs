@@ -1,11 +1,17 @@
 //! Mathematical processors.
 
 use crate::{prelude::*, processor::ProcessorError, signal::SignalBuffer};
-use std::ops::*;
+use std::ops::{
+    Add as AddOp, Div as DivOp, Mul as MulOp, Neg as NegOp, Rem as RemOp, Sub as SubOp,
+};
 
 /// A processor that outputs a constant value.
 ///
-/// See also: [`GraphBuilder::constant`](crate::builder::graph_builder::GraphBuilder::constant).
+/// # Outputs
+///
+/// | Index | Name | Default | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `0.0` | The constant value. |
 #[derive(Clone, Debug)]
 
 pub struct ConstantProc {
@@ -48,13 +54,6 @@ impl Process for ConstantProc {
 }
 
 impl GraphBuilder {
-    /// A processor that outputs a constant value.
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Default | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `0.0` | The constant value. |
     pub fn constant(&self, value: f64) -> Node {
         self.add_processor(ConstantProc::new(value))
     }
@@ -62,7 +61,17 @@ impl GraphBuilder {
 
 /// A processor that converts a MIDI note number to a frequency in Hz.
 ///
-/// See also: [`GraphBuilder::midi2freq`](crate::builder::graph_builder::GraphBuilder::midi2freq).
+/// # Inputs
+///
+/// | Index | Name | Default | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `note` | `69.0` | The MIDI note number to convert to a frequency. |
+///
+/// # Outputs
+///
+/// | Index | Name | Default | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `freq` | `440.0` | The frequency in Hz. |
 #[derive(Clone, Debug, Default)]
 pub struct MidiToFreqProc;
 
@@ -96,19 +105,6 @@ impl Process for MidiToFreqProc {
 }
 
 impl GraphBuilder {
-    /// A processor that converts a MIDI note number to a frequency in Hz.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Default | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `note` | `69.0` | The MIDI note number to convert to a frequency. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Default | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `freq` | `440.0` | The frequency in Hz. |
     pub fn midi2freq(&self) -> Node {
         self.add_processor(MidiToFreqProc)
     }
@@ -116,11 +112,21 @@ impl GraphBuilder {
 
 /// A processor that converts a frequency in Hz to a MIDI note number.
 ///
-/// See also: [`GraphBuilder::freq2midi`](crate::builder::graph_builder::GraphBuilder::freq2midi).
+/// # Inputs
+///
+/// | Index | Name | Default | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `freq` | `440.0` | The frequency in Hz to convert to a MIDI note number. |
+///
+/// # Outputs
+///
+/// | Index | Name | Default | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `note` | `69.0` | The MIDI note number. |
 #[derive(Clone, Debug, Default)]
-pub struct FreqToMidiProc;
+pub struct FreqToMidi;
 
-impl Process for FreqToMidiProc {
+impl Process for FreqToMidi {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("freq", 440.0)]
     }
@@ -150,26 +156,13 @@ impl Process for FreqToMidiProc {
 }
 
 impl GraphBuilder {
-    /// A processor that converts a frequency in Hz to a MIDI note number.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Default | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `freq` | `440.0` | The frequency in Hz to convert to a MIDI note number. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Default | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `note` | `69.0` | The MIDI note number. |
     pub fn freq2midi(&self) -> Node {
-        self.add_processor(FreqToMidiProc)
+        self.add_processor(FreqToMidi)
     }
 }
 
 macro_rules! impl_binary_proc {
-    ($name:ident, $method:ident, $doc:expr) => {
+    ($name:ident, $method:ident, $shortdoc:literal, $doc:literal) => {
         #[derive(Clone, Debug, Default)]
         #[doc = $doc]
         pub struct $name;
@@ -202,7 +195,8 @@ macro_rules! impl_binary_proc {
                     .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
                 for (sample, in1, in2) in itertools::izip!(out, in1, in2) {
-                    *sample = (**in1).$method(**in2).into();
+                    // *sample = (**in1).$method(**in2).into();
+                    **sample = f64::$method(**in1, **in2);
                 }
 
                 Ok(())
@@ -210,7 +204,7 @@ macro_rules! impl_binary_proc {
         }
 
         impl GraphBuilder {
-            #[doc = $doc]
+            #[doc = $shortdoc]
             pub fn $method(&self) -> Node {
                 self.add_processor($name)
             }
@@ -219,8 +213,13 @@ macro_rules! impl_binary_proc {
 }
 
 impl_binary_proc!(
-    AddProc,
+    Add,
     add,
+    r#"
+A processor that adds two signals together.
+
+See also: [`Add`](crate::builtins::math::Add).
+    "#,
     r#"
 A processor that adds two signals together.
 
@@ -239,8 +238,13 @@ A processor that adds two signals together.
     "#
 );
 impl_binary_proc!(
-    SubProc,
+    Sub,
     sub,
+    r#"
+A processor that subtracts one signal from another.
+
+See also: [`Sub`](crate::builtins::math::Sub).
+    "#,
     r#"
 A processor that subtracts one signal from another.
 
@@ -259,8 +263,13 @@ A processor that subtracts one signal from another.
     "#
 );
 impl_binary_proc!(
-    MulProc,
+    Mul,
     mul,
+    r#"
+A processor that multiplies two signals together.
+
+See also: [`Mul`](crate::builtins::math::Mul).
+    "#,
     r#"
 A processor that multiplies two signals together.
 
@@ -279,8 +288,13 @@ A processor that multiplies two signals together.
     "#
 );
 impl_binary_proc!(
-    DivProc,
+    Div,
     div,
+    r#"
+A processor that divides one signal by another.
+
+See also: [`Div`](crate::builtins::math::Div).
+    "#,
     r#"
 A processor that divides one signal by another.
 
@@ -301,8 +315,13 @@ Note that the second input defaults to `0.0`, so be sure to provide a non-zero v
     "#
 );
 impl_binary_proc!(
-    RemProc,
+    Rem,
     rem,
+    r#"
+A processor that calculates the remainder of one signal divided by another.
+
+See also: [`Rem`](crate::builtins::math::Rem).
+    "#,
     r#"
 A processor that calculates the remainder of one signal divided by another.
 
@@ -323,8 +342,13 @@ Note that the second input defaults to `0.0`, so be sure to provide a non-zero v
     "#
 );
 impl_binary_proc!(
-    PowfProc,
+    Powf,
     powf,
+    r#"
+A processor that raises one signal to the power of a constant value.
+
+See also: [`Powf`](crate::builtins::math::Powf).
+    "#,
     r#"
 A processor that raises one signal to the power of another.
 
@@ -343,8 +367,13 @@ A processor that raises one signal to the power of another.
     "#
 );
 impl_binary_proc!(
-    Atan2Proc,
+    Atan2,
     atan2,
+    r#"
+A processor that calculates the arctangent of the ratio of two signals.
+
+See also: [`Atan2`](crate::builtins::math::Atan2).
+    "#,
     r#"
 A processor that calculates the arctangent of the ratio of two signals.
 
@@ -365,8 +394,13 @@ Note that the second input defaults to `0.0`, so be sure to provide a non-zero v
     "#
 );
 impl_binary_proc!(
-    HypotProc,
+    Hypot,
     hypot,
+    r#"
+A processor that calculates the hypotenuse of two signals.
+
+See also: [`Hypot`](crate::builtins::math::Hypot).
+    "#,
     r#"
 A processor that calculates the hypotenuse of two signals.
 
@@ -385,8 +419,13 @@ A processor that calculates the hypotenuse of two signals.
     "#
 );
 impl_binary_proc!(
-    MaxProc,
+    Max,
     max,
+    r#"
+A processor that calculates the maximum of two signals.
+
+See also: [`Max`](crate::builtins::math::Max).
+    "#,
     r#"
 A processor that calculates the maximum of two signals.
 
@@ -405,8 +444,13 @@ A processor that calculates the maximum of two signals.
     "#
 );
 impl_binary_proc!(
-    MinProc,
+    Min,
     min,
+    r#"
+A processor that calculates the minimum of two signals.
+
+See also: [`Min`](crate::builtins::math::Min).
+    "#,
     r#"
 A processor that calculates the minimum of two signals.
 
@@ -426,7 +470,7 @@ A processor that calculates the minimum of two signals.
 );
 
 macro_rules! impl_unary_proc {
-    ($name:ident, $method:ident, $doc:expr) => {
+    ($name:ident, $method:ident, $shortdoc:literal, $doc:literal) => {
         #[derive(Clone, Debug, Default)]
         #[doc = $doc]
         pub struct $name;
@@ -461,7 +505,7 @@ macro_rules! impl_unary_proc {
         }
 
         impl GraphBuilder {
-            #[doc = $doc]
+            #[doc = $shortdoc]
             pub fn $method(&self) -> Node {
                 self.add_processor($name)
             }
@@ -470,8 +514,13 @@ macro_rules! impl_unary_proc {
 }
 
 impl_unary_proc!(
-    NegProc,
+    Neg,
     neg,
+    r#"
+A processor that negates a signal.
+
+See also: [`Neg`](crate::builtins::math::Neg).
+    "#,
     r#"
 A processor that negates a signal.
 
@@ -489,8 +538,13 @@ A processor that negates a signal.
     "#
 );
 impl_unary_proc!(
-    AbsProc,
+    Abs,
     abs,
+    r#"
+A processor that calculates the absolute value of a signal.
+
+See also: [`Abs`](crate::builtins::math::Abs).
+    "#,
     r#"
 A processor that calculates the absolute value of a signal.
 
@@ -508,8 +562,13 @@ A processor that calculates the absolute value of a signal.
     "#
 );
 impl_unary_proc!(
-    SqrtProc,
+    Sqrt,
     sqrt,
+    r#"
+A processor that calculates the square root of a signal.
+
+See also: [`Sqrt`](crate::builtins::math::Sqrt).
+    "#,
     r#"
 A processor that calculates the square root of a signal.
 
@@ -527,8 +586,13 @@ A processor that calculates the square root of a signal.
     "#
 );
 impl_unary_proc!(
-    CbrtProc,
+    Cbrt,
     cbrt,
+    r#"
+A processor that calculates the cube root of a signal.
+
+See also: [`Cbrt`](crate::builtins::math::Cbrt).
+    "#,
     r#"
 A processor that calculates the cube root of a signal.
 
@@ -546,8 +610,13 @@ A processor that calculates the cube root of a signal.
     "#
 );
 impl_unary_proc!(
-    CeilProc,
+    Ceil,
     ceil,
+    r#"
+A processor that rounds a signal up to the nearest integer.
+
+See also: [`Ceil`](crate::builtins::math::Ceil).
+    "#,
     r#"
 A processor that rounds a signal up to the nearest integer.
 
@@ -565,8 +634,13 @@ A processor that rounds a signal up to the nearest integer.
     "#
 );
 impl_unary_proc!(
-    FloorProc,
+    Floor,
     floor,
+    r#"
+A processor that rounds a signal down to the nearest integer.
+
+See also: [`Floor`](crate::builtins::math::Floor).
+    "#,
     r#"
 A processor that rounds a signal down to the nearest integer.
 
@@ -584,8 +658,13 @@ A processor that rounds a signal down to the nearest integer.
     "#
 );
 impl_unary_proc!(
-    RoundProc,
+    Round,
     round,
+    r#"
+A processor that rounds a signal to the nearest integer.
+
+See also: [`Round`](crate::builtins::math::Round).
+    "#,
     r#"
 A processor that rounds a signal to the nearest integer.
 
@@ -603,8 +682,13 @@ A processor that rounds a signal to the nearest integer.
     "#
 );
 impl_unary_proc!(
-    TruncProc,
+    Trunc,
     trunc,
+    r#"
+A processor that truncates a signal to an integer.
+
+See also: [`Trunc`](crate::builtins::math::Trunc).
+    "#,
     r#"
 A processor that truncates a signal to an integer.
 
@@ -622,8 +706,13 @@ A processor that truncates a signal to an integer.
     "#
 );
 impl_unary_proc!(
-    FractProc,
+    Fract,
     fract,
+    r#"
+A processor that returns the fractional part of a signal.
+
+See also: [`Fract`](crate::builtins::math::Fract).
+    "#,
     r#"
 A processor that returns the fractional part of a signal.
 
@@ -641,8 +730,13 @@ A processor that returns the fractional part of a signal.
     "#
 );
 impl_unary_proc!(
-    RecipProc,
+    Recip,
     recip,
+    r#"
+A processor that calculates the reciprocal of a signal.
+
+See also: [`Recip`](crate::builtins::math::Recip).
+    "#,
     r#"
 A processor that calculates the reciprocal of a signal.
 
@@ -662,8 +756,13 @@ Note that the input signal defaults to `0.0`, so be sure to provide a non-zero v
     "#
 );
 impl_unary_proc!(
-    SignumProc,
+    Signum,
     signum,
+    r#"
+A processor that returns the sign of a signal.
+
+See also: [`Signum`](crate::builtins::math::Signum).
+    "#,
     r#"
 A processor that returns the sign of a signal.
 
@@ -681,8 +780,13 @@ A processor that returns the sign of a signal.
     "#
 );
 impl_unary_proc!(
-    SinProc,
+    Sin,
     sin,
+    r#"
+A processor that calculates the sine of a signal.
+
+See also: [`Sin`](crate::builtins::math::Sin).
+    "#,
     r#"
 A processor that calculates the sine of a signal.
 
@@ -700,8 +804,13 @@ A processor that calculates the sine of a signal.
     "#
 );
 impl_unary_proc!(
-    CosProc,
+    Cos,
     cos,
+    r#"
+A processor that calculates the cosine of a signal.
+
+See also: [`Cos`](crate::builtins::math::Cos).
+    "#,
     r#"
 A processor that calculates the cosine of a signal.
 
@@ -719,8 +828,13 @@ A processor that calculates the cosine of a signal.
     "#
 );
 impl_unary_proc!(
-    TanProc,
+    Tan,
     tan,
+    r#"
+A processor that calculates the tangent of a signal.
+
+See also: [`Tan`](crate::builtins::math::Tan).
+    "#,
     r#"
 A processor that calculates the tangent of a signal.
 
@@ -738,105 +852,13 @@ A processor that calculates the tangent of a signal.
     "#
 );
 impl_unary_proc!(
-    AsinProc,
-    asin,
-    r#"
-A processor that calculates the arcsine of a signal.
-
-# Inputs
-
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the arcsine of. |
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The arcsine of the input signal. |
-    "#
-);
-impl_unary_proc!(
-    AcosProc,
-    acos,
-    r#"
-A processor that calculates the arccosine of a signal.
-
-# Inputs
-
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the arccosine of. |
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The arccosine of the input signal. |
-    "#
-);
-impl_unary_proc!(
-    AtanProc,
-    atan,
-    r#"
-A processor that calculates the arctangent of a signal.
-
-# Inputs
-
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the arctangent of. |
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The arctangent of the input signal. |
-    "#
-);
-impl_unary_proc!(
-    SinhProc,
-    sinh,
-    r#"
-A processor that calculates the hyperbolic sine of a signal.
-
-# Inputs
-
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `in` | `0.0` | The signal to calculate the hyperbolic sine of. |
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The hyperbolic sine of the input signal. |
-    "#
-);
-impl_unary_proc!(
-    CoshProc,
-    cosh,
-    r#"
-A processor that calculates the hyperbolic cosine of a signal.
-
-# Inputs
-
-# Inputs
-
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the hyperbolic cosine of. |
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The hyperbolic cosine of the input signal. |
-    "#
-);
-impl_unary_proc!(
-    TanhProc,
+    Tanh,
     tanh,
+    r#"
+A processor that calculates the hyperbolic tangent of a signal.
+
+See also: [`Tanh`](crate::builtins::math::Tanh).
+    "#,
     r#"
 A processor that calculates the hyperbolic tangent of a signal.
 
@@ -854,8 +876,13 @@ A processor that calculates the hyperbolic tangent of a signal.
     "#
 );
 impl_unary_proc!(
-    ExpProc,
+    Exp,
     exp,
+    r#"
+A processor that calculates the exponential of a signal.
+
+See also: [`Exp`](crate::builtins::math::Exp).
+    "#,
     r#"
 A processor that calculates the exponential of a signal.
 
@@ -873,46 +900,13 @@ A processor that calculates the exponential of a signal.
     "#
 );
 impl_unary_proc!(
-    Exp2Proc,
-    exp2,
-    r#"
-A processor that calculates 2 raised to the power of a signal.
-
-# Inputs
-
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate 2 raised to the power of. |
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `out` | `Sample` | 2 raised to the power of the input signal. |
-    "#
-);
-impl_unary_proc!(
-    ExpM1Proc,
-    exp_m1,
-    r#"
-A processor that calculates the exponential of a signal minus 1.
-
-# Inputs
-
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the exponential of minus 1. |
-
-# Outputs
-
-| Index | Name | Type | Description |
-| --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The exponential of the input signal minus 1. |
-    "#
-);
-impl_unary_proc!(
-    LnProc,
+    Ln,
     ln,
+    r#"
+A processor that calculates the natural logarithm of a signal.
+
+See also: [`Ln`](crate::builtins::math::Ln).
+    "#,
     r#"
 A processor that calculates the natural logarithm of a signal.
 
@@ -932,8 +926,13 @@ Note that the input signal defaults to `0.0`, so be sure to provide a positive v
     "#
 );
 impl_unary_proc!(
-    Log2Proc,
+    Log2,
     log2,
+    r#"
+A processor that calculates the base-2 logarithm of a signal.
+
+See also: [`Log2`](crate::builtins::math::Log2).
+    "#,
     r#"
 A processor that calculates the base-2 logarithm of a signal.
 
@@ -953,8 +952,13 @@ Note that the input signal defaults to `0.0`, so be sure to provide a positive v
     "#
 );
 impl_unary_proc!(
-    Log10Proc,
+    Log10,
     log10,
+    r#"
+A processor that calculates the base-10 logarithm of a signal.
+
+See also: [`Log10`](crate::builtins::math::Log10).
+    "#,
     r#"
 A processor that calculates the base-10 logarithm of a signal.
 
