@@ -126,7 +126,7 @@ impl Node {
         if self.output_kind(0) == SignalKind::Sample {
             return self.clone();
         }
-        let proc = self.graph.add_processor(MessageToSampleProc);
+        let proc = self.graph.add_processor(MessageToAudio);
         proc.connect_input(self, 0, 0);
         proc
     }
@@ -143,7 +143,7 @@ impl Node {
         if self.output_kind(0) == SignalKind::Message {
             return self.clone();
         }
-        let proc = self.graph.add_processor(SampleToMessageProc);
+        let proc = self.graph.add_processor(AudioToMessage);
         proc.connect_input(self, 0, 0);
         proc
     }
@@ -157,7 +157,7 @@ impl Node {
     #[track_caller]
     pub fn smooth(&self) -> Node {
         self.assert_single_output();
-        let proc = self.graph.add_processor(SmoothProc::default());
+        let proc = self.graph.add_processor(Smooth::default());
         proc.input("factor").set(0.1);
         proc.input(0).connect(&self.output(0));
         proc
@@ -285,7 +285,7 @@ impl Output {
         if self.kind() == SignalKind::Sample {
             return self.clone();
         }
-        let proc = self.node.graph().add_processor(MessageToSampleProc);
+        let proc = self.node.graph().add_processor(MessageToAudio);
         proc.input(0).connect(self);
         proc.output(0)
     }
@@ -296,7 +296,7 @@ impl Output {
         if self.kind() == SignalKind::Message {
             return self.clone();
         }
-        let proc = self.node.graph().add_processor(SampleToMessageProc);
+        let proc = self.node.graph().add_processor(AudioToMessage);
         proc.input(0).connect(self);
         proc.output(0)
     }

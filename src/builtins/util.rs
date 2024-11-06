@@ -13,13 +13,24 @@ use crate::{
 
 /// A processor that sends a message when triggered.
 ///
-/// See also: [message](crate::builder::graph_builder::GraphBuilder::message).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `trig` | `Bang` | | Triggers the message. |
+/// | `1` | `message` | `Message` | | The message to send. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Message` | The message to send. |
 #[derive(Clone, Debug)]
-pub struct MessageProc {
+pub struct MessageSender {
     message: Option<Message>,
 }
 
-impl MessageProc {
+impl MessageSender {
     /// Creates a new `MessageProc` with the given initial message.
     pub fn new(message: Message) -> Self {
         Self {
@@ -28,7 +39,7 @@ impl MessageProc {
     }
 }
 
-impl Process for MessageProc {
+impl Process for MessageSender {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("trig", Signal::new_message_none()),
@@ -76,37 +87,30 @@ impl Process for MessageProc {
 impl GraphBuilder {
     /// A processor that sends a message when triggered.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `trig` | `Bang` | | Triggers the message. |
-    /// | `1` | `message` | `Message` | | The message to send. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message` | The message to send. |
+    /// See also: [MessageSender](crate::builtins::util::MessageSender).
     pub fn message(&self, message: impl Into<Message>) -> Node {
-        self.add_processor(MessageProc::new(message.into()))
+        self.add_processor(MessageSender::new(message.into()))
     }
 }
 
 /// A processor that sends a constant message every sample.
 ///
-/// See also: [constant_message](crate::builder::graph_builder::GraphBuilder::constant_message).
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `message` | `Message` | The constant message. |
 #[derive(Clone, Debug)]
-pub struct ConstantMessageProc(Message);
+pub struct ConstantMessageSender(Message);
 
-impl ConstantMessageProc {
-    /// Creates a new `ConstantMessageProc` with the given message.
+impl ConstantMessageSender {
+    /// Creates a new `ConstantMessageSender` with the given message.
     pub fn new(message: Message) -> Self {
         Self(message)
     }
 }
 
-impl Process for ConstantMessageProc {
+impl Process for ConstantMessageSender {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
@@ -133,30 +137,30 @@ impl Process for ConstantMessageProc {
 }
 
 impl GraphBuilder {
-    /// A processor that sends a constant message.
+    /// A processor that sends a constant message every sample.
     ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message` | The constant message. |
+    /// See also: [ConstantMessageSender](crate::builtins::util::ConstantMessageSender).
     pub fn constant_message(&self, message: impl Into<Message>) -> Node {
-        self.add_processor(ConstantMessageProc::new(message.into()))
+        self.add_processor(ConstantMessageSender::new(message.into()))
     }
 }
 
 /// A processor that prints a message when triggered.
 ///
-/// See also: [print](crate::builder::graph_builder::GraphBuilder::print).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `trig` | `Message(Bang)` | | Triggers the print. |
+/// | `1` | `message` | `Message` | | The message to print. |
 #[derive(Clone, Debug, Default)]
-
-pub struct PrintProc {
+pub struct Print {
     name: Option<String>,
     msg: Option<String>,
 }
 
-impl PrintProc {
-    /// Creates a new `PrintProc`, optionally with a name and message.
+impl Print {
+    /// Creates a new `Print`, optionally with a name and message.
     pub fn new(name: Option<&str>, msg: Option<&str>) -> Self {
         Self {
             name: name.map(String::from),
@@ -164,7 +168,7 @@ impl PrintProc {
         }
     }
 
-    /// Creates a new `PrintProc` with the given name.
+    /// Creates a new `Print` with the given name.
     pub fn with_name(name: &str) -> Self {
         Self {
             name: Some(String::from(name)),
@@ -172,7 +176,7 @@ impl PrintProc {
         }
     }
 
-    /// Creates a new `PrintProc` with the given message.
+    /// Creates a new `Print` with the given message.
     pub fn with_msg(msg: &str) -> Self {
         Self {
             msg: Some(String::from(msg)),
@@ -180,7 +184,7 @@ impl PrintProc {
         }
     }
 
-    /// Creates a new `PrintProc` with the given name and message.
+    /// Creates a new `Print` with the given name and message.
     pub fn with_name_and_msg(name: &str, msg: &str) -> Self {
         Self {
             name: Some(String::from(name)),
@@ -189,7 +193,7 @@ impl PrintProc {
     }
 }
 
-impl Process for PrintProc {
+impl Process for Print {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("trig", Signal::new_message_none()),
@@ -243,29 +247,34 @@ impl Process for PrintProc {
 impl GraphBuilder {
     /// A processor that prints a message when triggered.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `trig` | `Message(Bang)` | | Triggers the print. |
-    /// | `1` | `message` | `Message` | | The message to print. |
+    /// See also: [Print](crate::builtins::util::Print).
     pub fn print<'a>(
         &self,
         name: impl Into<Option<&'a str>>,
         msg: impl Into<Option<&'a str>>,
     ) -> Node {
-        self.add_processor(PrintProc::new(name.into(), msg.into()))
+        self.add_processor(Print::new(name.into(), msg.into()))
     }
 }
 
-/// A processor that converts a message to a sample.
+/// A processor that converts a message to an audio signal.
 ///
-/// See also: [to_audio](crate::builder::graph_builder::GraphBuilder::to_audio).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `message` | `Message` | | The message to convert. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `sample` | `Sample` | The sample value. |
 #[derive(Clone, Debug, Default)]
 
-pub struct MessageToSampleProc;
+pub struct MessageToAudio;
 
-impl Process for MessageToSampleProc {
+impl Process for MessageToAudio {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("message", Signal::new_message_none())]
     }
@@ -299,32 +308,29 @@ impl Process for MessageToSampleProc {
 }
 
 impl GraphBuilder {
-    /// A processor that converts a message to a sample.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message` | | The message to convert. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `sample` | `Sample` | The sample value. |
-    pub fn to_audio(&self) -> Node {
-        self.add_processor(MessageToSampleProc)
+    pub fn message_to_audio(&self) -> Node {
+        self.add_processor(MessageToAudio)
     }
 }
 
-/// A processor that converts a sample to an f64 message.
+/// A processor that converts an audio sample to a float message.
 ///
-/// See also: [to_message](crate::builder::graph_builder::GraphBuilder::to_message).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `sample` | `Sample` | | The sample to convert. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `message` | `Message(Float)` | The message value. |
 #[derive(Clone, Debug, Default)]
 
-pub struct SampleToMessageProc;
+pub struct AudioToMessage;
 
-impl Process for SampleToMessageProc {
+impl Process for AudioToMessage {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("sample", 0.0)]
     }
@@ -354,34 +360,27 @@ impl Process for SampleToMessageProc {
 }
 
 impl GraphBuilder {
-    /// A processor that converts a sample to a float message.
+    /// A processor that converts an audio sample to a float message.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `sample` | `Sample` | | The sample to convert. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `message` | `Message(Float)` | The message value. |
-    pub fn to_message(&self) -> Node {
-        self.add_processor(SampleToMessageProc)
+    /// See also: [AudioToMessage](crate::builtins::util::AudioToMessage).
+    pub fn audio_to_message(&self) -> Node {
+        self.add_processor(AudioToMessage)
     }
 }
 
 /// A processor that outputs the sample rate that the graph is running at.
 ///
-/// See also: [sample_rate](crate::builder::graph_builder::GraphBuilder::sample_rate).
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `sample_rate` | `Sample` | The sample rate. |
 #[derive(Clone, Debug, Default)]
-
-pub struct SampleRateProc {
+pub struct SampleRate {
     sample_rate: f64,
 }
 
-impl Process for SampleRateProc {
+impl Process for SampleRate {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
@@ -412,13 +411,9 @@ impl Process for SampleRateProc {
 impl GraphBuilder {
     /// A processor that outputs the sample rate that the graph is running at.
     ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `sample_rate` | `Sample` | The sample rate. |
+    /// See also: [SampleRate](crate::builtins::util::SampleRate).
     pub fn sample_rate(&self) -> Node {
-        self.add_processor(SampleRateProc::default())
+        self.add_processor(SampleRate::default())
     }
 }
 
@@ -427,16 +422,26 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
     a + (b - a) * t
 }
 
-/// A processor that smoothly ramps between values over time.
+/// A processor that smoothly interpolates between values over time.
 ///
-/// See also: [smooth](crate::builder::graph_builder::GraphBuilder::smooth).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `target` | `Sample` | 0.0 | The target value. |
+/// | `1` | `factor` | `Sample` | 1.0  | The factor of smoothing (0 <= factor <= 1). |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Sample` | The current value of the interpolation. |
 #[derive(Clone, Debug, Default)]
-
-pub struct SmoothProc {
+pub struct Smooth {
     current: f64,
 }
 
-impl Process for SmoothProc {
+impl Process for Smooth {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("target", 0.0),
@@ -483,33 +488,32 @@ impl Process for SmoothProc {
 impl GraphBuilder {
     /// A processor that smoothly interpolates between values over time.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `target` | `Sample` | 0.0 | The target value. |
-    /// | `1` | `factor` | `Sample` | 1.0  | The factor of smoothing (0 <= factor <= 1). |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Sample` | The current value of the interpolation. |
+    /// See also: [Smooth](crate::builtins::util::Smooth).
     pub fn smooth(&self) -> Node {
-        self.add_processor(SmoothProc::default())
+        self.add_processor(Smooth::default())
     }
 }
 
 /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
 ///
-/// See also: [changed](crate::builder::graph_builder::GraphBuilder::changed).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `in` | `Sample` | | The input signal to detect changes on. |
+/// | `1` | `threshold` | `Sample` | | The threshold for a change to be detected. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
 #[derive(Clone, Debug, Default)]
-
-pub struct ChangedProc {
+pub struct Changed {
     last: f64,
 }
 
-impl Process for ChangedProc {
+impl Process for Changed {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", 0.0),
@@ -559,33 +563,31 @@ impl Process for ChangedProc {
 impl GraphBuilder {
     /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `in` | `Sample` | | The input signal to detect changes on. |
-    /// | `1` | `threshold` | `Sample` | | The threshold for a change to be detected. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
+    /// See also: [Changed](crate::builtins::util::Changed).
     pub fn changed(&self) -> Node {
-        self.add_processor(ChangedProc::default())
+        self.add_processor(Changed::default())
     }
 }
 
-/// A processor that sends a bang message when a zero crossing is detected.
+/// A processor that sends a bang message when a zero crossing is detected on the input signal.
 ///
-/// See also: [zero_crossing](crate::builder::graph_builder::GraphBuilder::zero_crossing).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `in` | `Sample` | | The input signal to detect zero crossings on. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
 #[derive(Clone, Debug, Default)]
-
-pub struct ZeroCrossingProc {
+pub struct ZeroCrossing {
     last: f64,
 }
 
-impl Process for ZeroCrossingProc {
+impl Process for ZeroCrossing {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("in", 0.0)]
     }
@@ -624,21 +626,11 @@ impl Process for ZeroCrossingProc {
 }
 
 impl GraphBuilder {
-    /// A processor that sends a bang message when a zero crossing is detected.
+    /// A processor that sends a bang message when a zero crossing is detected on the input signal.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `in` | `Sample` | | The input signal to detect zero crossings on. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
+    /// See also: [ZeroCrossing](crate::builtins::util::ZeroCrossing).
     pub fn zero_crossing(&self) -> Node {
-        self.add_processor(ZeroCrossingProc::default())
+        self.add_processor(ZeroCrossing::default())
     }
 }
 
@@ -787,17 +779,7 @@ impl Process for Param {
 impl GraphBuilder {
     /// A processor that can be used to send/receive messages from outside the graph.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `set` | `Message` | | The message to set the parameter to. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `get` | `Message` | The current value of the parameter. |
+    /// See also: [Param](crate::builtins::util::Param).
     pub fn param(&self, param: &Param) -> Node {
         self.add_param(param.clone())
     }
@@ -805,9 +787,23 @@ impl GraphBuilder {
 
 /// A processor that routes a message to one of its outputs.
 ///
-/// See also: [select](crate::builder::graph_builder::GraphBuilder::select).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `in` | `Message` | | The message to route. |
+/// | `1` | `index` | `Message(int)` | `0` | The index of the output to route to. |
+///
+/// # Outputs
+///
+/// Note that the number of outputs is determined by the number specified at construction.
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `0` | `Message` | The message, if routed to output `0`. |
+/// | `1` | `1` | `Message` | The message, if routed to output `1`. |
+/// | `...` | `...` | `...` | etc... |
 #[derive(Clone, Debug)]
-
 pub struct Select {
     num_outputs: usize,
     last_index: i64,
@@ -878,24 +874,9 @@ impl Process for Select {
 }
 
 impl GraphBuilder {
-    /// A processor that routes a message to one of its outputs.
+    /// A processor that selects an output based on an index.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `in` | `Message` | | The message to route. |
-    /// | `1` | `index` | `Message(int)` | `0` | The index of the output to route to. |
-    ///
-    /// # Outputs
-    ///
-    /// Note that the number of outputs is determined by the number specified at construction.
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `0` | `Message` | The message, if routed to output `0`. |
-    /// | `1` | `1` | `Message` | The message, if routed to output `1`. |
-    /// | `...` | `...` | `...` | etc... |
+    /// See also: [Select](crate::builtins::util::Select).
     pub fn select(&self, num_outputs: usize) -> Node {
         self.add_processor(Select::new(num_outputs))
     }
@@ -903,9 +884,24 @@ impl GraphBuilder {
 
 /// A processor that outputs any messages it receives on any of its inputs.
 ///
-/// See also: [merge](crate::builder::graph_builder::GraphBuilder::merge).
+/// If a message is received on multiple inputs, the message from the input with the lowest index is output.
+///
+/// # Inputs
+///
+/// Note that the number of inputs is determined by the number specified at construction.
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `0` | `Message` | | The message to merge. |
+/// | `1` | `1` | `Message` | | The message to merge. |
+/// | `...` | `...` | `...` | | etc... |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Message` | The merged message. |
 #[derive(Clone, Debug)]
-
 pub struct Merge {
     num_inputs: usize,
 }
@@ -962,23 +958,7 @@ impl Process for Merge {
 impl GraphBuilder {
     /// A processor that outputs any messages it receives on any of its inputs.
     ///
-    /// If a message is received on multiple inputs, the message from the input with the lowest index is output.
-    ///
-    /// # Inputs
-    ///
-    /// Note that the number of inputs is determined by the number specified at construction.
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `0` | `Message` | | The message to merge. |
-    /// | `1` | `1` | `Message` | | The message to merge. |
-    /// | `...` | `...` | `...` | | etc... |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message` | The merged message. |
+    /// See also: [Merge](crate::builtins::util::Merge).
     pub fn merge(&self, num_inputs: usize) -> Node {
         self.add_processor(Merge::new(num_inputs))
     }
@@ -986,14 +966,24 @@ impl GraphBuilder {
 
 /// A processor that counts the number of times it receives a bang message.
 ///
-/// See also: [counter](crate::builder::graph_builder::GraphBuilder::counter).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `trig` | `Message(Bang)` | | Triggers the counter. |
+/// | `1` | `reset` | `Message(Bang)` | | Resets the counter. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `count` | `Message(Int)` | The current count. |
 #[derive(Clone, Debug, Default)]
-
-pub struct CounterProc {
+pub struct Counter {
     count: i64,
 }
 
-impl Process for CounterProc {
+impl Process for Counter {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("trig", Signal::new_message_none()),
@@ -1041,30 +1031,34 @@ impl Process for CounterProc {
 impl GraphBuilder {
     /// A processor that counts the number of times it receives a bang message.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `trig` | `Message(Bang)` | | Triggers the counter. |
-    /// | `1` | `reset` | `Message(Bang)` | | Resets the counter. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `count` | `Message(Int)` | The current count. |
+    /// See also: [Counter](crate::builtins::util::Counter).
     pub fn counter(&self) -> Node {
-        self.add_processor(CounterProc::default())
+        self.add_processor(Counter::default())
     }
 }
 
 /// A sample-and-hold processor.
+///
+/// The processor holds the last value it received when triggered.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `in` | `Sample` | | The input signal to sample. |
+/// | `1` | `trig` | `Message(Bang)` | | Triggers the sample-and-hold. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Sample` | The sampled value. |
 #[derive(Clone, Debug, Default)]
-pub struct SampleAndHoldProc {
+pub struct SampleAndHold {
     last: Option<Sample>,
 }
 
-impl Process for SampleAndHoldProc {
+impl Process for SampleAndHold {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", 0.0),
@@ -1114,21 +1108,8 @@ impl Process for SampleAndHoldProc {
 impl GraphBuilder {
     /// A sample-and-hold processor.
     ///
-    /// The processor holds the last value it received when triggered.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `in` | `Sample` | | The input signal to sample. |
-    /// | `1` | `trig` | `Message(Bang)` | | Triggers the sample-and-hold. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Sample` | The sampled value. |
+    /// See also: [SampleAndHold](crate::builtins::util::SampleAndHold).
     pub fn sample_and_hold(&self) -> Node {
-        self.add_processor(SampleAndHoldProc::default())
+        self.add_processor(SampleAndHold::default())
     }
 }

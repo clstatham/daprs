@@ -4,16 +4,27 @@ use crate::prelude::*;
 
 /// A processor that reads a sample from a buffer.
 ///
-/// See also: [`GraphBuilder::buffer_reader`](crate::builder::graph_builder::GraphBuilder::buffer_reader).
+/// If the index is out of bounds, it will wrap around.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `position` | `Message(i64)` | `0` | The sample index to read from the buffer. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Sample` | The sample value read from the buffer. |
 #[derive(Clone, Debug)]
-
-pub struct BufferReaderProc {
+pub struct BufferReader {
     buffer: SignalBuffer,
     sample_rate: f64,
     pos: usize,
 }
 
-impl BufferReaderProc {
+impl BufferReader {
     /// Creates a new buffer reader processor.
     pub fn new(buffer: Buffer<Sample>) -> Self {
         Self {
@@ -24,7 +35,7 @@ impl BufferReaderProc {
     }
 }
 
-impl Process for BufferReaderProc {
+impl Process for BufferReader {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded(
             "position",
@@ -80,33 +91,32 @@ impl Process for BufferReaderProc {
 impl GraphBuilder {
     /// A processor that reads a sample from a buffer.
     ///
-    /// If the index is out of bounds, it will wrap around.
-    ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `position` | `Message(i64)` | `0` | The sample index to read from the buffer. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Sample` | The sample value read from the buffer. |
+    /// See also: [`BufferReader`](crate::builtins::storage::BufferReader).
     pub fn buffer_reader(&self, buffer: impl Into<Buffer<Sample>>) -> Node {
-        self.add_processor(BufferReaderProc::new(buffer.into()))
+        self.add_processor(BufferReader::new(buffer.into()))
     }
 }
 
 /// A processor that stores a message in a register.
 ///
-/// See also: [`GraphBuilder::register`](crate::builder::graph_builder::GraphBuilder::register).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `set` | `Message` |  | Set the register to the value. |
+/// | `1` | `clear` | `Message` |  | Clear the register. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Message` | The value stored in the register. |
 #[derive(Clone, Debug, Default)]
-pub struct RegisterProc {
+pub struct Register {
     value: Option<Message>,
 }
 
-impl Process for RegisterProc {
+impl Process for Register {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("set", Signal::new_message_none()),
@@ -154,19 +164,8 @@ impl Process for RegisterProc {
 impl GraphBuilder {
     /// A processor that stores a message in a register.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `set` | `Message` |  | Set the register to the value. |
-    /// | `1` | `clear` | `Message` |  | Clear the register. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Message` | The value stored in the register. |
+    /// See also: [`Register`](crate::builtins::storage::Register).
     pub fn register(&self) -> Node {
-        self.add_processor(RegisterProc::default())
+        self.add_processor(Register::default())
     }
 }

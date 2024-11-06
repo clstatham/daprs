@@ -7,12 +7,22 @@ use crate::{
     signal::Signal,
 };
 
-/// A metronome processor.
+/// A metronome that emits a bang at the given period.
 ///
-/// See also: [`GraphBuilder::metro`](crate::builder::graph_builder::GraphBuilder::metro).
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `period` | `Message(f64)` | | The period of the metronome in seconds. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Bang` | Emits a bang at the given period. |
 #[derive(Debug, Clone)]
 
-pub struct MetroProc {
+pub struct Metro {
     period: f64,
     last_time: f64,
     next_time: f64,
@@ -20,7 +30,7 @@ pub struct MetroProc {
     sample_rate: f64,
 }
 
-impl MetroProc {
+impl Metro {
     /// Creates a new metronome processor with the given period.
     pub fn new() -> Self {
         Self {
@@ -47,13 +57,13 @@ impl MetroProc {
     }
 }
 
-impl Default for MetroProc {
+impl Default for Metro {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Process for MetroProc {
+impl Process for Metro {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("period", Signal::new_message_none())]
     }
@@ -98,20 +108,10 @@ impl Process for MetroProc {
 }
 
 impl GraphBuilder {
-    /// A metronome that emits a bang at the given period.
+    /// A metronome processor.
     ///
-    /// # Inputs
-    ///
-    /// | Index | Name | Type | Default | Description |
-    /// | --- | --- | --- | --- | --- |
-    /// | `0` | `period` | `Message(f64)` | | The period of the metronome in seconds. |
-    ///
-    /// # Outputs
-    ///
-    /// | Index | Name | Type | Description |
-    /// | --- | --- | --- | --- |
-    /// | `0` | `out` | `Bang` | Emits a bang at the given period. |
+    /// See also: [`Metro`](crate::builtins::time::Metro).
     pub fn metro(&self) -> Node {
-        self.add_processor(MetroProc::new())
+        self.add_processor(Metro::new())
     }
 }
