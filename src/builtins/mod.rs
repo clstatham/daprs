@@ -1,5 +1,7 @@
 //! Built-in processors and utilities for the audio graph.
 
+pub mod dynamics;
+pub mod filters;
 pub mod math;
 pub mod oscillators;
 pub mod storage;

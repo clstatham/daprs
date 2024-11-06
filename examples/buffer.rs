@@ -14,7 +14,7 @@ fn main() {
     // add a buffer reader
     let buf = Buffer::load_wav("examples/assets/piano1.wav").unwrap();
     let len = buf.len() as f64;
-    let buffer = graph.buffer_reader(buf);
+    let buffer = graph.audio_buffer(buf);
 
     // connect the buffer reader to the outputs
     buffer.output(0).connect(&out1.input(0));

@@ -2,16 +2,21 @@
 
 use crate::prelude::*;
 
-/// A processor that reads a sample from a buffer.
+/// A processor that reads and writes audio samples in a buffer.
 ///
-/// If the index is out of bounds, it will wrap around.
-/// If the index is not an integer, the processor will lineraly interpolate between the two nearest samples.
+/// When reading: from the buffer:
+/// - If the index is a whole number, the processor reads the sample at the given index.
+/// - If the index is a fraction, the processor linearly interpolates between the samples at the floor and ceil positions.
+///
+/// When writing to the buffer:
+/// - The processor sets the value at the given index (rounded down) if a message is received at the `set` input.
 ///
 /// # Inputs
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `position` | `Message(i64)` | `0` | The sample index to read from the buffer. |
+/// | `0` | `index` | `Message(i64)` | `0` | The sample index to read from the buffer. |
+/// | `1` | `set` | `Message(f64)` |  | Set the value at the given index. |
 ///
 /// # Outputs
 ///
@@ -20,29 +25,29 @@ use crate::prelude::*;
 /// | `0` | `out` | `Sample` | The sample value read from the buffer. |
 /// | `1` | `length` | `Message(i64)` | The length of the buffer in samples. |
 #[derive(Clone, Debug)]
-pub struct BufferReader {
+pub struct AudioBuffer {
     buffer: SignalBuffer,
     sample_rate: f64,
-    pos: f64,
+    index: f64,
 }
 
-impl BufferReader {
-    /// Creates a new buffer reader processor.
+impl AudioBuffer {
+    /// Creates a new audio buffer processor with the given buffer.
     pub fn new(buffer: Buffer<Sample>) -> Self {
         Self {
             buffer: SignalBuffer::Sample(buffer),
             sample_rate: 0.0,
-            pos: 0.0,
+            index: 0.0,
         }
     }
 }
 
-impl Process for BufferReader {
+impl Process for AudioBuffer {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded(
-            "position",
-            Signal::new_message_some(Message::Int(0)),
-        )]
+        vec![
+            SignalSpec::unbounded("index", Signal::new_message_some(Message::Int(0))),
+            SignalSpec::unbounded("set", Signal::new_message_none()),
+        ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -61,9 +66,13 @@ impl Process for BufferReader {
         inputs: &[SignalBuffer],
         outputs: &mut [SignalBuffer],
     ) -> Result<(), ProcessorError> {
-        let position = inputs[0]
+        let index = inputs[0]
             .as_message()
             .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let set = inputs[1]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(1))?;
 
         let (out, length) = outputs.split_at_mut(1);
 
@@ -75,36 +84,44 @@ impl Process for BufferReader {
             .as_message_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(1))?;
 
-        let buffer = self.buffer.as_sample().unwrap();
+        let buffer = self.buffer.as_sample_mut().unwrap();
 
-        for (out, length, position) in itertools::izip!(out, length, position) {
-            if let Some(pos) = position {
-                let Some(pos) = pos.cast_to_float() else {
+        for (out, length, index, set) in itertools::izip!(out, length, index, set) {
+            if let Some(index) = index {
+                let Some(index) = index.cast_to_float() else {
                     return Err(ProcessorError::InputSpecMismatch(0));
                 };
 
-                self.pos = pos;
+                self.index = index;
 
-                if pos.fract() != 0.0 {
-                    let pos_floor = pos.floor() as usize;
-                    let pos_ceil = pos.ceil() as usize;
+                if let Some(set) = set {
+                    let set = set
+                        .cast_to_float()
+                        .ok_or(ProcessorError::InputSpecMismatch(1))?;
+
+                    *buffer[self.index as usize] = set;
+                }
+
+                if index.fract() != 0.0 {
+                    let pos_floor = index.floor() as usize;
+                    let pos_ceil = index.ceil() as usize;
 
                     let value_floor = buffer[pos_floor];
                     let value_ceil = buffer[pos_ceil];
 
-                    let t = pos.fract();
+                    let t = index.fract();
 
                     *out = value_floor + (value_ceil - value_floor) * t.into();
                 } else {
-                    let pos = pos as i64;
+                    let index = index as i64;
 
-                    if pos < 0 {
-                        self.pos = buffer.len() as f64 + pos as f64;
+                    if index < 0 {
+                        self.index = buffer.len() as f64 + index as f64;
                     } else {
-                        self.pos = pos as f64;
+                        self.index = index as f64;
                     }
 
-                    *out = buffer[self.pos as usize];
+                    *out = buffer[self.index as usize];
                 }
             }
 
@@ -116,11 +133,11 @@ impl Process for BufferReader {
 }
 
 impl GraphBuilder {
-    /// A processor that reads a sample from a buffer.
+    /// A processor that reads and writes audio samples in a buffer.
     ///
-    /// See also: [`BufferReader`].
-    pub fn buffer_reader(&self, buffer: impl Into<Buffer<Sample>>) -> Node {
-        self.add_processor(BufferReader::new(buffer.into()))
+    /// See also: [`AudioBuffer`].
+    pub fn audio_buffer(&self, buffer: impl Into<Buffer<Sample>>) -> Node {
+        self.add_processor(AudioBuffer::new(buffer.into()))
     }
 }
 

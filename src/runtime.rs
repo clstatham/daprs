@@ -195,14 +195,13 @@ impl Runtime {
     }
 
     /// Resets the runtime with the given sample rate and block size.
-    /// This will reset the state of all nodes in the graph and potentially reallocate internal buffers.
+    /// This will potentially reallocate internal buffers.
     pub fn reset(&mut self, sample_rate: f64, block_size: usize) -> RuntimeResult<()> {
         self.graph.allocate_visitor();
 
         let mut max_edges = 0;
 
         // allocate buffers
-        // self.inputs = vec![SignalBuffer::new_sample(block_size); self.graph.num_inputs()];
         for input in self.inputs.iter_mut() {
             input.resize(block_size, Signal::new_sample(0.0));
         }
@@ -285,10 +284,6 @@ impl Runtime {
 
     /// Renders the next block of audio.
     pub fn process(&mut self) -> RuntimeResult<()> {
-        // for buffer in self.buffer_cache.values_mut() {
-        //     buffer.clear_buffers();
-        // }
-
         self.graph.visit(|graph, node_id| -> RuntimeResult<()> {
             self.edge_cache.extend(
                 graph

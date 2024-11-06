@@ -107,15 +107,6 @@ impl Process for MidiToFreq {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that converts a MIDI note number to a frequency in Hz.
-    ///
-    /// See also: [`MidiToFreq`].
-    pub fn midi2freq(&self) -> Node {
-        self.add_processor(MidiToFreq)
-    }
-}
-
 /// A processor that converts a frequency in Hz to a MIDI note number.
 ///
 /// # Inputs
@@ -161,15 +152,6 @@ impl Process for FreqToMidi {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that converts a frequency in Hz to a MIDI note number.
-    ///
-    /// See also: [`FreqToMidi`].
-    pub fn freq2midi(&self) -> Node {
-        self.add_processor(FreqToMidi)
-    }
-}
-
 macro_rules! impl_binary_proc {
     ($name:ident, $method:ident, $shortdoc:literal, $doc:literal) => {
         #[derive(Clone, Debug, Default)]
@@ -208,13 +190,6 @@ macro_rules! impl_binary_proc {
                 }
 
                 Ok(())
-            }
-        }
-
-        impl GraphBuilder {
-            #[doc = $shortdoc]
-            pub fn $method(&self) -> Node {
-                self.add_processor($name)
             }
         }
     };
@@ -509,13 +484,6 @@ macro_rules! impl_unary_proc {
                 }
 
                 Ok(())
-            }
-        }
-
-        impl GraphBuilder {
-            #[doc = $shortdoc]
-            pub fn $method(&self) -> Node {
-                self.add_processor($name)
             }
         }
     };
