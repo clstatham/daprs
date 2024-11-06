@@ -87,19 +87,24 @@ impl Process for PeakLimiter {
             .as_sample()
             .ok_or(ProcessorError::InputSpecMismatch(1))?;
 
-        let release = inputs[2]
+        let attack = inputs[2]
             .as_sample()
             .ok_or(ProcessorError::InputSpecMismatch(2))?;
+
+        let release = inputs[3]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(3))?;
 
         let out = outputs[0]
             .as_sample_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
-        for (out, in_signal, threshold, release) in
-            itertools::izip!(out, in_signal, threshold, release)
+        for (out, in_signal, threshold, attack, release) in
+            itertools::izip!(out, in_signal, threshold, attack, release)
         {
             self.threshold = **threshold;
             self.release = **release;
+            self.attack = **attack;
 
             self.envelope = in_signal.abs().max(self.envelope * self.release);
 
