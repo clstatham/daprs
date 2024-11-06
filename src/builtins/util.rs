@@ -11,6 +11,47 @@ use crate::{
     signal::{Sample, Signal, SignalBuffer},
 };
 
+/// A processor that forwards its input to its output.
+#[derive(Clone, Debug)]
+pub struct Passthrough;
+
+impl Process for Passthrough {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("in", 0.0)]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", 0.0)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let in_signal = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let out_signal = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        out_signal.copy_from_slice(in_signal);
+
+        Ok(())
+    }
+}
+
+impl GraphBuilder {
+    /// A processor that forwards its input to its output.
+    ///
+    /// See also: [Passthrough].
+    pub fn passthrough(&self) -> Node {
+        self.add_processor(Passthrough)
+    }
+}
+
 /// A processor that sends a message when triggered.
 ///
 /// # Inputs
@@ -669,7 +710,7 @@ impl ParamRx {
         }
     }
 
-    /// Receives a message, returning the last message if there are no new messages.
+    /// Receives a message from the `Param`.
     pub fn recv(&mut self) -> Option<Message> {
         let mut last = self.last.try_lock().ok()?;
         if let Ok(msg) = self.rx.try_recv() {
@@ -869,6 +910,15 @@ impl Process for Select {
                     .ok_or(ProcessorError::OutputSpecMismatch(index as usize))?;
 
                 out_signal[sample_index] = in_signal.clone();
+
+                for (i, out_signal) in outputs.iter_mut().enumerate() {
+                    if i != index as usize {
+                        let out_signal = out_signal
+                            .as_message_mut()
+                            .ok_or(ProcessorError::OutputSpecMismatch(i))?;
+                        out_signal[sample_index] = None;
+                    }
+                }
             }
         }
 

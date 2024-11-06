@@ -90,8 +90,9 @@ pub enum Device {
     Name(String),
 }
 
+/// Stores the input and output buffers for a node.
 #[derive(Clone)]
-pub(crate) struct NodeBuffers {
+pub struct NodeBuffers {
     input_spec: Vec<SignalSpec>,
     output_spec: Vec<SignalSpec>,
     inputs: Vec<SignalBuffer>,
@@ -284,9 +285,9 @@ impl Runtime {
 
     /// Renders the next block of audio.
     pub fn process(&mut self) -> RuntimeResult<()> {
-        for buffer in self.buffer_cache.values_mut() {
-            buffer.clear_buffers();
-        }
+        // for buffer in self.buffer_cache.values_mut() {
+        //     buffer.clear_buffers();
+        // }
 
         self.graph.visit(|graph, node_id| -> RuntimeResult<()> {
             self.edge_cache.extend(

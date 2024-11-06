@@ -5,6 +5,7 @@ use crate::prelude::*;
 /// A processor that reads a sample from a buffer.
 ///
 /// If the index is out of bounds, it will wrap around.
+/// If the index is not an integer, the processor will lineraly interpolate between the two nearest samples.
 ///
 /// # Inputs
 ///
@@ -17,11 +18,12 @@ use crate::prelude::*;
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Sample` | The sample value read from the buffer. |
+/// | `1` | `length` | `Message(i64)` | The length of the buffer in samples. |
 #[derive(Clone, Debug)]
 pub struct BufferReader {
     buffer: SignalBuffer,
     sample_rate: f64,
-    pos: usize,
+    pos: f64,
 }
 
 impl BufferReader {
@@ -30,7 +32,7 @@ impl BufferReader {
         Self {
             buffer: SignalBuffer::Sample(buffer),
             sample_rate: 0.0,
-            pos: 0,
+            pos: 0.0,
         }
     }
 }
@@ -44,7 +46,10 @@ impl Process for BufferReader {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+        vec![
+            SignalSpec::unbounded("out", 0.0),
+            SignalSpec::unbounded("length", Signal::new_message_none()),
+        ]
     }
 
     fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
@@ -60,28 +65,50 @@ impl Process for BufferReader {
             .as_message()
             .ok_or(ProcessorError::InputSpecMismatch(0))?;
 
-        let out = outputs[0]
+        let (out, length) = outputs.split_at_mut(1);
+
+        let out = out[0]
             .as_sample_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
+        let length = length[0]
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(1))?;
+
         let buffer = self.buffer.as_sample().unwrap();
 
-        for (out, position) in itertools::izip!(out, position) {
+        for (out, length, position) in itertools::izip!(out, length, position) {
             if let Some(pos) = position {
-                let Some(pos) = pos.cast_to_int() else {
+                let Some(pos) = pos.cast_to_float() else {
                     return Err(ProcessorError::InputSpecMismatch(0));
                 };
 
-                let pos = if pos < 0 {
-                    buffer.len() as i64 + pos
-                } else {
-                    pos
-                } as usize;
+                self.pos = pos;
 
-                self.pos = pos % buffer.len();
+                if pos.fract() != 0.0 {
+                    let pos_floor = pos.floor() as usize;
+                    let pos_ceil = pos.ceil() as usize;
+
+                    let value_floor = buffer[pos_floor];
+                    let value_ceil = buffer[pos_ceil];
+
+                    let t = pos.fract();
+
+                    *out = value_floor + (value_ceil - value_floor) * t.into();
+                } else {
+                    let pos = pos as i64;
+
+                    if pos < 0 {
+                        self.pos = buffer.len() as f64 + pos as f64;
+                    } else {
+                        self.pos = pos as f64;
+                    }
+
+                    *out = buffer[self.pos as usize];
+                }
             }
 
-            *out = buffer[self.pos];
+            *length = Some(Message::Int(buffer.len() as i64));
         }
 
         Ok(())

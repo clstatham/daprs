@@ -190,6 +190,19 @@ impl Node {
         proc.input(0).connect(&self.output(0));
         proc
     }
+
+    /// Creates a new, single-output node that holds and continuously outputs the last value of this node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    pub fn make_register(&self) -> Node {
+        self.assert_single_output();
+        let node = self.graph.add_processor(Register::default());
+        node.input(0).connect(&self.output(0));
+        node
+    }
 }
 
 /// An input of a node in the graph.
@@ -308,6 +321,22 @@ impl Output {
             SignalKind::Message => self.to_message(),
             SignalKind::Sample => self.to_audio(),
         }
+    }
+
+    /// Creates a new, single-output node that passes the output of this node through.
+    #[inline]
+    pub fn make_node(&self) -> Node {
+        let node = self.node.graph().add_processor(Passthrough);
+        node.input(0).connect(self);
+        node
+    }
+
+    /// Creates a new, single-output node that holds and continuously outputs the last value of this node.
+    #[inline]
+    pub fn make_register(&self) -> Node {
+        let node = self.node.graph().add_processor(Register::default());
+        node.input(0).connect(self);
+        node
     }
 }
 

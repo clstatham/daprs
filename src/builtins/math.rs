@@ -204,7 +204,6 @@ macro_rules! impl_binary_proc {
                     .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
                 for (sample, in1, in2) in itertools::izip!(out, in1, in2) {
-                    // *sample = (**in1).$method(**in2).into();
                     **sample = f64::$method(**in1, **in2);
                 }
 
