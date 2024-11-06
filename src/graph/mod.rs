@@ -288,6 +288,7 @@ impl Graph {
         &self.output_nodes
     }
 
+    #[inline]
     pub(crate) fn allocate_visitor(&mut self) {
         if self.visit_path.capacity() < self.digraph.node_count() {
             self.visit_path = Vec::with_capacity(self.digraph.node_count());

@@ -213,8 +213,36 @@ impl Runtime {
             let node = &mut graph.digraph_mut()[node_id];
             node.resize_buffers(sample_rate, block_size);
 
-            let buffers = self.buffer_cache.get_mut(&node_id).unwrap();
-            buffers.resize(block_size);
+            let buffers = self.buffer_cache.get_mut(&node_id);
+            if let Some(buffers) = buffers {
+                buffers.resize(block_size);
+            } else {
+                // graph was hot-reloaded, allocate buffers
+                let input_spec = node.input_spec();
+                let output_spec = node.output_spec();
+
+                let mut inputs = Vec::with_capacity(input_spec.len());
+                let mut outputs = Vec::with_capacity(output_spec.len());
+
+                for spec in input_spec.iter() {
+                    let buffer = SignalBuffer::from_spec_default(spec, block_size);
+                    inputs.push(buffer);
+                }
+                for spec in output_spec.iter() {
+                    let buffer = SignalBuffer::from_spec_default(spec, block_size);
+                    outputs.push(buffer);
+                }
+
+                self.buffer_cache.insert(
+                    node_id,
+                    NodeBuffers {
+                        input_spec,
+                        output_spec,
+                        inputs,
+                        outputs,
+                    },
+                );
+            }
 
             let num_inputs = graph
                 .digraph()
@@ -527,8 +555,9 @@ impl Runtime {
     /// Runs the audio graph in real-time using the specified audio backend and device.
     pub fn run(&mut self, backend: Backend, device: Device) -> RuntimeResult<RuntimeHandle> {
         let (kill_tx, kill_rx) = mpsc::channel();
+        let (graph_tx, graph_rx) = mpsc::channel();
 
-        let handle = RuntimeHandle { kill_tx };
+        let handle = RuntimeHandle { kill_tx, graph_tx };
 
         let host_id = match backend {
             Backend::Default => cpal::default_host().id(),
@@ -588,16 +617,36 @@ impl Runtime {
 
         std::thread::spawn(move || -> RuntimeResult<()> {
             let stream = match config.sample_format() {
-                cpal::SampleFormat::I8 => runtime.run_inner::<i8>(&device, &config.config())?,
-                cpal::SampleFormat::I16 => runtime.run_inner::<i16>(&device, &config.config())?,
-                cpal::SampleFormat::I32 => runtime.run_inner::<i32>(&device, &config.config())?,
-                cpal::SampleFormat::I64 => runtime.run_inner::<i64>(&device, &config.config())?,
-                cpal::SampleFormat::U8 => runtime.run_inner::<u8>(&device, &config.config())?,
-                cpal::SampleFormat::U16 => runtime.run_inner::<u16>(&device, &config.config())?,
-                cpal::SampleFormat::U32 => runtime.run_inner::<u32>(&device, &config.config())?,
-                cpal::SampleFormat::U64 => runtime.run_inner::<u64>(&device, &config.config())?,
-                cpal::SampleFormat::F32 => runtime.run_inner::<f32>(&device, &config.config())?,
-                cpal::SampleFormat::F64 => runtime.run_inner::<f64>(&device, &config.config())?,
+                cpal::SampleFormat::I8 => {
+                    runtime.run_inner::<i8>(&device, &config.config(), graph_rx)?
+                }
+                cpal::SampleFormat::I16 => {
+                    runtime.run_inner::<i16>(&device, &config.config(), graph_rx)?
+                }
+                cpal::SampleFormat::I32 => {
+                    runtime.run_inner::<i32>(&device, &config.config(), graph_rx)?
+                }
+                cpal::SampleFormat::I64 => {
+                    runtime.run_inner::<i64>(&device, &config.config(), graph_rx)?
+                }
+                cpal::SampleFormat::U8 => {
+                    runtime.run_inner::<u8>(&device, &config.config(), graph_rx)?
+                }
+                cpal::SampleFormat::U16 => {
+                    runtime.run_inner::<u16>(&device, &config.config(), graph_rx)?
+                }
+                cpal::SampleFormat::U32 => {
+                    runtime.run_inner::<u32>(&device, &config.config(), graph_rx)?
+                }
+                cpal::SampleFormat::U64 => {
+                    runtime.run_inner::<u64>(&device, &config.config(), graph_rx)?
+                }
+                cpal::SampleFormat::F32 => {
+                    runtime.run_inner::<f32>(&device, &config.config(), graph_rx)?
+                }
+                cpal::SampleFormat::F64 => {
+                    runtime.run_inner::<f64>(&device, &config.config(), graph_rx)?
+                }
 
                 sample_format => {
                     return Err(RuntimeError::UnsupportedSampleFormat(sample_format));
@@ -622,6 +671,7 @@ impl Runtime {
         mut self,
         device: &cpal::Device,
         config: &cpal::StreamConfig,
+        graph_rx: mpsc::Receiver<Graph>,
     ) -> RuntimeResult<cpal::Stream>
     where
         T: cpal::SizedSample + cpal::FromSample<f64>,
@@ -633,8 +683,16 @@ impl Runtime {
             .build_output_stream(
                 config,
                 move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
-                    self.reset(audio_rate, data.len() / channels).unwrap();
+                    if let Ok(graph) = graph_rx.try_recv() {
+                        self.graph = graph;
+                        self.reset(audio_rate, data.len() / channels).unwrap();
+                        self.prepare().unwrap();
+                    } else {
+                        self.reset(audio_rate, data.len() / channels).unwrap();
+                    }
+
                     self.process().unwrap();
+
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
                             let buffer = &self.outputs[channel_idx];
@@ -662,12 +720,18 @@ impl Runtime {
 #[derive(Clone)]
 pub struct RuntimeHandle {
     kill_tx: mpsc::Sender<()>,
+    graph_tx: mpsc::Sender<Graph>,
 }
 
 impl RuntimeHandle {
     /// Stops the running runtime.
     pub fn stop(&self) {
         self.kill_tx.send(()).ok();
+    }
+
+    /// Hot-reloads the audio graph with the given graph.
+    pub fn hot_reload(&self, graph: Graph) {
+        self.graph_tx.send(graph).ok();
     }
 }
 
