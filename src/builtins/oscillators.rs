@@ -457,3 +457,111 @@ impl Process for BlSawOscillator {
         Ok(())
     }
 }
+
+const BL_SQUARE_MAX_HARMONICS: usize = 512;
+
+/// A free-running band-limited square wave oscillator.
+#[derive(Clone, Debug)]
+pub struct BlSquareOscillator {
+    sample_rate: f64,
+
+    // phase accumulator
+    t: f64,
+    // phase increment per sample
+    t_step: f64,
+
+    // band-limited square wave coefficients
+    coeff: Box<[f64; BL_SQUARE_MAX_HARMONICS]>,
+
+    /// The frequency of the square wave in Hz.
+    pub frequency: f64,
+    /// The pulse width of the square wave.
+    pub pulse_width: f64,
+}
+
+impl Default for BlSquareOscillator {
+    fn default() -> Self {
+        Self::new(440.0, 0.5)
+    }
+}
+
+impl BlSquareOscillator {
+    /// Creates a new band-limited square wave oscillator.
+    pub fn new(frequency: f64, pulse_width: f64) -> Self {
+        Self {
+            frequency,
+            pulse_width,
+            t: 0.0,
+            t_step: 0.0,
+            coeff: Box::new([0.0; BL_SQUARE_MAX_HARMONICS]),
+            sample_rate: 0.0,
+        }
+    }
+}
+
+impl Process for BlSquareOscillator {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::unbounded("frequency", 440.0),
+            SignalSpec::unbounded("pulse_width", 0.5),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", 0.0)]
+    }
+
+    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+        self.sample_rate = sample_rate;
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let frequency = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let pulse_width = inputs[1]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(1))?;
+
+        let out = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for (out, frequency, pulse_width) in itertools::izip!(out, frequency, pulse_width) {
+            if **frequency <= 0.0 {
+                **out = 0.0;
+                continue;
+            }
+
+            self.frequency = **frequency;
+            self.pulse_width = **pulse_width;
+
+            self.t_step = self.frequency / self.sample_rate;
+
+            let n_harm = (self.sample_rate / (self.frequency * 4.0)) as usize;
+            self.coeff[0] = self.pulse_width - 0.5;
+            for i in 1..n_harm + 1 {
+                self.coeff[i] = f64::sin(i as f64 * std::f64::consts::PI * self.pulse_width) * 2.0
+                    / (i as f64 * std::f64::consts::PI);
+            }
+
+            let theta = self.t * 2.0 * std::f64::consts::PI;
+
+            let mut square = 0.0;
+            for i in 0..n_harm + 1 {
+                square += self.coeff[i] * (theta * i as f64).cos();
+            }
+
+            self.t += self.t_step;
+
+            **out = square;
+        }
+
+        Ok(())
+    }
+}
