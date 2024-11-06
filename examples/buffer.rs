@@ -21,7 +21,7 @@ fn main() {
     buffer.output(0).connect(&out2.input(0));
 
     // create a sawtooth oscillator to drive the buffer reader
-    let saw = graph.saw_osc();
+    let saw = graph.add(SawOscillator::default());
 
     // we want to read the sample to its full length, so set the frequency to the sample rate divided by the length
     let freq = graph.sample_rate() / len;

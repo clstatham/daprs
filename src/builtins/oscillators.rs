@@ -75,15 +75,6 @@ impl Process for PhaseAccumulator {
     }
 }
 
-impl GraphBuilder {
-    /// A phase accumulator.
-    ///
-    /// See also: [`PhaseAccumulator`].
-    pub fn phase_accum(&self) -> Node {
-        self.add_processor(PhaseAccumulator::default())
-    }
-}
-
 /// A free-running sine wave oscillator.
 ///
 /// # Inputs
@@ -99,7 +90,7 @@ impl GraphBuilder {
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Sample` | The output sine wave signal. |
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct SineOscillator {
     // phase accumulator
     t: f64,
@@ -107,13 +98,40 @@ pub struct SineOscillator {
     t_step: f64,
     // sample rate
     sample_rate: f64,
+
+    /// The frequency of the sine wave in Hz.
+    pub frequency: f64,
+    /// The phase of the sine wave in radians.
+    pub phase: f64,
+}
+
+impl SineOscillator {
+    /// Creates a new sine wave oscillator.
+    pub fn new(frequency: f64) -> Self {
+        Self {
+            frequency,
+            ..Default::default()
+        }
+    }
+}
+
+impl Default for SineOscillator {
+    fn default() -> Self {
+        Self {
+            t: 0.0,
+            t_step: 0.0,
+            sample_rate: 0.0,
+            frequency: 440.0,
+            phase: 0.0,
+        }
+    }
 }
 
 impl Process for SineOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::unbounded("frequency", 440.0),
-            SignalSpec::unbounded("phase", 0.0),
+            SignalSpec::unbounded("frequency", self.frequency),
+            SignalSpec::unbounded("phase", self.phase),
             SignalSpec::unbounded("reset", Signal::new_message_none()),
         ]
     }
@@ -165,15 +183,6 @@ impl Process for SineOscillator {
     }
 }
 
-impl GraphBuilder {
-    /// A free-running sine wave oscillator.
-    ///
-    /// See also: [`SineOscillator`].
-    pub fn sine_osc(&self) -> Node {
-        self.add_processor(SineOscillator::default())
-    }
-}
-
 /// A free-running sawtooth wave oscillator.
 ///
 /// # Inputs
@@ -189,7 +198,7 @@ impl GraphBuilder {
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Sample` | The output sawtooth wave signal. |
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct SawOscillator {
     // phase accumulator
     t: f64,
@@ -197,13 +206,40 @@ pub struct SawOscillator {
     t_step: f64,
     // sample rate
     sample_rate: f64,
+
+    /// The frequency of the sawtooth wave in Hz.
+    pub frequency: f64,
+    /// The phase of the sawtooth wave in radians.
+    pub phase: f64,
+}
+
+impl Default for SawOscillator {
+    fn default() -> Self {
+        Self {
+            t: 0.0,
+            t_step: 0.0,
+            sample_rate: 0.0,
+            frequency: 440.0,
+            phase: 0.0,
+        }
+    }
+}
+
+impl SawOscillator {
+    /// Creates a new sawtooth wave oscillator.
+    pub fn new(frequency: f64) -> Self {
+        Self {
+            frequency,
+            ..Default::default()
+        }
+    }
 }
 
 impl Process for SawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::unbounded("frequency", 440.0),
-            SignalSpec::unbounded("phase", 0.0),
+            SignalSpec::unbounded("frequency", self.frequency),
+            SignalSpec::unbounded("phase", self.phase),
             SignalSpec::unbounded("reset", Signal::new_message_none()),
         ]
     }
@@ -251,15 +287,6 @@ impl Process for SawOscillator {
         }
 
         Ok(())
-    }
-}
-
-impl GraphBuilder {
-    /// A free-running sawtooth wave oscillator.
-    ///
-    /// See also: [`SawOscillator`].
-    pub fn saw_osc(&self) -> Node {
-        self.add_processor(SawOscillator::default())
     }
 }
 
@@ -324,11 +351,109 @@ impl Process for NoiseOscillator {
     }
 }
 
-impl GraphBuilder {
-    /// A free-running unipolar noise oscillator.
-    ///
-    /// See also: [`NoiseOscillator`].
-    pub fn noise_osc(&self) -> Node {
-        self.add_processor(NoiseOscillator::new())
+/// A free-running band-limited sawtooth wave oscillator.
+///
+/// The band-limited sawtooth wave oscillator generates a sawtooth wave with reduced aliasing artifacts.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `frequency` | `Sample` | `440.0` | The frequency of the sawtooth wave in Hz. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Sample` | The output sawtooth wave signal. |
+#[derive(Clone, Debug)]
+pub struct BlSawOscillator {
+    p: f64,
+    dp: f64,
+    saw: f64,
+    sample_rate: f64,
+
+    /// The frequency of the sawtooth wave in Hz.
+    pub frequency: f64,
+}
+
+impl Default for BlSawOscillator {
+    fn default() -> Self {
+        Self {
+            p: 0.0,
+            dp: 1.0,
+            saw: 0.0,
+            sample_rate: 0.0,
+            frequency: 440.0,
+        }
+    }
+}
+
+impl BlSawOscillator {
+    /// Creates a new band-limited sawtooth wave oscillator.
+    pub fn new(frequency: f64) -> Self {
+        Self {
+            frequency,
+            ..Default::default()
+        }
+    }
+}
+
+impl Process for BlSawOscillator {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("frequency", 440.0)]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", 0.0)]
+    }
+
+    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+        self.sample_rate = sample_rate;
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let frequency = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        let out = outputs[0]
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        // algorithm courtesy of https://www.musicdsp.org/en/latest/Synthesis/12-bandlimited-waveforms.html
+        for (out, frequency) in itertools::izip!(out, frequency) {
+            if **frequency <= 0.0 {
+                **out = 0.0;
+                continue;
+            }
+
+            let pmax = 0.5 * self.sample_rate / **frequency;
+            let dc = -0.498 / pmax;
+
+            self.p += self.dp;
+            if self.p < 0.0 {
+                self.p = -self.p;
+                self.dp = -self.dp;
+            } else if self.p > pmax {
+                self.p = 2.0 * pmax - self.p;
+                self.dp = -self.dp;
+            }
+
+            let mut x = std::f64::consts::PI * self.p;
+            if x < 0.00001 {
+                x = 0.00001;
+            }
+
+            self.saw = 0.995 * self.saw + dc + x.sin() / x;
+
+            **out = self.saw;
+        }
+
+        Ok(())
     }
 }

@@ -137,7 +137,7 @@ impl GraphBuilder {
     ///
     /// See also: [`AudioBuffer`].
     pub fn audio_buffer(&self, buffer: impl Into<Buffer<Sample>>) -> Node {
-        self.add_processor(AudioBuffer::new(buffer.into()))
+        self.add(AudioBuffer::new(buffer.into()))
     }
 }
 
@@ -210,6 +210,6 @@ impl GraphBuilder {
     ///
     /// See also: [`Register`].
     pub fn register(&self) -> Node {
-        self.add_processor(Register::default())
+        self.add(Register::default())
     }
 }

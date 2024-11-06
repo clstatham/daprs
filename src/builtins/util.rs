@@ -48,7 +48,7 @@ impl GraphBuilder {
     ///
     /// See also: [Passthrough].
     pub fn passthrough(&self) -> Node {
-        self.add_processor(Passthrough)
+        self.add(Passthrough)
     }
 }
 
@@ -130,7 +130,7 @@ impl GraphBuilder {
     ///
     /// See also: [MessageSender].
     pub fn message(&self, message: impl Into<Message>) -> Node {
-        self.add_processor(MessageSender::new(message.into()))
+        self.add(MessageSender::new(message.into()))
     }
 }
 
@@ -182,7 +182,7 @@ impl GraphBuilder {
     ///
     /// See also: [ConstantMessageSender].
     pub fn constant_message(&self, message: impl Into<Message>) -> Node {
-        self.add_processor(ConstantMessageSender::new(message.into()))
+        self.add(ConstantMessageSender::new(message.into()))
     }
 }
 
@@ -294,7 +294,7 @@ impl GraphBuilder {
         name: impl Into<Option<&'a str>>,
         msg: impl Into<Option<&'a str>>,
     ) -> Node {
-        self.add_processor(Print::new(name.into(), msg.into()))
+        self.add(Print::new(name.into(), msg.into()))
     }
 }
 
@@ -353,7 +353,7 @@ impl GraphBuilder {
     ///
     /// See also: [MessageToAudio].
     pub fn message_to_audio(&self) -> Node {
-        self.add_processor(MessageToAudio)
+        self.add(MessageToAudio)
     }
 }
 
@@ -408,7 +408,7 @@ impl GraphBuilder {
     ///
     /// See also: [AudioToMessage].
     pub fn audio_to_message(&self) -> Node {
-        self.add_processor(AudioToMessage)
+        self.add(AudioToMessage)
     }
 }
 
@@ -457,7 +457,7 @@ impl GraphBuilder {
     ///
     /// See also: [SampleRate].
     pub fn sample_rate(&self) -> Node {
-        self.add_processor(SampleRate::default())
+        self.add(SampleRate::default())
     }
 }
 
@@ -534,7 +534,7 @@ impl GraphBuilder {
     ///
     /// See also: [Smooth].
     pub fn smooth(&self) -> Node {
-        self.add_processor(Smooth::default())
+        self.add(Smooth::default())
     }
 }
 
@@ -609,7 +609,7 @@ impl GraphBuilder {
     ///
     /// See also: [Changed].
     pub fn changed(&self) -> Node {
-        self.add_processor(Changed::default())
+        self.add(Changed::default())
     }
 }
 
@@ -674,7 +674,7 @@ impl GraphBuilder {
     ///
     /// See also: [ZeroCrossing].
     pub fn zero_crossing(&self) -> Node {
-        self.add_processor(ZeroCrossing::default())
+        self.add(ZeroCrossing::default())
     }
 }
 
@@ -931,7 +931,7 @@ impl GraphBuilder {
     ///
     /// See also: [Select].
     pub fn select(&self, num_outputs: usize) -> Node {
-        self.add_processor(Select::new(num_outputs))
+        self.add(Select::new(num_outputs))
     }
 }
 
@@ -1013,7 +1013,7 @@ impl GraphBuilder {
     ///
     /// See also: [Merge].
     pub fn merge(&self, num_inputs: usize) -> Node {
-        self.add_processor(Merge::new(num_inputs))
+        self.add(Merge::new(num_inputs))
     }
 }
 
@@ -1086,7 +1086,7 @@ impl GraphBuilder {
     ///
     /// See also: [Counter].
     pub fn counter(&self) -> Node {
-        self.add_processor(Counter::default())
+        self.add(Counter::default())
     }
 }
 
@@ -1163,6 +1163,6 @@ impl GraphBuilder {
     ///
     /// See also: [SampleAndHold].
     pub fn sample_and_hold(&self) -> Node {
-        self.add_processor(SampleAndHold::default())
+        self.add(SampleAndHold::default())
     }
 }

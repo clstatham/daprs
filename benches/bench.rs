@@ -9,7 +9,7 @@ fn bench_demo(c: &mut Criterion) {
 
     let out1 = graph.add_output();
 
-    let sine = graph.sine_osc();
+    let sine = graph.add(SineOscillator::default());
     sine.input("frequency").set(440.0);
     let sine = sine * 0.2;
     sine.output(0).connect(&out1.input(0));
@@ -38,7 +38,7 @@ fn bench_demo_realtime_simulation(c: &mut Criterion) {
 
     let out1 = graph.add_output();
 
-    let sine = graph.sine_osc();
+    let sine = graph.add(SineOscillator::default());
     sine.input("frequency").set(440.0);
     let sine = sine * 0.2;
     sine.output(0).connect(&out1.input(0));
@@ -68,7 +68,7 @@ fn bench_big_graph(c: &mut Criterion) {
 
     let out1 = graph.add_output();
 
-    let sine = graph.sine_osc();
+    let sine = graph.add(SineOscillator::default());
     sine.input("frequency").set(440.0);
     let mut sine = sine * 0.2;
     for _ in 0..1000 {

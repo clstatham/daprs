@@ -58,7 +58,7 @@ impl GraphBuilder {
     ///
     /// See also: [`Constant`].
     pub fn constant(&self, value: f64) -> Node {
-        self.add_processor(Constant::new(value))
+        self.add(Constant::new(value))
     }
 }
 

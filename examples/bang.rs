@@ -12,7 +12,7 @@ fn main() {
     bang.input("period").set(0.5);
 
     // add a sine oscillator node with a frequency of 1 Hz
-    let sine = graph.sine_osc();
+    let sine = graph.add(SineOscillator::default());
     sine.input("frequency").set(1.0);
 
     // make the sine only output positive values

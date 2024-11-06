@@ -112,7 +112,7 @@ impl GraphBuilder {
     ///
     /// See also: [`Metro`].
     pub fn metro(&self) -> Node {
-        self.add_processor(Metro::new())
+        self.add(Metro::new())
     }
 }
 
@@ -181,7 +181,7 @@ impl GraphBuilder {
     ///
     /// See also: [`UnitDelay`].
     pub fn unit_delay(&self) -> Node {
-        self.add_processor(UnitDelay::new())
+        self.add(UnitDelay::new())
     }
 }
 
@@ -278,6 +278,6 @@ impl GraphBuilder {
     ///
     /// See also: [`SampleDelay`].
     pub fn sample_delay(&self, max_delay: usize) -> Node {
-        self.add_processor(SampleDelay::new(max_delay))
+        self.add(SampleDelay::new(max_delay))
     }
 }

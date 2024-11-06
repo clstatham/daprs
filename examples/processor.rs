@@ -42,10 +42,10 @@ fn main() {
     let out1 = graph.add_output();
     let out2 = graph.add_output();
 
-    let sine = graph.sine_osc();
+    let sine = graph.add(SineOscillator::default());
     sine.input("frequency").set(440.0);
 
-    let gain = graph.add_processor(GainProc { gain: 0.5 });
+    let gain = graph.add(GainProc { gain: 0.5 });
 
     sine.output(0).connect(&gain.input(0));
 

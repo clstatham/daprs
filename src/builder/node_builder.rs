@@ -126,7 +126,7 @@ impl Node {
         if self.output_kind(0) == SignalKind::Sample {
             return self.clone();
         }
-        let proc = self.graph.add_processor(MessageToAudio);
+        let proc = self.graph.add(MessageToAudio);
         proc.connect_input(self, 0, 0);
         proc
     }
@@ -143,7 +143,7 @@ impl Node {
         if self.output_kind(0) == SignalKind::Message {
             return self.clone();
         }
-        let proc = self.graph.add_processor(AudioToMessage);
+        let proc = self.graph.add(AudioToMessage);
         proc.connect_input(self, 0, 0);
         proc
     }
@@ -157,7 +157,7 @@ impl Node {
     #[track_caller]
     pub fn smooth(&self) -> Node {
         self.assert_single_output();
-        let proc = self.graph.add_processor(Smooth::default());
+        let proc = self.graph.add(Smooth::default());
         proc.input("factor").set(0.1);
         proc.input(0).connect(&self.output(0));
         proc
@@ -172,7 +172,7 @@ impl Node {
     #[track_caller]
     pub fn midi2freq(&self) -> Node {
         self.assert_single_output();
-        let proc = self.graph.add_processor(MidiToFreq);
+        let proc = self.graph.add(MidiToFreq);
         proc.input(0).connect(&self.output(0));
         proc
     }
@@ -186,7 +186,7 @@ impl Node {
     #[track_caller]
     pub fn freq2midi(&self) -> Node {
         self.assert_single_output();
-        let proc = self.graph.add_processor(FreqToMidi);
+        let proc = self.graph.add(FreqToMidi);
         proc.input(0).connect(&self.output(0));
         proc
     }
@@ -199,7 +199,7 @@ impl Node {
     #[inline]
     pub fn make_register(&self) -> Node {
         self.assert_single_output();
-        let node = self.graph.add_processor(Register::default());
+        let node = self.graph.add(Register::default());
         node.input(0).connect(&self.output(0));
         node
     }
@@ -298,7 +298,7 @@ impl Output {
         if self.kind() == SignalKind::Sample {
             return self.clone();
         }
-        let proc = self.node.graph().add_processor(MessageToAudio);
+        let proc = self.node.graph().add(MessageToAudio);
         proc.input(0).connect(self);
         proc.output(0)
     }
@@ -309,7 +309,7 @@ impl Output {
         if self.kind() == SignalKind::Message {
             return self.clone();
         }
-        let proc = self.node.graph().add_processor(AudioToMessage);
+        let proc = self.node.graph().add(AudioToMessage);
         proc.input(0).connect(self);
         proc.output(0)
     }
@@ -326,7 +326,7 @@ impl Output {
     /// Creates a new, single-output node that passes the output of this node through.
     #[inline]
     pub fn make_node(&self) -> Node {
-        let node = self.node.graph().add_processor(Passthrough);
+        let node = self.node.graph().add(Passthrough);
         node.input(0).connect(self);
         node
     }
@@ -334,7 +334,7 @@ impl Output {
     /// Creates a new, single-output node that holds and continuously outputs the last value of this node.
     #[inline]
     pub fn make_register(&self) -> Node {
-        let node = self.node.graph().add_processor(Register::default());
+        let node = self.node.graph().add(Register::default());
         node.input(0).connect(self);
         node
     }
@@ -381,7 +381,7 @@ impl IntoNode for &Node {
 
 impl IntoNode for Param {
     fn into_node(self, graph: &GraphBuilder) -> Node {
-        graph.add_processor(self)
+        graph.add(self)
     }
 }
 
@@ -480,7 +480,7 @@ macro_rules! impl_binary_node_ops {
                 other.assert_single_output();
 
                 let processor = <$proc>::default();
-                let node = self.graph().add_processor(processor);
+                let node = self.graph().add(processor);
                 node.input(0).connect(&self.output(0));
                 node.input(1).connect(&other.output(0));
 
@@ -498,7 +498,7 @@ macro_rules! impl_binary_node_ops {
                 other.assert_single_output();
 
                 let processor = <$proc>::default();
-                let node = self.graph().add_processor(processor);
+                let node = self.graph().add(processor);
                 node.input(0).connect(&self.output(0));
                 node.input(1).connect(&other.output(0));
 
@@ -583,7 +583,7 @@ macro_rules! impl_unary_node_ops {
                 self.assert_single_output();
 
                 let processor = <$proc>::default();
-                let node = self.graph().add_processor(processor);
+                let node = self.graph().add(processor);
                 node.input(0).connect(&self.output(0));
 
                 node

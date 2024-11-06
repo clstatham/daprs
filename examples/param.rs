@@ -12,7 +12,7 @@ fn main() {
     let out2 = graph.add_output();
 
     // create a sine oscillator
-    let sine = graph.sine_osc();
+    let sine = graph.add(SineOscillator::default());
 
     // create a parameter for the frequency
     // this will allow us to change the frequency of the sine oscillator while the graph is running
