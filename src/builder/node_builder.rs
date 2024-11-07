@@ -251,9 +251,13 @@ impl Input {
 
     /// Creates a parameter for the input.
     #[inline]
-    pub fn param(&self, name: impl Into<String>) -> Param {
+    pub fn param(
+        &self,
+        name: impl Into<String>,
+        initial_value: Option<impl Into<Message>>,
+    ) -> Param {
         let name = name.into();
-        let param = Param::new(&name);
+        let param = Param::new(&name, initial_value);
         let proc = self.node.graph().add_param(param.clone());
         match self.kind() {
             SignalKind::Message => proc.output(0).connect(self),

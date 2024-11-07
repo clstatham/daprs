@@ -3,13 +3,13 @@
 	- I understand Rust and optimized programming much better now since working on my game engine
 	- New version is much more lightweight and easier to use
 - Design goals
-	- Fast; focus on `Copy` types and shared references wherever possible
+	- Fast; focus on types that are cheap to copy, and use references as much as we can
 	- No allocations on the real-time audio thread
 	- Precompute as much as possible
 - 2 API levels:
 	- Low-level `processor` API where raw access to audio data are available for arbitrary processing in Rust
 	- High-level `builder` API for constructing signal processor graphs intuitively
-		- Bindings to Lua! (Potentially Python, JS in the future)
+		- Bindings to Python!
 - Other notable features
 	- Run signal flow graphs either in real-time or offline
 	- Save rendered audio to WAV files
@@ -18,5 +18,5 @@
 	- `bang.rs` (messages)
 	- `param.rs` (external control of signals)
 	- `processor.rs` (`processor` api)
-- Bonus: Lua bindings!
-	- (go over example)
+- Bonus: Python bindings!
+	- (go over examples)

@@ -703,11 +703,15 @@ pub struct Param {
 
 impl Param {
     /// Creates a new `Param`.
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
+    pub fn new<T: Into<Message>>(name: impl Into<String>, initial_value: Option<T>) -> Self {
+        let this = Self {
             name: name.into(),
             channels: param_channels(),
+        };
+        if let Some(initial_value) = initial_value {
+            this.set(initial_value);
         }
+        this
     }
 
     /// Returns the name of this `Param`.
