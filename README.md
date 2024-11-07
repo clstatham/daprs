@@ -27,8 +27,7 @@ See [examples/demo.rs](https://github.com/clstatham/raug/blob/master/examples/de
 ## Related Projects
 
 - Python bindings: [raug-python](https://github.com/clstatham/raug-python)
-- Lua bindings: [raug-lua](https://github.com/clstatham/raug-lua)
-- GUI using [iced](https://github.com/iced-rs/iced): [raug-iced](https://github.com/clstatham/raug-iced)
+- GUI using [iced](https://github.com/iced-rs/iced) (WIP): [raug-iced](https://github.com/clstatham/raug-iced)
 
 ## Roadmap
 
