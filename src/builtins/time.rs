@@ -2,7 +2,7 @@
 
 use crate::{
     message::Message,
-    prelude::{GraphBuilder, Node, Process, SignalSpec},
+    prelude::{Process, SignalSpec},
     processor::ProcessorError,
     signal::{Buffer, Sample, Signal, SignalBuffer},
 };
@@ -32,9 +32,9 @@ pub struct Metro {
 
 impl Metro {
     /// Creates a new metronome processor with the given period.
-    pub fn new() -> Self {
+    pub fn new(period: f64) -> Self {
         Self {
-            period: 1.0,
+            period,
             last_time: 0.0,
             next_time: 0.0,
             time: 0.0,
@@ -59,13 +59,16 @@ impl Metro {
 
 impl Default for Metro {
     fn default() -> Self {
-        Self::new()
+        Self::new(1.0)
     }
 }
 
 impl Process for Metro {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("period", Signal::new_message_none())]
+        vec![SignalSpec::unbounded(
+            "period",
+            Signal::new_message_some(Message::Float(self.period)),
+        )]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -104,15 +107,6 @@ impl Process for Metro {
         }
 
         Ok(())
-    }
-}
-
-impl GraphBuilder {
-    /// A metronome processor.
-    ///
-    /// See also: [`Metro`].
-    pub fn metro(&self) -> Node {
-        self.add(Metro::new())
     }
 }
 
@@ -171,17 +165,6 @@ impl Process for UnitDelay {
         }
 
         Ok(())
-    }
-}
-
-impl GraphBuilder {
-    /// A processor that delays a signal by a single sample.
-    ///
-    /// Note that feedback loops inherently introduce a single sample delay, so this processor is not necessary in those cases.
-    ///
-    /// See also: [`UnitDelay`].
-    pub fn unit_delay(&self) -> Node {
-        self.add(UnitDelay::new())
     }
 }
 
@@ -268,16 +251,5 @@ impl Process for SampleDelay {
         }
 
         Ok(())
-    }
-}
-
-impl GraphBuilder {
-    /// A sample delay processor.
-    ///
-    /// If you need to delay a signal by a single sample, consider using [`UnitDelay`] instead.
-    ///
-    /// See also: [`SampleDelay`].
-    pub fn sample_delay(&self, max_delay: usize) -> Node {
-        self.add(SampleDelay::new(max_delay))
     }
 }

@@ -132,15 +132,6 @@ impl Process for AudioBuffer {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that reads and writes audio samples in a buffer.
-    ///
-    /// See also: [`AudioBuffer`].
-    pub fn audio_buffer(&self, buffer: impl Into<Buffer<Sample>>) -> Node {
-        self.add(AudioBuffer::new(buffer.into()))
-    }
-}
-
 /// A processor that stores a message in a register.
 ///
 /// # Inputs
@@ -202,14 +193,5 @@ impl Process for Register {
         }
 
         Ok(())
-    }
-}
-
-impl GraphBuilder {
-    /// A processor that stores a message in a register.
-    ///
-    /// See also: [`Register`].
-    pub fn register(&self) -> Node {
-        self.add(Register::default())
     }
 }

@@ -348,15 +348,6 @@ impl Process for MessageToAudio {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that converts a message to an audio signal.
-    ///
-    /// See also: [MessageToAudio].
-    pub fn message_to_audio(&self) -> Node {
-        self.add(MessageToAudio)
-    }
-}
-
 /// A processor that converts an audio sample to a float message.
 ///
 /// # Inputs
@@ -400,15 +391,6 @@ impl Process for AudioToMessage {
         }
 
         Ok(())
-    }
-}
-
-impl GraphBuilder {
-    /// A processor that converts an audio sample to a float message.
-    ///
-    /// See also: [AudioToMessage].
-    pub fn audio_to_message(&self) -> Node {
-        self.add(AudioToMessage)
     }
 }
 
@@ -529,15 +511,6 @@ impl Process for Smooth {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that smoothly interpolates between values over time.
-    ///
-    /// See also: [Smooth].
-    pub fn smooth(&self) -> Node {
-        self.add(Smooth::default())
-    }
-}
-
 /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
 ///
 /// # Inputs
@@ -604,15 +577,6 @@ impl Process for Changed {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
-    ///
-    /// See also: [Changed].
-    pub fn changed(&self) -> Node {
-        self.add(Changed::default())
-    }
-}
-
 /// A processor that sends a bang message when a zero crossing is detected on the input signal.
 ///
 /// # Inputs
@@ -666,15 +630,6 @@ impl Process for ZeroCrossing {
         }
 
         Ok(())
-    }
-}
-
-impl GraphBuilder {
-    /// A processor that sends a bang message when a zero crossing is detected on the input signal.
-    ///
-    /// See also: [ZeroCrossing].
-    pub fn zero_crossing(&self) -> Node {
-        self.add(ZeroCrossing::default())
     }
 }
 
@@ -820,15 +775,6 @@ impl Process for Param {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that can be used to send/receive messages from outside the graph.
-    ///
-    /// See also: [Param].
-    pub fn param(&self, param: &Param) -> Node {
-        self.add_param(param.clone())
-    }
-}
-
 /// A processor that routes a message to one of its outputs.
 ///
 /// # Inputs
@@ -926,15 +872,6 @@ impl Process for Select {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that selects an output based on an index.
-    ///
-    /// See also: [Select].
-    pub fn select(&self, num_outputs: usize) -> Node {
-        self.add(Select::new(num_outputs))
-    }
-}
-
 /// A processor that outputs any messages it receives on any of its inputs.
 ///
 /// If a message is received on multiple inputs, the message from the input with the lowest index is output.
@@ -1008,15 +945,6 @@ impl Process for Merge {
     }
 }
 
-impl GraphBuilder {
-    /// A processor that outputs any messages it receives on any of its inputs.
-    ///
-    /// See also: [Merge].
-    pub fn merge(&self, num_inputs: usize) -> Node {
-        self.add(Merge::new(num_inputs))
-    }
-}
-
 /// A processor that counts the number of times it receives a bang message.
 ///
 /// # Inputs
@@ -1078,15 +1006,6 @@ impl Process for Counter {
         }
 
         Ok(())
-    }
-}
-
-impl GraphBuilder {
-    /// A processor that counts the number of times it receives a bang message.
-    ///
-    /// See also: [Counter].
-    pub fn counter(&self) -> Node {
-        self.add(Counter::default())
     }
 }
 
@@ -1155,14 +1074,5 @@ impl Process for SampleAndHold {
         }
 
         Ok(())
-    }
-}
-
-impl GraphBuilder {
-    /// A sample-and-hold processor.
-    ///
-    /// See also: [SampleAndHold].
-    pub fn sample_and_hold(&self) -> Node {
-        self.add(SampleAndHold::default())
     }
 }
