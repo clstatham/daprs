@@ -12,10 +12,7 @@ fn main() {
     let out2 = graph.add_output();
 
     // add a sine oscillator
-    let sine = graph.add(SineOscillator::default());
-
-    // set the frequency of the sine oscillator
-    sine.input("frequency").set(440.0);
+    let sine = graph.add(SineOscillator::new(440.0));
 
     // set the amplitude of the sine oscillator
     let sine = sine * 0.2;
@@ -29,6 +26,6 @@ fn main() {
 
     // run the runtime for 1 second and output to the default audio device
     runtime
-        .run_for(Duration::from_secs(10), Backend::Default, Device::Default)
+        .run_for(Duration::from_secs(1), Backend::Default, Device::Default)
         .unwrap();
 }

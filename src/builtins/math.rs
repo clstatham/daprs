@@ -186,6 +186,8 @@ macro_rules! impl_binary_proc {
                     .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
                 for (sample, in1, in2) in itertools::izip!(out, in1, in2) {
+                    debug_assert!(in1.is_finite());
+                    debug_assert!(in2.is_finite());
                     **sample = f64::$method(**in1, **in2);
                 }
 
@@ -480,6 +482,7 @@ macro_rules! impl_unary_proc {
                     .ok_or(ProcessorError::OutputSpecMismatch(0))?;
 
                 for (sample, in1) in itertools::izip!(out, in1) {
+                    debug_assert!(in1.is_finite());
                     *sample = (**in1).$method().into();
                 }
 

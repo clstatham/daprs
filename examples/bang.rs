@@ -11,14 +11,12 @@ fn main() {
     let bang = graph.add(Metro::new(0.5));
 
     // add a sine oscillator node with a frequency of 1 Hz
-    let sine = graph.add(SineOscillator::default());
-    sine.input("frequency").set(1.0);
+    let sine = graph.add(SineOscillator::new(1.0));
 
     // make the sine only output positive values
     let sine = sine.abs();
 
     // connect the sine oscillator to the metronome
-    // sine.connect_output(0, bang, "period");
     sine.output(0).connect(&bang.input("period"));
 
     // add a print node

@@ -251,10 +251,10 @@ impl Input {
 
     /// Creates a parameter for the input.
     #[inline]
-    pub fn param(
+    pub fn param<T: Into<Message>>(
         &self,
         name: impl Into<String>,
-        initial_value: Option<impl Into<Message>>,
+        initial_value: Option<T>,
     ) -> Param {
         let name = name.into();
         let param = Param::new(&name, initial_value);

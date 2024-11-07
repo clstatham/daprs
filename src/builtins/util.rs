@@ -534,7 +534,7 @@ impl Process for Changed {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", 0.0),
-            SignalSpec::unbounded("threshold", 0.0),
+            SignalSpec::unbounded("threshold", f64::EPSILON),
         ]
     }
 
@@ -1074,6 +1074,56 @@ impl Process for SampleAndHold {
                 *out_signal = last;
             } else {
                 *out_signal = Sample::new(0.0);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// A processor that panics if the input signal is infinite or NaN.
+/// This is useful for debugging.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `in` | `Sample` | | The input signal to check. |
+#[derive(Clone, Debug, Default)]
+pub struct CheckFinite {
+    context: String,
+}
+
+impl CheckFinite {
+    /// Creates a new `CheckFinite` with the given context.
+    pub fn new(context: impl Into<String>) -> Self {
+        Self {
+            context: context.into(),
+        }
+    }
+}
+
+impl Process for CheckFinite {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("in", 0.0)]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        _outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let in_signal = inputs[0]
+            .as_sample()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        for in_signal in in_signal {
+            if !in_signal.is_finite() {
+                panic!("{}: signal is not finite: {:?}", self.context, in_signal);
             }
         }
 

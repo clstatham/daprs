@@ -478,7 +478,8 @@ impl Runtime {
                         ProcessorError::OutputSpecMismatch(i),
                     ));
                 };
-                output[sample_count..sample_count + actual_block_size].copy_from_slice(buffer);
+                output[sample_count..sample_count + actual_block_size]
+                    .copy_from_slice(&buffer[..actual_block_size]);
             }
 
             if add_delay {
