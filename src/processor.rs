@@ -401,18 +401,33 @@ impl Processor {
     }
 
     /// Returns the name of this [`Processor`].
+    #[inline]
     pub fn name(&self) -> &str {
         self.processor.name()
     }
 
     /// Returns information about the inputs this [`Processor`] expects.
+    #[inline]
     pub fn input_spec(&self) -> &[SignalSpec] {
         &self.input_spec
     }
 
     /// Returns information about the outputs this [`Processor`] produces.
+    #[inline]
     pub fn output_spec(&self) -> &[SignalSpec] {
         &self.output_spec
+    }
+
+    /// Returns the number of input buffers/channels this [`Processor`] expects.
+    #[inline]
+    pub fn num_inputs(&self) -> usize {
+        self.input_spec.len()
+    }
+
+    /// Returns the number of output buffers/channels this [`Processor`] produces.
+    #[inline]
+    pub fn num_outputs(&self) -> usize {
+        self.output_spec.len()
     }
 
     /// Resizes the input and output buffers to match the given sample rates and block size.

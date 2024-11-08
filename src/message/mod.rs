@@ -4,6 +4,7 @@ use std::fmt::{Debug, Display};
 
 /// A message that can be sent between processors.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum Message {
     /// A bang message ("do whatever it is you do").
     Bang,
@@ -13,6 +14,8 @@ pub enum Message {
     Float(f64),
     /// A string message.
     String(String),
+    /// A list of messages.
+    List(Vec<Message>),
 }
 
 impl Display for Message {
@@ -22,6 +25,16 @@ impl Display for Message {
             Message::Int(i) => write!(f, "{}", i),
             Message::Float(x) => write!(f, "{}", x),
             Message::String(s) => write!(f, "{}", s),
+            Message::List(list) => {
+                write!(f, "[")?;
+                for (i, item) in list.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", item)?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }
@@ -104,6 +117,7 @@ impl Message {
             Message::Int(i) => *i != 0,
             Message::Float(x) => *x != 0.0,
             Message::String(s) => !s.is_empty(),
+            Message::List(list) => !list.is_empty(),
         }
     }
 
@@ -143,6 +157,7 @@ impl Message {
             Message::Int(i) => Some(i.to_string()),
             Message::Float(x) => Some(x.to_string()),
             Message::String(s) => Some(s.to_string()),
+            _ => None,
         }
     }
 }

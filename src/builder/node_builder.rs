@@ -7,8 +7,6 @@ use crate::{prelude::*, signal::SignalKind};
 use super::graph_builder::GraphBuilder;
 
 /// A node in a [`GraphBuilder`].
-///
-/// This type has no lifetime parameter, so it can be used in any context.
 #[derive(Clone)]
 pub struct Node {
     pub(crate) graph: GraphBuilder,
@@ -197,6 +195,7 @@ impl Node {
     ///
     /// Panics if the node has more than one output.
     #[inline]
+    #[track_caller]
     pub fn make_register(&self) -> Node {
         self.assert_single_output();
         let node = self.graph.add(Register::default());
@@ -327,7 +326,7 @@ impl Output {
         }
     }
 
-    /// Creates a new, single-output node that passes the output of this node through.
+    /// Creates a new, single-output node that passes the value of this output through.
     #[inline]
     pub fn make_node(&self) -> Node {
         let node = self.node.graph().add(Passthrough);
@@ -335,7 +334,7 @@ impl Output {
         node
     }
 
-    /// Creates a new, single-output node that holds and continuously outputs the last value of this node.
+    /// Creates a new, single-output node that holds and continuously outputs the last value of this output.
     #[inline]
     pub fn make_register(&self) -> Node {
         let node = self.node.graph().add(Register::default());

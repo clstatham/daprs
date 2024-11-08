@@ -7,7 +7,7 @@ use petgraph::prelude::*;
 use rustc_hash::FxBuildHasher;
 
 use crate::{
-    graph::{edge::Edge, Graph, GraphRunError, NodeIndex},
+    graph::{Graph, GraphRunError, NodeIndex},
     prelude::{Param, ProcessInputs, SignalSpec},
     processor::{ProcessOutputs, ProcessorError},
     signal::{Sample, Signal, SignalBuffer},
@@ -127,14 +127,6 @@ impl NodeBuffers {
 pub struct Runtime {
     graph: Graph,
     buffer_cache: hashbrown::HashMap<NodeIndex, NodeBuffers, FxBuildHasher>,
-    input_ids: Vec<NodeIndex>,
-    output_ids: Vec<NodeIndex>,
-    // cached internal state to avoid allocations in `process()`
-    edge_cache: Vec<(NodeIndex, Edge)>,
-    // cached list of all nodes in the graph
-    node_indices: Vec<NodeIndex>,
-    // cached visitor state for graph traversal
-    visit_path: Vec<NodeIndex>,
 }
 
 impl Runtime {
@@ -174,18 +166,14 @@ impl Runtime {
             .unwrap();
 
         Runtime {
-            input_ids: graph.input_indices().to_vec(),
-            output_ids: graph.output_indices().to_vec(),
             buffer_cache,
-            edge_cache: Vec::with_capacity(graph.digraph().edge_count().next_power_of_two()),
-            visit_path: Vec::with_capacity(graph.digraph().node_count()),
-            node_indices: Vec::with_capacity(graph.digraph().node_count()),
             graph,
         }
     }
 
     /// Resets the runtime with the given sample rate and block size.
     /// This will potentially reallocate internal buffers.
+    #[inline(never)]
     pub fn reset(&mut self, sample_rate: f64, block_size: usize) -> RuntimeResult<()> {
         self.graph.allocate_visitor();
 
@@ -233,28 +221,6 @@ impl Runtime {
             Ok(())
         })?;
 
-        // allocate edge cache
-        if self.edge_cache.capacity() < max_edges.next_power_of_two() {
-            let additional = max_edges.next_power_of_two() - self.edge_cache.capacity();
-            self.edge_cache.reserve(additional);
-        }
-
-        // populate visitor path
-        self.visit_path.clear();
-        let mut visitor = DfsPostOrder::empty(self.graph.digraph());
-        for node in self.graph.digraph().externals(Direction::Incoming) {
-            visitor.stack.push(node);
-        }
-        while let Some(node) = visitor.next(&self.graph.digraph()) {
-            self.visit_path.push(node);
-        }
-        self.visit_path.reverse();
-
-        // allocate and populate node indices
-        self.node_indices.clear();
-        self.node_indices
-            .extend(self.graph.digraph().node_indices());
-
         Ok(())
     }
 
@@ -292,53 +258,52 @@ impl Runtime {
     /// Returns an iterator over the output channels of the runtime.
     #[inline]
     pub fn outputs(&self) -> impl Iterator<Item = &SignalBuffer> + '_ {
-        self.output_ids
+        self.graph()
+            .output_indices()
             .iter()
             .map(|&id| &self.buffer_cache[&id].outputs[0])
     }
 
     /// Renders the next block of audio.
     pub fn process(&mut self) -> RuntimeResult<()> {
-        self.graph.visit(|graph, node_id| -> RuntimeResult<()> {
-            self.edge_cache.extend(
-                graph
+        self.graph.visit(
+            #[inline(never)]
+            |graph, node_id| -> RuntimeResult<()> {
+                let num_inputs = graph.digraph()[node_id].input_spec().len();
+
+                let mut inputs = vec![None; num_inputs];
+
+                let mut buffers = self.buffer_cache.remove(&node_id).unwrap();
+
+                for (source_id, edge) in graph
                     .digraph()
                     .edges_directed(node_id, Direction::Incoming)
-                    .map(|edge| (edge.source(), *edge.weight())),
-            );
+                    .map(|edge| (edge.source(), *edge.weight()))
+                {
+                    let source_buffers = self.buffer_cache.get(&source_id).unwrap();
+                    inputs[edge.target_input as usize] =
+                        Some(&source_buffers.outputs[edge.source_output as usize]);
+                }
 
-            let num_inputs = graph.digraph()[node_id].input_spec().len();
+                let node = graph.digraph_mut().node_weight_mut(node_id).unwrap();
 
-            let mut inputs = vec![None; num_inputs];
+                node.process(
+                    ProcessInputs {
+                        input_spec: &buffers.input_spec,
+                        input_spec_defaults: &buffers.input_spec_defaults,
+                        inputs: &inputs,
+                    },
+                    ProcessOutputs {
+                        output_spec: &buffers.output_spec,
+                        outputs: &mut buffers.outputs,
+                    },
+                )?;
 
-            let mut buffers = self.buffer_cache.remove(&node_id).unwrap();
+                self.buffer_cache.insert(node_id, buffers);
 
-            for (source_id, edge) in self.edge_cache.drain(..) {
-                let source_buffers = self.buffer_cache.get(&source_id).unwrap();
-                inputs[edge.target_input as usize] =
-                    Some(&source_buffers.outputs[edge.source_output as usize]);
-            }
-
-            let outputs = buffers.outputs.as_mut_slice();
-
-            let node = graph.digraph_mut().node_weight_mut(node_id).unwrap();
-
-            node.process(
-                ProcessInputs {
-                    input_spec: &buffers.input_spec,
-                    input_spec_defaults: &buffers.input_spec_defaults,
-                    inputs: inputs.as_slice(),
-                },
-                ProcessOutputs {
-                    output_spec: &buffers.output_spec,
-                    outputs,
-                },
-            )?;
-
-            self.buffer_cache.insert(node_id, buffers);
-
-            Ok(())
-        })?;
+                Ok(())
+            },
+        )?;
 
         Ok(())
     }
@@ -353,7 +318,7 @@ impl Runtime {
     #[inline]
     pub fn get_input_mut(&mut self, input_index: usize) -> &mut SignalBuffer {
         self.buffer_cache
-            .get_mut(&self.input_ids[input_index])
+            .get_mut(&self.graph.input_indices()[input_index])
             .unwrap()
             .outputs
             .get_mut(0)
@@ -365,7 +330,7 @@ impl Runtime {
     pub fn get_output(&self, output_index: usize) -> &SignalBuffer {
         &self
             .buffer_cache
-            .get(&self.output_ids[output_index])
+            .get(&self.graph.output_indices()[output_index])
             .unwrap()
             .outputs[0]
     }
