@@ -11,7 +11,6 @@ name = "raug"
 [features]
 default = []
 jack = ["cpal/jack"]
-# serde = ["dep:serde", "petgraph/serde-1", "dep:typetag"]
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }
