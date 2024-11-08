@@ -269,7 +269,7 @@ impl Display for Sample {
 /// It can also be [`collected`](std::iter::Iterator::collect) from an iterator of [`Sample`]s.
 #[derive(PartialEq, Clone)]
 pub struct Buffer<T> {
-    buf: Box<[T]>,
+    buf: Vec<T>,
 }
 
 impl<T: Debug> Debug for Buffer<T> {
@@ -289,9 +289,7 @@ impl<T> Buffer<T> {
         for _ in 0..length {
             buf.push(T::default());
         }
-        Buffer {
-            buf: buf.into_boxed_slice(),
-        }
+        Buffer { buf }
     }
 
     /// Resizes the buffer to the given length, filling any new elements with the given value.
@@ -301,15 +299,7 @@ impl<T> Buffer<T> {
         T: Clone,
     {
         if self.len() != length {
-            let mut buf = Vec::with_capacity(length);
-            for i in 0..length {
-                buf.push(if i < self.len() {
-                    self.buf[i].clone()
-                } else {
-                    value.clone()
-                });
-            }
-            self.buf = buf.into_boxed_slice();
+            self.buf.resize(length, value);
         }
     }
 
@@ -342,7 +332,7 @@ impl<T> Buffer<T> {
         T: Clone,
     {
         Buffer {
-            buf: value.to_vec().into_boxed_slice(),
+            buf: value.to_vec(),
         }
     }
 }
@@ -516,14 +506,6 @@ impl Buffer<Option<Message>> {
             message.is_none() || message.as_ref().is_some_and(|message| message.is_string())
         })
     }
-
-    /// Returns `true` if all messages in the buffer are `Some(Message::List)`.
-    #[inline]
-    pub fn is_all_list(&self) -> bool {
-        self.buf.iter().all(|message| {
-            message.is_none() || message.as_ref().is_some_and(|message| message.is_list())
-        })
-    }
 }
 
 impl<T> Deref for Buffer<T> {
@@ -551,16 +533,16 @@ impl<T> AsRef<[T]> for Buffer<T> {
 impl<T> From<Vec<T>> for Buffer<T> {
     #[inline]
     fn from(vec: Vec<T>) -> Self {
-        Buffer {
-            buf: vec.into_boxed_slice(),
-        }
+        Buffer { buf: vec }
     }
 }
 
 impl<T> From<Box<[T]>> for Buffer<T> {
     #[inline]
     fn from(buf: Box<[T]>) -> Self {
-        Buffer { buf }
+        Buffer {
+            buf: buf.into_vec(),
+        }
     }
 }
 
@@ -571,7 +553,7 @@ where
     #[inline]
     fn from(slice: &[T]) -> Self {
         Buffer {
-            buf: slice.to_vec().into_boxed_slice(),
+            buf: slice.to_vec(),
         }
     }
 }
@@ -681,7 +663,7 @@ impl SignalBuffer {
     /// Creates a new message buffer of size `length`, filled with `None`.
     pub fn new_message(length: usize) -> Self {
         Self::Message(Buffer {
-            buf: vec![None; length].into_boxed_slice(),
+            buf: vec![None; length],
         })
     }
 
@@ -689,10 +671,10 @@ impl SignalBuffer {
     pub fn from_spec_default(spec: &SignalSpec, length: usize) -> Self {
         match &spec.default_value {
             Signal::Sample(default_value) => Self::Sample(Buffer {
-                buf: vec![*default_value; length].into_boxed_slice(),
+                buf: vec![*default_value; length],
             }),
             Signal::Message(mess) => Self::Message(Buffer {
-                buf: vec![mess.clone(); length].into_boxed_slice(),
+                buf: vec![mess.clone(); length],
             }),
         }
     }
@@ -781,14 +763,14 @@ impl SignalBuffer {
         match self {
             Self::Sample(buffer) => {
                 if let Signal::Sample(value) = value {
-                    buffer.map_mut(|sample| *sample = value);
+                    buffer.fill(value);
                 } else {
                     panic!("Cannot fill sample buffer with message");
                 }
             }
             Self::Message(buffer) => {
                 if let Signal::Message(value) = value {
-                    buffer.map_mut(|message| *message = value.clone());
+                    buffer.fill(value);
                 } else {
                     panic!("Cannot fill message buffer with sample");
                 }
@@ -805,10 +787,10 @@ impl SignalBuffer {
     pub fn copy_from(&mut self, other: &Self) {
         match (self, other) {
             (Self::Sample(this), Self::Sample(other)) => {
-                this.copy_map(other, |sample| *sample);
+                this.copy_from_slice(other);
             }
             (Self::Message(this), Self::Message(other)) => {
-                this.copy_map(other, |message| message.clone());
+                this.clone_from_slice(other);
             }
             _ => panic!("Cannot copy between sample and message buffers"),
         }
@@ -819,20 +801,10 @@ impl From<SignalBuffer> for Buffer<Signal> {
     fn from(buffer: SignalBuffer) -> Self {
         match buffer {
             SignalBuffer::Sample(buffer) => Buffer {
-                buf: buffer
-                    .buf
-                    .into_vec()
-                    .into_iter()
-                    .map(Signal::Sample)
-                    .collect(),
+                buf: buffer.buf.into_iter().map(Signal::Sample).collect(),
             },
             SignalBuffer::Message(buffer) => Buffer {
-                buf: buffer
-                    .buf
-                    .into_vec()
-                    .into_iter()
-                    .map(Signal::Message)
-                    .collect(),
+                buf: buffer.buf.into_iter().map(Signal::Message).collect(),
             },
         }
     }
@@ -853,12 +825,10 @@ impl TryFrom<Buffer<Signal>> for SignalBuffer {
         if !sample_buffer.is_empty() && !message_buffer.is_empty() {
             Err("Buffer contains both samples and messages")
         } else if !sample_buffer.is_empty() {
-            Ok(SignalBuffer::Sample(Buffer {
-                buf: sample_buffer.into_boxed_slice(),
-            }))
+            Ok(SignalBuffer::Sample(Buffer { buf: sample_buffer }))
         } else {
             Ok(SignalBuffer::Message(Buffer {
-                buf: message_buffer.into_boxed_slice(),
+                buf: message_buffer,
             }))
         }
     }

@@ -246,12 +246,12 @@ impl Processor {
         inputs: &[SignalBuffer],
         outputs: &mut [SignalBuffer],
     ) -> Result<(), ProcessorError> {
-        if inputs.len() != self.processor.num_inputs() {
-            return Err(ProcessorError::NumInputsMismatch);
-        }
-        if outputs.len() != self.processor.num_outputs() {
-            return Err(ProcessorError::NumOutputsMismatch);
-        }
+        // if inputs.len() != self.processor.num_inputs() {
+        //     return Err(ProcessorError::NumInputsMismatch);
+        // }
+        // if outputs.len() != self.processor.num_outputs() {
+        //     return Err(ProcessorError::NumOutputsMismatch);
+        // }
         self.processor.process(inputs, outputs)?;
         Ok(())
     }

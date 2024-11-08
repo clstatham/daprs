@@ -129,7 +129,7 @@ impl NodeBuffers {
 /// In real-time mode, the runtime will render audio samples in real-time using a specified audio backend and device.
 ///
 /// In offline mode, the runtime will render audio samples as fast as possible and return the rendered output channels.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Runtime {
     graph: Graph,
     buffer_cache: hashbrown::HashMap<NodeIndex, NodeBuffers, FxBuildHasher>,
@@ -139,6 +139,8 @@ pub struct Runtime {
     output_ids: Vec<NodeIndex>,
     // cached internal state to avoid allocations in `process()`
     edge_cache: Vec<(NodeIndex, Edge)>,
+    // cached list of all nodes in the graph
+    node_indices: Vec<NodeIndex>,
     // cached visitor state for graph traversal
     visit_path: Vec<NodeIndex>,
 }
@@ -190,6 +192,7 @@ impl Runtime {
             buffer_cache,
             edge_cache: Vec::with_capacity(graph.digraph().edge_count().next_power_of_two()),
             visit_path: Vec::with_capacity(graph.digraph().node_count()),
+            node_indices: Vec::with_capacity(graph.digraph().node_count()),
             graph,
         }
     }
@@ -269,6 +272,11 @@ impl Runtime {
             self.visit_path.push(node);
         }
         self.visit_path.reverse();
+
+        // allocate and populate node indices
+        self.node_indices.clear();
+        self.node_indices
+            .extend(self.graph.digraph().node_indices());
 
         Ok(())
     }
@@ -380,14 +388,12 @@ impl Runtime {
 
             let buffers = self.buffer_cache.get_mut(&node_id).unwrap();
 
-            // process node
-            graph.digraph_mut()[node_id]
-                .process(&buffers.inputs, &mut buffers.outputs)
-                .map_err(|e| GraphRunError {
-                    node_index: node_id,
-                    node_processor: graph.digraph()[node_id].name().to_string(),
-                    kind: crate::graph::GraphRunErrorKind::ProcessorError(e),
-                })?;
+            let inputs = buffers.inputs.as_slice();
+            let outputs = buffers.outputs.as_mut_slice();
+
+            let node = graph.digraph_mut().node_weight_mut(node_id).unwrap();
+
+            node.process(inputs, outputs)?;
 
             Ok(())
         })?;

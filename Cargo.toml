@@ -25,6 +25,7 @@ rustc-hash = "2"
 hashbrown = "0.15"
 crossbeam-channel = "0.5"
 rand = "0.8"
+arrayvec = "0.7.6"
 
 [dev-dependencies]
 env_logger = "0.11"

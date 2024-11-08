@@ -633,13 +633,13 @@ impl Process for ZeroCrossing {
     }
 }
 
-/// A sender for a `Param`.
+/// A message sender, used for `Param` communication and breaking cycles in the graph.
 #[derive(Clone, Debug)]
-pub struct ParamTx {
+pub struct MessageTx {
     tx: Sender<Message>,
 }
 
-impl ParamTx {
+impl MessageTx {
     pub(crate) fn new(tx: Sender<Message>) -> Self {
         Self { tx }
     }
@@ -650,15 +650,88 @@ impl ParamTx {
     }
 }
 
+impl Process for MessageTx {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("in", Signal::new_message_none())]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![]
+    }
+
+    fn process(
+        &mut self,
+        inputs: &[SignalBuffer],
+        _outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let in_signal = inputs[0]
+            .as_message()
+            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+
+        for message in in_signal.into_iter().flatten() {
+            self.send(message.clone());
+        }
+
+        Ok(())
+    }
+}
+
+/// A message receiver, used for `Param` communication and breaking cycles in the graph.
+#[derive(Clone, Debug)]
+pub struct MessageRx {
+    rx: Receiver<Message>,
+}
+
+impl MessageRx {
+    pub(crate) fn new(rx: Receiver<Message>) -> Self {
+        Self { rx }
+    }
+
+    /// Receives a message from the `Param`.
+    pub fn recv(&mut self) -> Option<Message> {
+        self.rx.try_recv().ok()
+    }
+}
+
+impl Process for MessageRx {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", Signal::new_message_none())]
+    }
+
+    fn process(
+        &mut self,
+        _inputs: &[SignalBuffer],
+        outputs: &mut [SignalBuffer],
+    ) -> Result<(), ProcessorError> {
+        let out = outputs[0]
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+
+        for out in out {
+            if let Some(msg) = self.recv() {
+                *out = Some(msg);
+            } else {
+                *out = None;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// A receiver for a `Param`.
 #[derive(Clone, Debug)]
 pub struct ParamRx {
-    rx: Receiver<Message>,
+    rx: MessageRx,
     last: Arc<Mutex<Option<Message>>>,
 }
 
 impl ParamRx {
-    pub(crate) fn new(rx: Receiver<Message>) -> Self {
+    pub(crate) fn new(rx: MessageRx) -> Self {
         Self {
             rx,
             last: Arc::new(Mutex::new(None)),
@@ -668,7 +741,7 @@ impl ParamRx {
     /// Receives a message from the `Param`.
     pub fn recv(&mut self) -> Option<Message> {
         let mut last = self.last.try_lock().ok()?;
-        if let Ok(msg) = self.rx.try_recv() {
+        if let Some(msg) = self.rx.recv() {
             *last = Some(msg.clone());
             Some(msg)
         } else {
@@ -677,9 +750,14 @@ impl ParamRx {
     }
 }
 
-fn param_channels() -> (ParamTx, ParamRx) {
+pub(crate) fn message_channel() -> (MessageTx, MessageRx) {
     let (tx, rx) = crossbeam_channel::unbounded();
-    (ParamTx::new(tx), ParamRx::new(rx))
+    (MessageTx::new(tx), MessageRx::new(rx))
+}
+
+pub(crate) fn param_channel() -> (MessageTx, ParamRx) {
+    let (tx, rx) = crossbeam_channel::unbounded();
+    (MessageTx::new(tx), ParamRx::new(MessageRx::new(rx)))
 }
 
 /// A processor that can be used to send/receive messages from outside the graph.
@@ -698,7 +776,7 @@ fn param_channels() -> (ParamTx, ParamRx) {
 #[derive(Clone, Debug)]
 pub struct Param {
     name: String,
-    channels: (ParamTx, ParamRx),
+    channels: (MessageTx, ParamRx),
 }
 
 impl Param {
@@ -706,7 +784,7 @@ impl Param {
     pub fn new<T: Into<Message>>(name: impl Into<String>, initial_value: Option<T>) -> Self {
         let this = Self {
             name: name.into(),
-            channels: param_channels(),
+            channels: param_channel(),
         };
         if let Some(initial_value) = initial_value {
             this.set(initial_value);
@@ -720,7 +798,7 @@ impl Param {
     }
 
     /// Returns the sender for this `Param`.
-    pub fn tx(&self) -> &ParamTx {
+    pub fn tx(&self) -> &MessageTx {
         &self.channels.0
     }
 

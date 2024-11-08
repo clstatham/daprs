@@ -2,9 +2,7 @@
 
 use std::fmt::{Debug, Display};
 
-/// A message that can be sent between processors.
 #[derive(Debug, Clone)]
-
 pub enum Message {
     /// A bang message ("do whatever it is you do").
     Bang,
@@ -14,8 +12,6 @@ pub enum Message {
     Float(f64),
     /// A string message.
     String(String),
-    /// A list of other messages.
-    List(Vec<Message>),
 }
 
 impl Display for Message {
@@ -25,16 +21,6 @@ impl Display for Message {
             Message::Int(i) => write!(f, "{}", i),
             Message::Float(x) => write!(f, "{}", x),
             Message::String(s) => write!(f, "{}", s),
-            Message::List(list) => {
-                write!(f, "[")?;
-                for (i, item) in list.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, " ")?;
-                    }
-                    write!(f, "{}", item)?;
-                }
-                write!(f, "]")
-            }
         }
     }
 }
@@ -49,7 +35,6 @@ impl Message {
                 | (Message::Int(_), Message::Int(_))
                 | (Message::Float(_), Message::Float(_))
                 | (Message::String(_), Message::String(_))
-                | (Message::List(_), Message::List(_))
         )
     }
 
@@ -86,17 +71,6 @@ impl Message {
         }
     }
 
-    /// Attempts to convert the message to a list.
-    ///
-    /// This does not attempt to *cast* the message to a list, but rather checks if the message is already `Message::List`.
-    #[inline]
-    pub fn as_list(&self) -> Option<&[Message]> {
-        match self {
-            Message::List(list) => Some(list),
-            _ => None,
-        }
-    }
-
     /// Returns true if the message is a bang.
     #[inline]
     pub fn is_bang(&self) -> bool {
@@ -121,12 +95,6 @@ impl Message {
         matches!(self, Message::String(_))
     }
 
-    /// Returns true if the message is a list.
-    #[inline]
-    pub fn is_list(&self) -> bool {
-        matches!(self, Message::List(_))
-    }
-
     /// Returns true if the message is truthy (can be reasonably interpreted as `true`).
     #[inline]
     pub fn is_truthy(&self) -> bool {
@@ -135,7 +103,6 @@ impl Message {
             Message::Int(i) => *i != 0,
             Message::Float(x) => *x != 0.0,
             Message::String(s) => !s.is_empty(),
-            Message::List(list) => !list.is_empty(),
         }
     }
 
@@ -174,17 +141,7 @@ impl Message {
             Message::Bang => Some("bang".to_string()),
             Message::Int(i) => Some(i.to_string()),
             Message::Float(x) => Some(x.to_string()),
-            Message::String(s) => Some(s.clone()),
-            _ => None,
-        }
-    }
-
-    /// Attempts to cast the message to a list using whatever method is most appropriate.
-    #[inline]
-    pub fn cast_to_list(&self) -> Option<Vec<Message>> {
-        match self {
-            Message::List(list) => Some(list.clone()),
-            msg => Some(vec![msg.clone()]),
+            Message::String(s) => Some(s.to_string()),
         }
     }
 }
@@ -203,18 +160,12 @@ impl From<f64> for Message {
 
 impl From<&str> for Message {
     fn from(s: &str) -> Self {
-        Message::String(s.to_string())
+        Message::String(String::from(s))
     }
 }
 
 impl From<String> for Message {
     fn from(s: String) -> Self {
         Message::String(s)
-    }
-}
-
-impl From<Vec<Message>> for Message {
-    fn from(list: Vec<Message>) -> Self {
-        Message::List(list)
     }
 }
