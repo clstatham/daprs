@@ -613,6 +613,20 @@ impl Signal {
         matches!(self, Self::Message(_))
     }
 
+    pub fn as_sample(&self) -> Option<&Sample> {
+        match self {
+            Self::Sample(sample) => Some(sample),
+            Self::Message(_) => None,
+        }
+    }
+
+    pub fn as_message(&self) -> Option<&Option<Message>> {
+        match self {
+            Self::Sample(_) => None,
+            Self::Message(message) => Some(message),
+        }
+    }
+
     /// Returns the type of signal this is.
     pub const fn kind(&self) -> SignalKind {
         match self {
@@ -687,6 +701,15 @@ impl SignalBuffer {
     /// Returns `true` if this is a message buffer.
     pub fn is_message(&self) -> bool {
         matches!(self, Self::Message(_))
+    }
+
+    /// Returns the signal at the given index.
+    #[inline]
+    pub fn signal_at(&self, index: usize) -> Option<Signal> {
+        match self {
+            Self::Sample(buffer) => Some(buffer.buf[index].into()),
+            Self::Message(buffer) => Some(Signal::Message(buffer.buf[index].clone())),
+        }
     }
 
     /// Returns a reference to the sample buffer, if this is a sample buffer.

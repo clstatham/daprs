@@ -2,7 +2,7 @@
 
 use rand::prelude::Distribution;
 
-use crate::prelude::*;
+use crate::{prelude::*, processor::ProcessOutputs};
 
 /// A phase accumulator.
 ///
@@ -43,22 +43,14 @@ impl Process for PhaseAccumulator {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let increment = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let reset = inputs[1]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (out, increment, reset) in itertools::izip!(out, increment, reset) {
+        for (out, increment, reset) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_messages(1)?
+        ) {
             if reset.is_some() {
                 self.t = 0.0;
             }
@@ -146,26 +138,15 @@ impl Process for SineOscillator {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let frequency = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let phase = inputs[1]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let reset = inputs[2]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(2))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (out, frequency, phase, reset) in itertools::izip!(out, frequency, phase, reset) {
+        for (out, frequency, phase, reset) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_samples(1)?,
+            inputs.iter_input_as_messages(2)?
+        ) {
             if reset.is_some() {
                 self.t = 0.0;
             }
@@ -254,26 +235,15 @@ impl Process for SawOscillator {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let frequency = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let phase = inputs[1]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let reset = inputs[2]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(2))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (out, frequency, phase, reset) in itertools::izip!(out, frequency, phase, reset) {
+        for (out, frequency, phase, reset) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_samples(1)?,
+            inputs.iter_input_as_messages(2)?
+        ) {
             if reset.is_some() {
                 self.t = 0.0;
             }
@@ -335,14 +305,10 @@ impl Process for NoiseOscillator {
 
     fn process(
         &mut self,
-        _inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        _inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for out in itertools::izip!(out) {
+        for out in itertools::izip!(outputs.iter_output_mut_as_samples(0)?) {
             // generate a random number
             **out = self.distribution.sample(&mut rand::thread_rng());
         }
@@ -414,19 +380,14 @@ impl Process for BlSawOscillator {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let frequency = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
         // algorithm courtesy of https://www.musicdsp.org/en/latest/Synthesis/12-bandlimited-waveforms.html
-        for (out, frequency) in itertools::izip!(out, frequency) {
+        for (out, frequency) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?
+        ) {
             if **frequency <= 0.0 {
                 **out = 0.0;
                 continue;
@@ -517,22 +478,14 @@ impl Process for BlSquareOscillator {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let frequency = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let pulse_width = inputs[1]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (out, frequency, pulse_width) in itertools::izip!(out, frequency, pulse_width) {
+        for (out, frequency, pulse_width) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_samples(1)?
+        ) {
             if **frequency <= 0.0 {
                 **out = 0.0;
                 continue;

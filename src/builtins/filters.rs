@@ -81,29 +81,16 @@ impl Process for MoogLadder {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let cutoff = inputs[1]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let resonance = inputs[2]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(2))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
         // based on: https://github.com/ddiakopoulos/MoogLadders/blob/fd147415573e723ba102dfc63dc46af0b7fe55b9/src/HuovilainenModel.h
-        for (out, in_signal, cutoff, resonance) in
-            itertools::izip!(out, in_signal, cutoff, resonance)
-        {
+        for (out, in_signal, cutoff, resonance) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_samples(1)?,
+            inputs.iter_input_as_samples(2)?
+        ) {
             let cutoff = cutoff.clamp(0.0, self.sample_rate * 0.5);
             let resonance = resonance.clamp(0.0, 1.0);
             self.cutoff = cutoff;
@@ -244,40 +231,18 @@ impl Process for Biquad {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let a0 = inputs[1]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let a1 = inputs[2]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(2))?;
-
-        let a2 = inputs[3]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(3))?;
-
-        let b1 = inputs[4]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(4))?;
-
-        let b2 = inputs[5]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(5))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (out, in_signal, a0, a1, a2, b1, b2) in
-            itertools::izip!(out, in_signal, a0, a1, a2, b1, b2)
-        {
+        for (out, in_signal, a0, a1, a2, b1, b2) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_samples(1)?,
+            inputs.iter_input_as_samples(2)?,
+            inputs.iter_input_as_samples(3)?,
+            inputs.iter_input_as_samples(4)?,
+            inputs.iter_input_as_samples(5)?
+        ) {
             self.a0 = **a0;
             self.a1 = **a1;
             self.a2 = **a2;
@@ -612,32 +577,16 @@ impl Process for AutoBiquad {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let frequency = inputs[1]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let q = inputs[2]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(2))?;
-
-        let gain = inputs[3]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(3))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (out, in_signal, frequency, q, gain) in
-            itertools::izip!(out, in_signal, frequency, q, gain)
-        {
+        for (out, in_signal, frequency, q, gain) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_samples(1)?,
+            inputs.iter_input_as_samples(2)?,
+            inputs.iter_input_as_samples(3)?
+        ) {
             let frequency_changed = (**frequency - self.cutoff).abs() > f64::EPSILON;
             let q_changed = (**q - self.q).abs() > f64::EPSILON;
             let gain_changed = (**gain - self.gain).abs() > f64::EPSILON;

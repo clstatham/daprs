@@ -16,18 +16,13 @@ impl Process for GainProc {
 
     fn process(
         &mut self,
-        input: &[SignalBuffer],
-        output: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let input = input[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let output = output[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (input, output) in itertools::izip!(input, output) {
+        for (input, output) in itertools::izip!(
+            inputs.iter_input_as_samples(0)?,
+            outputs.iter_output_mut_as_samples(0)?
+        ) {
             **output = **input * self.gain;
         }
         Ok(())

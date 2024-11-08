@@ -5,7 +5,10 @@ use std::fmt::Debug;
 use downcast_rs::{impl_downcast, DowncastSync};
 use thiserror::Error;
 
-use crate::signal::{Signal, SignalBuffer, SignalKind};
+use crate::{
+    message::Message,
+    signal::{Sample, Signal, SignalBuffer, SignalKind},
+};
 
 /// An error that can occur when processing signals.
 #[derive(Debug, Clone, Error)]
@@ -88,6 +91,138 @@ impl SignalSpec {
     }
 }
 
+/// A collection of input/output buffers for a [`Process`] to process.
+#[derive(Debug, Clone, Copy)]
+pub struct ProcessInputs<'a, 'b> {
+    pub input_spec: &'a [SignalSpec],
+    pub input_spec_defaults: &'a [Signal],
+    pub inputs: &'a [Option<&'b SignalBuffer>],
+}
+
+impl<'a, 'b> ProcessInputs<'a, 'b> {
+    /// Returns the number of input buffers.
+    #[inline]
+    pub fn num_inputs(&self) -> usize {
+        self.inputs.len()
+    }
+
+    /// Returns the input buffer at the given index, if any.
+    #[inline]
+    pub fn input(&self, index: usize) -> Option<&'b SignalBuffer> {
+        self.inputs.get(index).copied().flatten()
+    }
+
+    #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = Option<&'b SignalBuffer>> + '_ {
+        self.inputs.iter().copied()
+    }
+
+    /// Returns an iterator over the input signals at the given index.
+    #[inline]
+    pub fn iter_input_as_samples(
+        &self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = &Sample> + '_, ProcessorError> {
+        let buffer = self.input(index);
+
+        if let Some(buffer) = buffer {
+            let buffer = buffer
+                .as_sample()
+                .ok_or(ProcessorError::InputSpecMismatch(index))?;
+
+            Ok(itertools::Either::Left(buffer.iter()))
+        } else {
+            let default_value = self.input_spec_defaults[index]
+                .as_sample()
+                .ok_or(ProcessorError::InputSpecMismatch(index))?;
+            Ok(itertools::Either::Right(std::iter::repeat(default_value)))
+        }
+    }
+
+    /// Returns an iterator over the input messages at the given index.
+    #[inline]
+    pub fn iter_input_as_messages(
+        &self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = &Option<Message>> + '_, ProcessorError> {
+        let buffer = self.input(index);
+
+        if let Some(buffer) = buffer {
+            let buffer = buffer
+                .as_message()
+                .ok_or(ProcessorError::InputSpecMismatch(index))?;
+
+            Ok(itertools::Either::Left(buffer.iter()))
+        } else {
+            let default_value = self.input_spec_defaults[index]
+                .as_message()
+                .ok_or(ProcessorError::InputSpecMismatch(index))?;
+            Ok(itertools::Either::Right(std::iter::repeat(default_value)))
+        }
+    }
+}
+
+pub struct ProcessOutputs<'a> {
+    pub output_spec: &'a [SignalSpec],
+    pub outputs: &'a mut [SignalBuffer],
+}
+
+impl<'a> ProcessOutputs<'a> {
+    /// Returns the output buffer at the given index.
+    #[inline]
+    pub fn output(&mut self, index: usize) -> &mut SignalBuffer {
+        &mut self.outputs[index]
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut SignalBuffer> + '_ {
+        self.outputs.iter_mut()
+    }
+
+    /// Returns an iterator over the output samples at the given index.
+    #[inline]
+    pub fn iter_output_mut_as_samples(
+        &mut self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = &mut Sample> + '_, ProcessorError> {
+        let buffer = self
+            .output(index)
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(index))?;
+
+        Ok(buffer.iter_mut())
+    }
+
+    /// Returns an iterator over the output messages at the given index.
+    #[inline]
+    pub fn iter_output_mut_as_messages(
+        &mut self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = &mut Option<Message>> + '_, ProcessorError> {
+        let buffer = self
+            .output(index)
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(index))?;
+
+        Ok(buffer.iter_mut())
+    }
+
+    #[inline]
+    pub fn split_at_mut(&mut self, index: usize) -> (ProcessOutputs, ProcessOutputs) {
+        let (left, right) = self.outputs.split_at_mut(index);
+        (
+            ProcessOutputs {
+                output_spec: &self.output_spec[..index],
+                outputs: left,
+            },
+            ProcessOutputs {
+                output_spec: &self.output_spec[index..],
+                outputs: right,
+            },
+        )
+    }
+}
+
 /// A trait for processing audio or control signals.
 ///
 /// This is usually used as part of a [`Processor`], operating on its internal input/output buffers.
@@ -145,8 +280,8 @@ pub trait Process: 'static + Send + Sync + ProcessClone + DowncastSync {
     /// The number of input and output buffers must match the numbers returned by [`Process::num_inputs`] and [`Process::num_outputs`].
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError>;
 
     /// Clones this [`Process`] into a [`Processor`] object that can be used in the audio graph.
@@ -243,15 +378,9 @@ impl Processor {
     #[inline]
     pub fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        // if inputs.len() != self.processor.num_inputs() {
-        //     return Err(ProcessorError::NumInputsMismatch);
-        // }
-        // if outputs.len() != self.processor.num_outputs() {
-        //     return Err(ProcessorError::NumOutputsMismatch);
-        // }
         self.processor.process(inputs, outputs)?;
         Ok(())
     }

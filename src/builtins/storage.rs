@@ -63,30 +63,19 @@ impl Process for AudioBuffer {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let index = inputs[0]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let set = inputs[1]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let (out, length) = outputs.split_at_mut(1);
-
-        let out = out[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        let length = length[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(1))?;
-
         let buffer = self.buffer.as_sample_mut().unwrap();
 
-        for (out, length, index, set) in itertools::izip!(out, length, index, set) {
+        let (mut outputs0, mut outputs1) = outputs.split_at_mut(1);
+
+        for (out, length, index, set) in itertools::izip!(
+            outputs0.iter_output_mut_as_samples(0)?,
+            outputs1.iter_output_mut_as_messages(0)?,
+            inputs.iter_input_as_messages(0)?,
+            inputs.iter_input_as_messages(1)?
+        ) {
             if let Some(index) = index {
                 let Some(index) = index.cast_to_float() else {
                     return Err(ProcessorError::InputSpecMismatch(0));
@@ -165,22 +154,14 @@ impl Process for Register {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let set = inputs[0]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let clear = inputs[1]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let out = outputs[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (set, clear, out) in itertools::izip!(set, clear, out) {
+        for (set, clear, out) in itertools::izip!(
+            inputs.iter_input_as_messages(0)?,
+            inputs.iter_input_as_messages(1)?,
+            outputs.iter_output_mut_as_messages(0)?
+        ) {
             if let Some(set) = set {
                 self.value = Some(set.clone());
             }

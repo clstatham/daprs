@@ -76,32 +76,16 @@ impl Process for PeakLimiter {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let threshold = inputs[1]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let attack = inputs[2]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(2))?;
-
-        let release = inputs[3]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(3))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (out, in_signal, threshold, attack, release) in
-            itertools::izip!(out, in_signal, threshold, attack, release)
-        {
+        for (out, in_signal, threshold, attack, release) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_samples(1)?,
+            inputs.iter_input_as_samples(2)?,
+            inputs.iter_input_as_samples(3)?
+        ) {
             self.threshold = **threshold;
             self.release = **release;
             self.attack = **attack;

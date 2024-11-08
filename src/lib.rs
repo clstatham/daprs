@@ -22,7 +22,9 @@ pub mod prelude {
     pub use crate::builtins::*;
     pub use crate::graph::Graph;
     pub use crate::message::*;
-    pub use crate::processor::{Process, Processor, ProcessorError, SignalSpec};
+    pub use crate::processor::{
+        Process, ProcessInputs, ProcessOutputs, Processor, ProcessorError, SignalSpec,
+    };
     pub use crate::runtime::{Backend, Device, Runtime, RuntimeHandle};
     pub use crate::signal::{Buffer, Sample, Signal, SignalBuffer};
     pub use std::time::Duration;

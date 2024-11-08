@@ -1,6 +1,6 @@
 //! Mathematical processors.
 
-use crate::{prelude::*, processor::ProcessorError, signal::SignalBuffer};
+use crate::{prelude::*, processor::ProcessorError};
 use std::ops::{
     Add as AddOp, Div as DivOp, Mul as MulOp, Neg as NegOp, Rem as RemOp, Sub as SubOp,
 };
@@ -42,12 +42,14 @@ impl Process for Constant {
 
     fn process(
         &mut self,
-        _inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        _inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let out = &mut outputs[0];
+        let out = outputs.iter_output_mut_as_samples(0)?;
 
-        out.fill(self.value);
+        for sample in out {
+            **sample = self.value;
+        }
 
         Ok(())
     }
@@ -89,17 +91,13 @@ impl Process for MidiToFreq {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let note = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-        let freq = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (note, freq) in itertools::izip!(note, freq) {
+        for (note, freq) in itertools::izip!(
+            inputs.iter_input_as_samples(0)?,
+            outputs.iter_output_mut_as_samples(0)?
+        ) {
             **freq = (2.0_f64).powf((**note - 69.0) / 12.0) * 440.0;
         }
 
@@ -134,17 +132,13 @@ impl Process for FreqToMidi {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let freq = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-        let note = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (freq, note) in itertools::izip!(freq, note) {
+        for (freq, note) in itertools::izip!(
+            inputs.iter_input_as_samples(0)?,
+            outputs.iter_output_mut_as_samples(0)?
+        ) {
             **note = 69.0 + 12.0 * (**freq / 440.0).log2();
         }
 
@@ -172,20 +166,14 @@ macro_rules! impl_binary_proc {
 
             fn process(
                 &mut self,
-                inputs: &[SignalBuffer],
-                outputs: &mut [SignalBuffer],
+                inputs: ProcessInputs,
+                mut outputs: ProcessOutputs,
             ) -> Result<(), ProcessorError> {
-                let in1 = inputs[0]
-                    .as_sample()
-                    .ok_or(ProcessorError::InputSpecMismatch(0))?;
-                let in2 = inputs[1]
-                    .as_sample()
-                    .ok_or(ProcessorError::InputSpecMismatch(1))?;
-                let out = outputs[0]
-                    .as_sample_mut()
-                    .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-                for (sample, in1, in2) in itertools::izip!(out, in1, in2) {
+                for (sample, in1, in2) in itertools::izip!(
+                    outputs.iter_output_mut_as_samples(0)?,
+                    inputs.iter_input_as_samples(0)?,
+                    inputs.iter_input_as_samples(1)?
+                ) {
                     debug_assert!(in1.is_finite());
                     debug_assert!(in2.is_finite());
                     **sample = f64::$method(**in1, **in2);
@@ -471,17 +459,13 @@ macro_rules! impl_unary_proc {
 
             fn process(
                 &mut self,
-                inputs: &[SignalBuffer],
-                outputs: &mut [SignalBuffer],
+                inputs: ProcessInputs,
+                mut outputs: ProcessOutputs,
             ) -> Result<(), ProcessorError> {
-                let in1 = inputs[0]
-                    .as_sample()
-                    .ok_or(ProcessorError::InputSpecMismatch(0))?;
-                let out = outputs[0]
-                    .as_sample_mut()
-                    .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-                for (sample, in1) in itertools::izip!(out, in1) {
+                for (sample, in1) in itertools::izip!(
+                    outputs.iter_output_mut_as_samples(0)?,
+                    inputs.iter_input_as_samples(0)?
+                ) {
                     debug_assert!(in1.is_finite());
                     *sample = (**in1).$method().into();
                 }

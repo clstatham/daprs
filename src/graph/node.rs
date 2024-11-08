@@ -2,9 +2,8 @@
 
 use std::fmt::Debug;
 
-use crate::{
-    processor::{Process, Processor, SignalSpec},
-    signal::SignalBuffer,
+use crate::processor::{
+    Process, ProcessInputs, ProcessOutputs, Processor, ProcessorError, SignalSpec,
 };
 
 /// A node in the audio graph.
@@ -87,14 +86,18 @@ impl GraphNode {
     }
 
     /// Processes the node's input buffers and writes the results to the node's output buffers.
-    /// This is a no-op for passthrough nodes.
     pub fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
-    ) -> Result<(), crate::processor::ProcessorError> {
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
+    ) -> Result<(), ProcessorError> {
         if let Self::Processor(processor) = self {
             processor.process(inputs, outputs)?;
+        } else {
+            // Passthrough
+            let input = inputs.input(0).unwrap().as_sample().unwrap();
+            let output = outputs.output(0).as_sample_mut().unwrap();
+            output.copy_from_slice(input);
         }
 
         Ok(())

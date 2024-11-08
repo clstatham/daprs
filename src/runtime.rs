@@ -7,9 +7,9 @@ use petgraph::prelude::*;
 use rustc_hash::FxBuildHasher;
 
 use crate::{
-    graph::{edge::Edge, node::GraphNode, Graph, GraphRunError, NodeIndex},
-    prelude::{Param, SignalSpec},
-    processor::ProcessorError,
+    graph::{edge::Edge, Graph, GraphRunError, NodeIndex},
+    prelude::{Param, ProcessInputs, SignalSpec},
+    processor::{ProcessOutputs, ProcessorError},
     signal::{Sample, Signal, SignalBuffer},
 };
 
@@ -94,17 +94,14 @@ pub enum Device {
 #[derive(Clone)]
 pub struct NodeBuffers {
     input_spec: Vec<SignalSpec>,
+    input_spec_defaults: Vec<Signal>,
     output_spec: Vec<SignalSpec>,
-    inputs: Vec<SignalBuffer>,
     outputs: Vec<SignalBuffer>,
 }
 
 impl NodeBuffers {
     /// Resizes the input and output buffers to the given block size.
     pub fn resize(&mut self, block_size: usize) {
-        for (input, spec) in self.inputs.iter_mut().zip(&self.input_spec) {
-            input.resize(block_size, spec.default_value.clone());
-        }
         for (output, spec) in self.outputs.iter_mut().zip(&self.output_spec) {
             output.resize(block_size, spec.default_value.clone());
         }
@@ -112,9 +109,6 @@ impl NodeBuffers {
 
     /// Clears the input and output buffers.
     pub fn clear_buffers(&mut self) {
-        for (input, spec) in self.inputs.iter_mut().zip(&self.input_spec) {
-            input.fill_with_spec_default(spec);
-        }
         for (output, spec) in self.outputs.iter_mut().zip(&self.output_spec) {
             output.fill_with_spec_default(spec);
         }
@@ -133,8 +127,6 @@ impl NodeBuffers {
 pub struct Runtime {
     graph: Graph,
     buffer_cache: hashbrown::HashMap<NodeIndex, NodeBuffers, FxBuildHasher>,
-    inputs: Vec<SignalBuffer>,
-    outputs: Vec<SignalBuffer>,
     input_ids: Vec<NodeIndex>,
     output_ids: Vec<NodeIndex>,
     // cached internal state to avoid allocations in `process()`
@@ -154,16 +146,9 @@ impl Runtime {
         graph
             .visit(|graph, node_id| -> RuntimeResult<()> {
                 let node = &graph.digraph()[node_id];
-                let input_spec = node.input_spec();
                 let output_spec = node.output_spec();
 
-                let mut inputs = Vec::with_capacity(input_spec.len());
                 let mut outputs = Vec::with_capacity(output_spec.len());
-
-                for spec in input_spec.iter() {
-                    let buffer = SignalBuffer::from_spec_default(spec, 0);
-                    inputs.push(buffer);
-                }
 
                 for spec in output_spec.iter() {
                     let buffer = SignalBuffer::from_spec_default(spec, 0);
@@ -173,9 +158,13 @@ impl Runtime {
                 buffer_cache.insert(
                     node_id,
                     NodeBuffers {
-                        input_spec,
+                        input_spec: node.input_spec(),
+                        input_spec_defaults: node
+                            .input_spec()
+                            .iter()
+                            .map(|spec| spec.default_value.clone())
+                            .collect(),
                         output_spec,
-                        inputs,
                         outputs,
                     },
                 );
@@ -185,8 +174,6 @@ impl Runtime {
             .unwrap();
 
         Runtime {
-            inputs: vec![SignalBuffer::new_sample(0); graph.num_inputs()],
-            outputs: vec![SignalBuffer::new_sample(0); graph.num_outputs()],
             input_ids: graph.input_indices().to_vec(),
             output_ids: graph.output_indices().to_vec(),
             buffer_cache,
@@ -204,14 +191,6 @@ impl Runtime {
 
         let mut max_edges = 0;
 
-        // allocate buffers
-        for input in self.inputs.iter_mut() {
-            input.resize(block_size, Signal::new_sample(0.0));
-        }
-        for output in self.outputs.iter_mut() {
-            output.resize(block_size, Signal::new_sample(0.0));
-        }
-
         self.graph.visit(|graph, node_id| -> RuntimeResult<()> {
             let node = &mut graph.digraph_mut()[node_id];
             node.resize_buffers(sample_rate, block_size);
@@ -221,16 +200,10 @@ impl Runtime {
                 buffers.resize(block_size);
             } else {
                 // graph was hot-reloaded, allocate buffers
-                let input_spec = node.input_spec();
                 let output_spec = node.output_spec();
 
-                let mut inputs = Vec::with_capacity(input_spec.len());
                 let mut outputs = Vec::with_capacity(output_spec.len());
 
-                for spec in input_spec.iter() {
-                    let buffer = SignalBuffer::from_spec_default(spec, block_size);
-                    inputs.push(buffer);
-                }
                 for spec in output_spec.iter() {
                     let buffer = SignalBuffer::from_spec_default(spec, block_size);
                     outputs.push(buffer);
@@ -239,9 +212,13 @@ impl Runtime {
                 self.buffer_cache.insert(
                     node_id,
                     NodeBuffers {
-                        input_spec,
+                        input_spec: node.input_spec(),
+                        input_spec_defaults: node
+                            .input_spec()
+                            .iter()
+                            .map(|spec| spec.default_value.clone())
+                            .collect(),
                         output_spec,
-                        inputs,
                         outputs,
                     },
                 );
@@ -314,8 +291,10 @@ impl Runtime {
 
     /// Returns an iterator over the output channels of the runtime.
     #[inline]
-    pub fn outputs(&mut self) -> impl Iterator<Item = &SignalBuffer> + '_ {
-        self.outputs.iter()
+    pub fn outputs(&self) -> impl Iterator<Item = &SignalBuffer> + '_ {
+        self.output_ids
+            .iter()
+            .map(|&id| &self.buffer_cache[&id].outputs[0])
     }
 
     /// Renders the next block of audio.
@@ -328,83 +307,40 @@ impl Runtime {
                     .map(|edge| (edge.source(), *edge.weight())),
             );
 
+            let num_inputs = graph.digraph()[node_id].input_spec().len();
+
+            let mut inputs = vec![None; num_inputs];
+
+            let mut buffers = self.buffer_cache.remove(&node_id).unwrap();
+
             for (source_id, edge) in self.edge_cache.drain(..) {
-                let Edge {
-                    source_output,
-                    target_input,
-                } = edge;
-
-                let (source, target) = graph.digraph_mut().index_twice_mut(source_id, node_id);
-
-                let (source_buffer, target_buffer) = match (source, target) {
-                    (GraphNode::Passthrough, GraphNode::Passthrough) => {
-                        let input_idx = self
-                            .input_ids
-                            .iter()
-                            .position(|&id| id == source_id)
-                            .unwrap();
-                        let output_idx = self
-                            .output_ids
-                            .iter()
-                            .position(|&id| id == node_id)
-                            .unwrap();
-                        (&self.inputs[input_idx], &mut self.outputs[output_idx])
-                    }
-                    (GraphNode::Passthrough, GraphNode::Processor(_)) => {
-                        let buffers = self.buffer_cache.get_mut(&node_id).unwrap();
-                        (
-                            &self.inputs[source_output as usize],
-                            &mut buffers.inputs[target_input as usize],
-                        )
-                    }
-                    (GraphNode::Processor(_), GraphNode::Passthrough) => {
-                        let buffers = &self.buffer_cache[&source_id];
-                        let out_idx = self
-                            .output_ids
-                            .iter()
-                            .position(|&id| id == node_id)
-                            .unwrap();
-                        (
-                            &buffers.outputs[source_output as usize],
-                            &mut self.outputs[out_idx],
-                        )
-                    }
-                    (GraphNode::Processor(_), GraphNode::Processor(_)) => {
-                        let [source_buffer, target_buffer] =
-                            self.buffer_cache.get_many_mut([&source_id, &node_id]);
-
-                        let source_buffer = source_buffer.unwrap();
-                        let target_buffer = target_buffer.unwrap();
-
-                        (
-                            &source_buffer.outputs[source_output as usize],
-                            &mut target_buffer.inputs[target_input as usize],
-                        )
-                    }
-                };
-
-                target_buffer.copy_from(source_buffer);
+                let source_buffers = self.buffer_cache.get(&source_id).unwrap();
+                inputs[edge.target_input as usize] =
+                    Some(&source_buffers.outputs[edge.source_output as usize]);
             }
 
-            let buffers = self.buffer_cache.get_mut(&node_id).unwrap();
-
-            let inputs = buffers.inputs.as_slice();
             let outputs = buffers.outputs.as_mut_slice();
 
             let node = graph.digraph_mut().node_weight_mut(node_id).unwrap();
 
-            node.process(inputs, outputs)?;
+            node.process(
+                ProcessInputs {
+                    input_spec: &buffers.input_spec,
+                    input_spec_defaults: &buffers.input_spec_defaults,
+                    inputs: inputs.as_slice(),
+                },
+                ProcessOutputs {
+                    output_spec: &buffers.output_spec,
+                    outputs,
+                },
+            )?;
+
+            self.buffer_cache.insert(node_id, buffers);
 
             Ok(())
         })?;
 
         Ok(())
-    }
-
-    /// Returns the input buffer for the given node and input index.
-    #[inline]
-    pub fn get_node_input_mut(&mut self, node: NodeIndex, input_index: usize) -> &mut SignalBuffer {
-        &mut self.buffer_cache.get_mut(&node).unwrap().inputs[input_index]
     }
 
     /// Returns the output buffer for the given node and output index.
@@ -416,13 +352,22 @@ impl Runtime {
     /// Returns the input buffer for the given input index.
     #[inline]
     pub fn get_input_mut(&mut self, input_index: usize) -> &mut SignalBuffer {
-        &mut self.inputs[input_index]
+        self.buffer_cache
+            .get_mut(&self.input_ids[input_index])
+            .unwrap()
+            .outputs
+            .get_mut(0)
+            .unwrap()
     }
 
     /// Returns the output buffer for the given input index.
     #[inline]
     pub fn get_output(&self, output_index: usize) -> &SignalBuffer {
-        &self.outputs[output_index]
+        &self
+            .buffer_cache
+            .get(&self.output_ids[output_index])
+            .unwrap()
+            .outputs[0]
     }
 
     /// Runs the audio graph as fast as possible for the given duration's worth of samples, and returns the rendered output channels.
@@ -478,7 +423,7 @@ impl Runtime {
             self.process()?;
 
             for (i, output) in outputs.iter_mut().enumerate() {
-                let buffer = &self.outputs[i];
+                let buffer = self.get_output(i);
                 let SignalBuffer::Sample(buffer) = buffer else {
                     return Err(RuntimeError::ProcessorError(
                         ProcessorError::OutputSpecMismatch(i),
@@ -702,7 +647,7 @@ impl Runtime {
 
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
-                            let buffer = &self.outputs[channel_idx];
+                            let buffer = self.get_output(channel_idx);
                             let SignalBuffer::Sample(buffer) = buffer else {
                                 panic!("output {channel_idx} signal type mismatch");
                             };

@@ -6,9 +6,9 @@ use crossbeam_channel::{Receiver, Sender};
 
 use crate::{
     message::Message,
-    prelude::{GraphBuilder, Node, Process, SignalSpec},
+    prelude::{GraphBuilder, Node, Process, ProcessInputs, ProcessOutputs, SignalSpec},
     processor::ProcessorError,
-    signal::{Sample, Signal, SignalBuffer},
+    signal::{Sample, Signal},
 };
 
 /// A processor that forwards its input to its output.
@@ -26,16 +26,18 @@ impl Process for Passthrough {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
+        let Some(in_signal) = inputs.input(0) else {
+            return Ok(());
+        };
+
+        let in_signal = in_signal
             .as_sample()
             .ok_or(ProcessorError::InputSpecMismatch(0))?;
 
-        let out_signal = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+        let out_signal = outputs.output(0).as_sample_mut().unwrap();
 
         out_signal.copy_from_slice(in_signal);
 
@@ -94,22 +96,14 @@ impl Process for MessageSender {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let bang = inputs[0]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let message = inputs[1]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let out = outputs[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (bang, message, out) in itertools::izip!(bang, message, out) {
+        for (bang, message, out) in itertools::izip!(
+            inputs.iter_input_as_messages(0)?,
+            inputs.iter_input_as_messages(1)?,
+            outputs.iter_output_mut_as_messages(0)?
+        ) {
             if let Some(message) = message {
                 self.message = Some(message.clone());
             }
@@ -162,13 +156,10 @@ impl Process for ConstantMessageSender {
 
     fn process(
         &mut self,
-        _inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        _inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let message = outputs[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
+        let message = outputs.iter_output_mut_as_messages(0)?;
         for message in message {
             *message = Some(self.0.clone());
         }
@@ -248,17 +239,13 @@ impl Process for Print {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        _outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        _outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let print = inputs[0]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-        let message = inputs[1]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        for (bang, message) in itertools::izip!(print, message) {
+        for (bang, message) in itertools::izip!(
+            inputs.iter_input_as_messages(0)?,
+            inputs.iter_input_as_messages(1)?
+        ) {
             if let Some(message) = message {
                 self.msg = Some(format!("{}", message));
             }
@@ -326,17 +313,13 @@ impl Process for MessageToAudio {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let message = inputs[0]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-        let sample_out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (message, sample_out) in itertools::izip!(message, sample_out) {
+        for (message, sample_out) in itertools::izip!(
+            inputs.iter_input_as_messages(0)?,
+            outputs.iter_output_mut_as_samples(0)?
+        ) {
             if let Some(message) = message {
                 if let Some(sample) = message.cast_to_float() {
                     *sample_out = Sample::new(sample);
@@ -376,17 +359,13 @@ impl Process for AudioToMessage {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let sample = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-        let message_out = outputs[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (sample, message_out) in itertools::izip!(sample, message_out) {
+        for (sample, message_out) in itertools::izip!(
+            inputs.iter_input_as_samples(0)?,
+            outputs.iter_output_mut_as_messages(0)?
+        ) {
             *message_out = Some(Message::Float(sample.value()));
         }
 
@@ -421,13 +400,11 @@ impl Process for SampleRate {
 
     fn process(
         &mut self,
-        _inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        _inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let sample_rate_out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
+        // let sample_rate_out = outputs.iter_output_mut_as_samples(0)?;
+        let sample_rate_out = outputs.output(0).as_sample_mut().unwrap();
         sample_rate_out.fill(Sample::new(self.sample_rate));
 
         Ok(())
@@ -481,22 +458,14 @@ impl Process for Smooth {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let target = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let factor = inputs[1]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (target, factor, out) in itertools::izip!(target, factor, out) {
+        for (target, factor, out) in itertools::izip!(
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_samples(1)?,
+            outputs.iter_output_mut_as_samples(0)?
+        ) {
             let target = **target;
             let factor = **factor;
 
@@ -544,23 +513,14 @@ impl Process for Changed {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let threshold = inputs[1]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let out_signal = outputs[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (in_signal, threshold, out_signal) in itertools::izip!(in_signal, threshold, out_signal)
-        {
+        for (in_signal, threshold, out_signal) in itertools::izip!(
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_samples(1)?,
+            outputs.iter_output_mut_as_messages(0)?
+        ) {
             let in_signal = **in_signal;
             let threshold = **threshold;
 
@@ -606,18 +566,13 @@ impl Process for ZeroCrossing {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let out_signal = outputs[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
+        for (in_signal, out_signal) in itertools::izip!(
+            inputs.iter_input_as_samples(0)?,
+            outputs.iter_output_mut_as_messages(0)?
+        ) {
             let in_signal = **in_signal;
 
             if (self.last < 0.0 && in_signal >= 0.0) || (self.last > 0.0 && in_signal <= 0.0) {
@@ -661,14 +616,12 @@ impl Process for MessageTx {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        _outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        _outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+        let in_signal = inputs.iter_input_as_messages(0)?;
 
-        for message in in_signal.into_iter().flatten() {
+        for message in in_signal.flatten() {
             self.send(message.clone());
         }
 
@@ -704,12 +657,10 @@ impl Process for MessageRx {
 
     fn process(
         &mut self,
-        _inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        _inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let out = outputs[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+        let out = outputs.iter_output_mut_as_messages(0)?;
 
         for out in out {
             if let Some(msg) = self.recv() {
@@ -830,18 +781,13 @@ impl Process for Param {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let set = inputs[0]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let get = outputs[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (set, get) in itertools::izip!(set, get) {
+        for (set, get) in itertools::izip!(
+            inputs.iter_input_as_messages(0)?,
+            outputs.iter_output_mut_as_messages(0)?
+        ) {
             if let Some(set) = set {
                 self.tx().send(set.clone());
             }
@@ -913,18 +859,15 @@ impl Process for Select {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let index = inputs[1]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        for (sample_index, (in_signal, index)) in itertools::izip!(in_signal, index).enumerate() {
+        for (sample_index, (in_signal, index)) in itertools::izip!(
+            inputs.iter_input_as_messages(0)?,
+            inputs.iter_input_as_messages(1)?
+        )
+        .enumerate()
+        {
             let index = index
                 .as_ref()
                 .and_then(|index| index.cast_to_int())
@@ -933,9 +876,7 @@ impl Process for Select {
             self.last_index = index;
 
             if index >= 0 && index < self.num_outputs as i64 {
-                let out_signal = outputs[index as usize]
-                    .as_message_mut()
-                    .ok_or(ProcessorError::OutputSpecMismatch(index as usize))?;
+                let out_signal = outputs.output(index as usize).as_message_mut().unwrap();
 
                 out_signal[sample_index] = in_signal.clone();
 
@@ -1004,17 +945,18 @@ impl Process for Merge {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
         for (i, input) in inputs.iter().enumerate() {
+            let Some(input) = input else {
+                continue;
+            };
             let in_signal = input
                 .as_message()
                 .ok_or(ProcessorError::InputSpecMismatch(i))?;
 
-            let out_signal = outputs[0]
-                .as_message_mut()
-                .ok_or(ProcessorError::OutputSpecMismatch(0))?;
+            let out_signal = outputs.iter_output_mut_as_messages(0)?;
 
             for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
                 if let Some(in_signal) = in_signal {
@@ -1060,22 +1002,14 @@ impl Process for Counter {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let trig = inputs[0]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let reset = inputs[1]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let count = outputs[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (trig, reset, count) in itertools::izip!(trig, reset, count) {
+        for (trig, reset, count) in itertools::izip!(
+            inputs.iter_input_as_messages(0)?,
+            inputs.iter_input_as_messages(1)?,
+            outputs.iter_output_mut_as_messages(0)?
+        ) {
             if reset.is_some() {
                 self.count = 0;
             }
@@ -1126,22 +1060,14 @@ impl Process for SampleAndHold {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let trig = inputs[1]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let out_signal = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (in_signal, trig, out_signal) in itertools::izip!(in_signal, trig, out_signal) {
+        for (in_signal, trig, out_signal) in itertools::izip!(
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_messages(1)?,
+            outputs.iter_output_mut_as_samples(0)?
+        ) {
             let in_signal = **in_signal;
 
             if trig.is_some() {
@@ -1192,13 +1118,10 @@ impl Process for CheckFinite {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        _outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        _outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
+        let in_signal = inputs.iter_input_as_samples(0)?;
         for in_signal in in_signal {
             if !in_signal.is_finite() {
                 panic!("{}: signal is not finite: {:?}", self.context, in_signal);

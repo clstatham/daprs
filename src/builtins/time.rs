@@ -2,7 +2,7 @@
 
 use crate::{
     message::Message,
-    prelude::{Process, SignalSpec},
+    prelude::{Process, ProcessInputs, ProcessOutputs, SignalSpec},
     processor::ProcessorError,
     signal::{Buffer, Sample, Signal, SignalBuffer},
 };
@@ -81,18 +81,13 @@ impl Process for Metro {
 
     fn process(
         &mut self,
-        inputs: &[crate::signal::SignalBuffer],
-        outputs: &mut [crate::signal::SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let period = inputs[0]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let out = outputs[0]
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (period, out) in itertools::izip!(period, out) {
+        for (period, out) in itertools::izip!(
+            inputs.iter_input_as_messages(0)?,
+            outputs.iter_output_mut_as_messages(0)?
+        ) {
             if let Some(period) = period {
                 if let Some(period) = period.cast_to_float() {
                     self.period = period;
@@ -148,18 +143,13 @@ impl Process for UnitDelay {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
-        for (out, in_signal) in itertools::izip!(out, in_signal) {
+        for (out, in_signal) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?
+        ) {
             *out = self.value.unwrap_or_default();
             self.value = Some(*in_signal);
         }
@@ -215,24 +205,16 @@ impl Process for SampleDelay {
 
     fn process(
         &mut self,
-        inputs: &[SignalBuffer],
-        outputs: &mut [SignalBuffer],
+        inputs: ProcessInputs,
+        mut outputs: ProcessOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs[0]
-            .as_sample()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
-
-        let delay = inputs[1]
-            .as_message()
-            .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-        let out = outputs[0]
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(0))?;
-
         let buffer = self.buffer.as_sample_mut().unwrap();
 
-        for (out, in_signal, delay) in itertools::izip!(out, in_signal, delay) {
+        for (out, in_signal, delay) in itertools::izip!(
+            outputs.iter_output_mut_as_samples(0)?,
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_messages(1)?
+        ) {
             let delay = if let Some(delay) = delay {
                 delay.cast_to_int().unwrap_or(0).max(0) as usize
             } else {
