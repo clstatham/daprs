@@ -4,6 +4,7 @@ description = "raug - Rusty Audio Graphs"
 license = "Apache 2.0 OR MIT"
 version = "0.0.1"
 edition = "2021"
+documentation = "https://docs.rs/raug"
 
 [lib]
 name = "raug"
