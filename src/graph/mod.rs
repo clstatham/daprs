@@ -1,9 +1,8 @@
-//! A directed graph of [`GraphNode`]s connected by [`Edge`]s.
+//! A directed graph of [`Processor`]s connected by [`Edge`]s.
 
 use std::collections::VecDeque;
 
 use edge::Edge;
-use node::GraphNode;
 use petgraph::{
     prelude::{Direction, EdgeRef, StableDiGraph},
     visit::DfsPostOrder,
@@ -11,17 +10,16 @@ use petgraph::{
 use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::{
-    prelude::Param,
+    prelude::{Param, Passthrough},
     processor::{Process, Processor, ProcessorError},
 };
 
 pub mod edge;
-pub mod node;
 
 pub(crate) type GraphIx = u32;
 pub(crate) type NodeIndex = petgraph::graph::NodeIndex<GraphIx>;
 
-pub(crate) type DiGraph = StableDiGraph<GraphNode, Edge, GraphIx>;
+pub(crate) type DiGraph = StableDiGraph<Processor, Edge, GraphIx>;
 
 /// An error that can occur during graph processing.
 #[derive(Debug, thiserror::Error)]
@@ -84,7 +82,7 @@ pub type GraphRunResult<T> = Result<T, GraphRunError>;
 /// A result type for graph construction operations.
 pub type GraphConstructionResult<T> = Result<T, GraphConstructionError>;
 
-/// A directed graph of [`GraphNode`]s connected by [`Edge`]s.
+/// A directed graph of [`Processor`]s connected by [`Edge`]s.
 ///
 /// The graph is responsible for managing the processing of its nodes and edges, and can be used to build complex signal processing networks.
 ///
@@ -133,33 +131,33 @@ impl Graph {
         self.needs_visitor_alloc
     }
 
-    /// Adds a new input [`Passthrough`](GraphNode::Passthrough) node to the graph.
+    /// Adds a new input [`Passthrough`] node to the graph.
     pub fn add_input(&mut self) -> NodeIndex {
-        let idx = self.digraph.add_node(GraphNode::new_input());
+        let idx = self.digraph.add_node(Processor::new(Passthrough));
         self.input_nodes.push(idx);
         idx
     }
 
-    /// Adds a new output [`Passthrough`](GraphNode::Passthrough) node to the graph.
+    /// Adds a new output [`Passthrough`] node to the graph.
     pub fn add_output(&mut self) -> NodeIndex {
-        let idx = self.digraph.add_node(GraphNode::new_output());
+        let idx = self.digraph.add_node(Processor::new(Passthrough));
         self.output_nodes.push(idx);
         idx
     }
 
-    /// Adds a new [`GraphNode`] with the given [`Processor`] to the graph.
+    /// Adds a new [`Processor`] to the graph.
     pub fn add_processor_object(&mut self, processor: Processor) -> NodeIndex {
         self.needs_visitor_alloc = true;
-        self.digraph.add_node(GraphNode::Processor(processor))
+        self.digraph.add_node(processor)
     }
 
-    /// Adds a new [`GraphNode`] with the given [`Process`] functionality to the graph.
+    /// Adds a new [`Processor`] to the graph with the given [`Process`] implementation.
     pub fn add_processor(&mut self, processor: impl Process) -> NodeIndex {
         self.needs_visitor_alloc = true;
-        self.digraph.add_node(GraphNode::new_processor(processor))
+        self.digraph.add_node(Processor::new(processor))
     }
 
-    /// Adds a new [`GraphNode`] representing a [`Param`] to the graph.
+    /// Adds a new [`Processor`] representing a [`Param`] to the graph.
     pub fn add_param(&mut self, param: Param) -> NodeIndex {
         let name = param.name().to_string();
         let index = self.add_processor(param);
@@ -167,13 +165,13 @@ impl Graph {
         index
     }
 
-    /// Replaces the [`GraphNode`] at the given index in-place with a new [`Processor`].
-    pub fn replace_processor(&mut self, node: NodeIndex, processor: impl Process) -> GraphNode {
-        std::mem::replace(&mut self.digraph[node], GraphNode::new_processor(processor))
+    /// Replaces the [`Processor`] at the given node with a new [`Processor`] and returns the old one.
+    pub fn replace_processor(&mut self, node: NodeIndex, processor: impl Process) -> Processor {
+        std::mem::replace(&mut self.digraph[node], Processor::new(processor))
     }
 
-    /// Connects two [`GraphNode`]s with a new [`Edge`].
-    /// The signal will flow from the `source` [`GraphNode`]'s `source_output`-th output to the `target` [`GraphNode`]'s `target_input`-th input.
+    /// Connects two [`Processor`]s with a new [`Edge`].
+    /// The signal will flow from the `source` [`Processor`]'s `source_output`-th output to the `target` [`Processor`]'s `target_input`-th input.
     ///
     /// Duplicate edges will not be recreated, and instead the existing one will be returned.
     ///
@@ -218,13 +216,13 @@ impl Graph {
         Ok(())
     }
 
-    /// Returns the number of input [`GraphNode`]s in the graph.
+    /// Returns the number of input [`Processor`]s in the graph.
     #[inline]
     pub fn num_inputs(&self) -> usize {
         self.input_nodes.len()
     }
 
-    /// Returns the number of output [`GraphNode`]s in the graph.
+    /// Returns the number of output [`Processor`]s in the graph.
     #[inline]
     pub fn num_outputs(&self) -> usize {
         self.output_nodes.len()
@@ -255,22 +253,17 @@ impl Graph {
     pub fn param_named(&self, name: impl AsRef<str>) -> Option<&Param> {
         self.params
             .get(name.as_ref())
-            .and_then(|&idx| match &self.digraph[idx] {
-                GraphNode::Processor(proc) => {
-                    (*proc.processor).downcast_ref::<Param>()
-                    // proc.processor.as_any().downcast_ref::<Param>().cloned()
-                }
-                _ => None,
-            })
+            .and_then(|&idx| self.digraph.node_weight(idx))
+            .and_then(|proc| (*proc.processor).downcast_ref())
     }
 
-    /// Returns the index of the input [`GraphNode`] at the given index.
+    /// Returns the index of the input [`Processor`] at the given index.
     #[inline]
     pub fn node_for_input_index(&self, index: usize) -> Option<NodeIndex> {
         self.input_nodes.get(index).copied()
     }
 
-    /// Returns the index of the output [`GraphNode`] at the given index.
+    /// Returns the index of the output [`Processor`] at the given index.
     #[inline]
     pub fn node_for_output_index(&self, index: usize) -> Option<NodeIndex> {
         self.output_nodes.get(index).copied()
@@ -311,7 +304,7 @@ impl Graph {
         self.visit_path.reverse();
     }
 
-    /// Visits each [`GraphNode`] in the graph in breadth-first order, calling the given closure with a mutable reference to the graph alongside each index.
+    /// Visits each [`Processor`] in the graph in breadth-first order, calling the given closure with a mutable reference to the graph alongside each index.
     // #[inline]
     pub fn visit<F, E>(&mut self, mut f: F) -> Result<(), E>
     where
@@ -457,7 +450,7 @@ impl Graph {
         Ok(())
     }
 
-    /// Sets the block size of all [`GraphNode`]s in the graph. This will implicitly reallocate all internal buffers and resources.
+    /// Sets the block size of all [`Processor`]s in the graph. This will implicitly reallocate all internal buffers and resources.
     pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) -> GraphRunResult<()> {
         self.visit(|graph, node| {
             graph.digraph[node].resize_buffers(sample_rate, block_size);
@@ -465,7 +458,7 @@ impl Graph {
         })
     }
 
-    /// Prepares all [`GraphNode`]s in the graph for processing.
+    /// Prepares all [`Processor`]s in the graph for processing.
     ///
     /// This should be run at least once before the audio thread starts running, and again anytime the graph structure is modified.
     pub fn prepare(&mut self) -> GraphRunResult<()> {

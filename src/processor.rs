@@ -91,11 +91,14 @@ impl SignalSpec {
     }
 }
 
-/// A collection of input/output buffers for a [`Process`] to process.
+/// A collection of borrowed input buffers for a [`Process`] to read from, and related information about them.
 #[derive(Debug, Clone, Copy)]
 pub struct ProcessInputs<'a, 'b> {
+    /// The input signal specs.
     pub input_spec: &'a [SignalSpec],
+    /// The default values for the input signals.
     pub input_spec_defaults: &'a [Signal],
+    /// The input buffers to read from.
     pub inputs: &'a [Option<&'b SignalBuffer>],
 }
 
@@ -112,6 +115,7 @@ impl<'a, 'b> ProcessInputs<'a, 'b> {
         self.inputs.get(index).copied().flatten()
     }
 
+    /// Returns an iterator over the input buffers.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = Option<&'b SignalBuffer>> + '_ {
         self.inputs.iter().copied()
@@ -162,8 +166,11 @@ impl<'a, 'b> ProcessInputs<'a, 'b> {
     }
 }
 
+/// A collection of borrowed output buffers for a [`Process`] to write to, and related information about them.
 pub struct ProcessOutputs<'a> {
+    /// The output signal specs.
     pub output_spec: &'a [SignalSpec],
+    /// The output buffers to write to.
     pub outputs: &'a mut [SignalBuffer],
 }
 
@@ -174,6 +181,7 @@ impl<'a> ProcessOutputs<'a> {
         &mut self.outputs[index]
     }
 
+    /// Returns an iterator over the output buffers.
     #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut SignalBuffer> + '_ {
         self.outputs.iter_mut()
@@ -207,6 +215,47 @@ impl<'a> ProcessOutputs<'a> {
         Ok(buffer.iter_mut())
     }
 
+    /// Splits this [`ProcessOutputs`] into two at the given index.
+    ///
+    /// Note that the indices in the returned [`ProcessOutputs`] are relative to the split point, not the original outputs.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use raug::processor::{ProcessOutputs, SignalSpec};
+    /// use raug::signal::{Signal, SignalBuffer};
+    ///
+    /// // Create some output buffers and their specs.
+    /// let mut outputs = vec![
+    ///     SignalBuffer::new_sample(1),
+    ///     SignalBuffer::new_sample(2),
+    ///     SignalBuffer::new_sample(3),
+    /// ];
+    ///
+    /// let output_spec = vec![
+    ///     SignalSpec::unbounded("a", 0.0),
+    ///     SignalSpec::unbounded("b", 0.0),
+    ///     SignalSpec::unbounded("c", 0.0),
+    /// ];
+    ///
+    /// let mut process_outputs = ProcessOutputs {
+    ///     output_spec: &output_spec,
+    ///     outputs: &mut outputs,
+    /// };
+    ///
+    /// // Split the outputs at index 1.
+    /// let (mut left, mut right) = process_outputs.split_at_mut(1);
+    ///
+    /// assert_eq!(left.output_spec.len(), 1);
+    /// assert_eq!(right.output_spec.len(), 2);
+    ///
+    /// // The first output buffer is now in `left` at index 0.
+    /// assert_eq!(left.output(0).len(), 1);
+    ///
+    /// // The second and third output buffers are now in `right` at indices 0 and 1.
+    /// assert_eq!(right.output(0).len(), 2);
+    /// assert_eq!(right.output(1).len(), 3);
+    /// ```
     #[inline]
     pub fn split_at_mut(&mut self, index: usize) -> (ProcessOutputs, ProcessOutputs) {
         let (left, right) = self.outputs.split_at_mut(index);
@@ -224,8 +273,6 @@ impl<'a> ProcessOutputs<'a> {
 }
 
 /// A trait for processing audio or control signals.
-///
-/// This is usually used as part of a [`Processor`], operating on its internal input/output buffers.
 pub trait Process: 'static + Send + Sync + ProcessClone + DowncastSync {
     /// Returns the name of this [`Process`].
     fn name(&self) -> &str {
@@ -323,12 +370,11 @@ impl Debug for dyn Process {
 }
 
 /// A node in the audio graph that processes signals.
-///
-/// This is a wrapper around a [`Box<dyn Process>`](Process) that provides input and output buffers for the processor to use.
 #[derive(Clone)]
-
 pub struct Processor {
     pub(crate) processor: Box<dyn Process>,
+    input_spec: Vec<SignalSpec>,
+    output_spec: Vec<SignalSpec>,
 }
 
 impl Debug for Processor {
@@ -345,7 +391,13 @@ impl Processor {
 
     /// Creates a new [`Processor`] from the given boxed [`Process`] object.
     pub fn new_from_boxed(processor: Box<dyn Process>) -> Self {
-        Self { processor }
+        let input_spec = processor.input_spec();
+        let output_spec = processor.output_spec();
+        Self {
+            processor,
+            input_spec,
+            output_spec,
+        }
     }
 
     /// Returns the name of this [`Processor`].
@@ -354,13 +406,13 @@ impl Processor {
     }
 
     /// Returns information about the inputs this [`Processor`] expects.
-    pub fn input_spec(&self) -> Vec<SignalSpec> {
-        self.processor.input_spec()
+    pub fn input_spec(&self) -> &[SignalSpec] {
+        &self.input_spec
     }
 
     /// Returns information about the outputs this [`Processor`] produces.
-    pub fn output_spec(&self) -> Vec<SignalSpec> {
-        self.processor.output_spec()
+    pub fn output_spec(&self) -> &[SignalSpec] {
+        &self.output_spec
     }
 
     /// Resizes the input and output buffers to match the given sample rates and block size.

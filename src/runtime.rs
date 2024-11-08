@@ -150,7 +150,7 @@ impl Runtime {
 
                 let mut outputs = Vec::with_capacity(output_spec.len());
 
-                for spec in output_spec.iter() {
+                for spec in output_spec {
                     let buffer = SignalBuffer::from_spec_default(spec, 0);
                     outputs.push(buffer);
                 }
@@ -158,13 +158,13 @@ impl Runtime {
                 buffer_cache.insert(
                     node_id,
                     NodeBuffers {
-                        input_spec: node.input_spec(),
+                        input_spec: node.input_spec().to_vec(),
                         input_spec_defaults: node
                             .input_spec()
                             .iter()
                             .map(|spec| spec.default_value.clone())
                             .collect(),
-                        output_spec,
+                        output_spec: output_spec.to_vec(),
                         outputs,
                     },
                 );
@@ -204,7 +204,7 @@ impl Runtime {
 
                 let mut outputs = Vec::with_capacity(output_spec.len());
 
-                for spec in output_spec.iter() {
+                for spec in output_spec {
                     let buffer = SignalBuffer::from_spec_default(spec, block_size);
                     outputs.push(buffer);
                 }
@@ -212,13 +212,13 @@ impl Runtime {
                 self.buffer_cache.insert(
                     node_id,
                     NodeBuffers {
-                        input_spec: node.input_spec(),
+                        input_spec: node.input_spec().to_vec(),
                         input_spec_defaults: node
                             .input_spec()
                             .iter()
                             .map(|spec| spec.default_value.clone())
                             .collect(),
-                        output_spec,
+                        output_spec: output_spec.to_vec(),
                         outputs,
                     },
                 );

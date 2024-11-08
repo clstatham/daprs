@@ -613,14 +613,16 @@ impl Signal {
         matches!(self, Self::Message(_))
     }
 
-    pub fn as_sample(&self) -> Option<&Sample> {
+    /// Returns the sample value, if this is a sample.
+    pub const fn as_sample(&self) -> Option<&Sample> {
         match self {
             Self::Sample(sample) => Some(sample),
             Self::Message(_) => None,
         }
     }
 
-    pub fn as_message(&self) -> Option<&Option<Message>> {
+    /// Returns the message value, if this is a message.
+    pub const fn as_message(&self) -> Option<&Option<Message>> {
         match self {
             Self::Sample(_) => None,
             Self::Message(message) => Some(message),

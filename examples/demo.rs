@@ -24,13 +24,13 @@ fn main() {
     // build the graph
     let mut runtime = graph.build_runtime();
 
-    // // run the runtime for 1 second and output to the default audio device
-    // runtime
-    //     .run_for(Duration::from_secs(1), Backend::Default, Device::Default)
-    //     .unwrap();
-
-    // run the graph for 1 second
+    // run the runtime for 1 second and output to the default audio device
     runtime
-        .run_offline_to_file("target/demo.wav", Duration::from_secs(1), 44_100.0, 512)
+        .run_for(Duration::from_secs(1), Backend::Default, Device::Default)
         .unwrap();
+
+    // // run the graph for 1 second
+    // runtime
+    //     .run_offline_to_file("target/demo.wav", Duration::from_secs(1), 44_100.0, 512)
+    //     .unwrap();
 }

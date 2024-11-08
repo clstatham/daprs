@@ -1,3 +1,5 @@
+//! Built-in filters for processing audio signals.
+
 use std::f64::consts::PI;
 
 use crate::prelude::*;
@@ -197,6 +199,7 @@ impl Default for Biquad {
 }
 
 impl Biquad {
+    /// Creates a new biquad filter with the given coefficients.
     pub fn new(a0: f64, a1: f64, a2: f64, b1: f64, b2: f64) -> Self {
         Self {
             a0,

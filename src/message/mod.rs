@@ -2,6 +2,7 @@
 
 use std::fmt::{Debug, Display};
 
+/// A message that can be sent between processors.
 #[derive(Debug, Clone)]
 pub enum Message {
     /// A bang message ("do whatever it is you do").

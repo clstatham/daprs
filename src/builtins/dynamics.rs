@@ -1,3 +1,5 @@
+//! Dynamics processors, such as compressors and limiters.
+
 use crate::prelude::*;
 
 /// A peak limiter processor.
