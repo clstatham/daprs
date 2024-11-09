@@ -17,6 +17,7 @@
 - Runtime capable of running signal flow graphs, either in realtime or offline
 - Save rendered audio to WAV files
 - Exclusively uses `f64` audio samples internally for highest precision
+- No custom unsafe code, completely safe API
 
 ## Examples
 
@@ -34,7 +35,8 @@ See [examples/demo.rs](https://github.com/clstatham/raug/blob/master/examples/de
 - [ ] More built-in processors
 - [ ] More examples
 - [ ] More tests
-- [ ] More bindings (Python? JavaScript?)
+- [ ] More optimizations
+- [ ] More bindings (JavaScript?)
 
 ## Contributing
 
