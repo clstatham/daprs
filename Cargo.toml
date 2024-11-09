@@ -5,6 +5,7 @@ license = "MIT OR Apache-2.0"
 version = "0.0.2"
 edition = "2021"
 documentation = "https://docs.rs/raug"
+repository = "https://github.com/clstatham/raug"
 
 [lib]
 name = "raug"

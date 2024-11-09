@@ -1,4 +1,4 @@
-//! Contains the [`BuiltNode`] struct, which represents a node in the audio graph that processes signals.
+//! Contains the [`ProcessorNode`] struct, which represents a node in the audio graph that processes signals.
 
 use std::fmt::Debug;
 
@@ -6,25 +6,25 @@ use crate::prelude::{Processor, ProcessorError, ProcessorInputs, ProcessorOutput
 
 /// A node in the audio graph that processes signals.
 #[derive(Clone)]
-pub struct BuiltNode {
+pub struct ProcessorNode {
     pub(crate) processor: Box<dyn Processor>,
     input_spec: Vec<SignalSpec>,
     output_spec: Vec<SignalSpec>,
 }
 
-impl Debug for BuiltNode {
+impl Debug for ProcessorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.processor.name())
     }
 }
 
-impl BuiltNode {
-    /// Creates a new [`BuiltNode`] from the given [`Processor`] object.
+impl ProcessorNode {
+    /// Creates a new [`ProcessorNode`] from the given [`Processor`] object.
     pub fn new(processor: impl Processor) -> Self {
         Self::new_from_boxed(Box::new(processor))
     }
 
-    /// Creates a new [`BuiltNode`] from the given boxed [`Processor`] object.
+    /// Creates a new [`ProcessorNode`] from the given boxed [`Processor`] object.
     pub fn new_from_boxed(processor: Box<dyn Processor>) -> Self {
         let input_spec = processor.input_spec();
         let output_spec = processor.output_spec();
@@ -35,31 +35,31 @@ impl BuiltNode {
         }
     }
 
-    /// Returns the name of this [`BuiltNode`].
+    /// Returns the name of this [`ProcessorNode`].
     #[inline]
     pub fn name(&self) -> &str {
         self.processor.name()
     }
 
-    /// Returns information about the inputs this [`BuiltNode`] expects.
+    /// Returns information about the inputs this [`ProcessorNode`] expects.
     #[inline]
     pub fn input_spec(&self) -> &[SignalSpec] {
         &self.input_spec
     }
 
-    /// Returns information about the outputs this [`BuiltNode`] produces.
+    /// Returns information about the outputs this [`ProcessorNode`] produces.
     #[inline]
     pub fn output_spec(&self) -> &[SignalSpec] {
         &self.output_spec
     }
 
-    /// Returns the number of input buffers/channels this [`BuiltNode`] expects.
+    /// Returns the number of input buffers/channels this [`ProcessorNode`] expects.
     #[inline]
     pub fn num_inputs(&self) -> usize {
         self.input_spec.len()
     }
 
-    /// Returns the number of output buffers/channels this [`BuiltNode`] produces.
+    /// Returns the number of output buffers/channels this [`ProcessorNode`] produces.
     #[inline]
     pub fn num_outputs(&self) -> usize {
         self.output_spec.len()
