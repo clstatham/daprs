@@ -2,7 +2,7 @@
 name = "raug"
 description = "raug - Rusty Audio Graphs"
 license = "MIT OR Apache-2.0"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 documentation = "https://docs.rs/raug"
 
@@ -25,7 +25,6 @@ rustc-hash = "2"
 hashbrown = "0.15"
 crossbeam-channel = "0.5"
 rand = "0.8"
-arrayvec = "0.7.6"
 
 [dev-dependencies]
 env_logger = "0.11"
