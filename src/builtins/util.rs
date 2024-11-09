@@ -6,7 +6,7 @@ use crossbeam_channel::{Receiver, Sender};
 
 use crate::{
     message::Message,
-    prelude::{GraphBuilder, Node, Process, ProcessInputs, ProcessOutputs, SignalSpec},
+    prelude::{GraphBuilder, Node, Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
     signal::{Sample, Signal},
 };
@@ -15,7 +15,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct Passthrough;
 
-impl Process for Passthrough {
+impl Processor for Passthrough {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("in", 0.0)]
     }
@@ -26,8 +26,8 @@ impl Process for Passthrough {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let Some(in_signal) = inputs.input(0) else {
             return Ok(());
@@ -82,7 +82,7 @@ impl MessageSender {
     }
 }
 
-impl Process for MessageSender {
+impl Processor for MessageSender {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("trig", Signal::new_message_none()),
@@ -96,8 +96,8 @@ impl Process for MessageSender {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (bang, message, out) in itertools::izip!(
             inputs.iter_input_as_messages(0)?,
@@ -145,7 +145,7 @@ impl ConstantMessageSender {
     }
 }
 
-impl Process for ConstantMessageSender {
+impl Processor for ConstantMessageSender {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
@@ -156,8 +156,8 @@ impl Process for ConstantMessageSender {
 
     fn process(
         &mut self,
-        _inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        _inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let message = outputs.iter_output_mut_as_messages(0)?;
         for message in message {
@@ -225,7 +225,7 @@ impl Print {
     }
 }
 
-impl Process for Print {
+impl Processor for Print {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("trig", Signal::new_message_none()),
@@ -239,8 +239,8 @@ impl Process for Print {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        _outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        _outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (bang, message) in itertools::izip!(
             inputs.iter_input_as_messages(0)?,
@@ -302,7 +302,7 @@ impl GraphBuilder {
 
 pub struct MessageToAudio;
 
-impl Process for MessageToAudio {
+impl Processor for MessageToAudio {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("message", Signal::new_message_none())]
     }
@@ -313,8 +313,8 @@ impl Process for MessageToAudio {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (message, sample_out) in itertools::izip!(
             inputs.iter_input_as_messages(0)?,
@@ -348,7 +348,7 @@ impl Process for MessageToAudio {
 
 pub struct AudioToMessage;
 
-impl Process for AudioToMessage {
+impl Processor for AudioToMessage {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("sample", 0.0)]
     }
@@ -359,8 +359,8 @@ impl Process for AudioToMessage {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (sample, message_out) in itertools::izip!(
             inputs.iter_input_as_samples(0)?,
@@ -385,7 +385,7 @@ pub struct SampleRate {
     sample_rate: f64,
 }
 
-impl Process for SampleRate {
+impl Processor for SampleRate {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
@@ -400,8 +400,8 @@ impl Process for SampleRate {
 
     fn process(
         &mut self,
-        _inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        _inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         // let sample_rate_out = outputs.iter_output_mut_as_samples(0)?;
         let sample_rate_out = outputs.output(0).as_sample_mut().unwrap();
@@ -444,7 +444,7 @@ pub struct Smooth {
     current: f64,
 }
 
-impl Process for Smooth {
+impl Processor for Smooth {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("target", 0.0),
@@ -458,8 +458,8 @@ impl Process for Smooth {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (target, factor, out) in itertools::izip!(
             inputs.iter_input_as_samples(0)?,
@@ -499,7 +499,7 @@ pub struct Changed {
     last: f64,
 }
 
-impl Process for Changed {
+impl Processor for Changed {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", 0.0),
@@ -513,8 +513,8 @@ impl Process for Changed {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (in_signal, threshold, out_signal) in itertools::izip!(
             inputs.iter_input_as_samples(0)?,
@@ -555,7 +555,7 @@ pub struct ZeroCrossing {
     last: f64,
 }
 
-impl Process for ZeroCrossing {
+impl Processor for ZeroCrossing {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("in", 0.0)]
     }
@@ -566,8 +566,8 @@ impl Process for ZeroCrossing {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (in_signal, out_signal) in itertools::izip!(
             inputs.iter_input_as_samples(0)?,
@@ -605,7 +605,7 @@ impl MessageTx {
     }
 }
 
-impl Process for MessageTx {
+impl Processor for MessageTx {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("in", Signal::new_message_none())]
     }
@@ -616,8 +616,8 @@ impl Process for MessageTx {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        _outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        _outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let in_signal = inputs.iter_input_as_messages(0)?;
 
@@ -646,7 +646,7 @@ impl MessageRx {
     }
 }
 
-impl Process for MessageRx {
+impl Processor for MessageRx {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
@@ -657,8 +657,8 @@ impl Process for MessageRx {
 
     fn process(
         &mut self,
-        _inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        _inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let out = outputs.iter_output_mut_as_messages(0)?;
 
@@ -770,7 +770,7 @@ impl Param {
     }
 }
 
-impl Process for Param {
+impl Processor for Param {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("set", Signal::new_message_none())]
     }
@@ -781,8 +781,8 @@ impl Process for Param {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (set, get) in itertools::izip!(
             inputs.iter_input_as_messages(0)?,
@@ -843,7 +843,7 @@ impl Default for Select {
     }
 }
 
-impl Process for Select {
+impl Processor for Select {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", Signal::new_message_none()),
@@ -859,8 +859,8 @@ impl Process for Select {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (sample_index, (in_signal, index)) in itertools::izip!(
             inputs.iter_input_as_messages(0)?,
@@ -932,7 +932,7 @@ impl Default for Merge {
     }
 }
 
-impl Process for Merge {
+impl Processor for Merge {
     fn input_spec(&self) -> Vec<SignalSpec> {
         (0..self.num_inputs)
             .map(|i| SignalSpec::unbounded(format!("{}", i), Signal::new_message_none()))
@@ -945,8 +945,8 @@ impl Process for Merge {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (i, input) in inputs.iter().enumerate() {
             let Some(input) = input else {
@@ -988,7 +988,7 @@ pub struct Counter {
     count: i64,
 }
 
-impl Process for Counter {
+impl Processor for Counter {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("trig", Signal::new_message_none()),
@@ -1002,8 +1002,8 @@ impl Process for Counter {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (trig, reset, count) in itertools::izip!(
             inputs.iter_input_as_messages(0)?,
@@ -1046,7 +1046,7 @@ pub struct SampleAndHold {
     last: Option<Sample>,
 }
 
-impl Process for SampleAndHold {
+impl Processor for SampleAndHold {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", 0.0),
@@ -1060,8 +1060,8 @@ impl Process for SampleAndHold {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (in_signal, trig, out_signal) in itertools::izip!(
             inputs.iter_input_as_samples(0)?,
@@ -1107,7 +1107,7 @@ impl CheckFinite {
     }
 }
 
-impl Process for CheckFinite {
+impl Processor for CheckFinite {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("in", 0.0)]
     }
@@ -1118,8 +1118,8 @@ impl Process for CheckFinite {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        _outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        _outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let in_signal = inputs.iter_input_as_samples(0)?;
         for in_signal in in_signal {

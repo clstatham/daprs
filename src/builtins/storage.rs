@@ -42,7 +42,7 @@ impl AudioBuffer {
     }
 }
 
-impl Process for AudioBuffer {
+impl Processor for AudioBuffer {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("index", Signal::new_message_some(Message::Int(0))),
@@ -63,8 +63,8 @@ impl Process for AudioBuffer {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let buffer = self.buffer.as_sample_mut().unwrap();
 
@@ -140,7 +140,7 @@ pub struct Register {
     value: Option<Message>,
 }
 
-impl Process for Register {
+impl Processor for Register {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("set", Signal::new_message_none()),
@@ -154,8 +154,8 @@ impl Process for Register {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (set, clear, out) in itertools::izip!(
             inputs.iter_input_as_messages(0)?,

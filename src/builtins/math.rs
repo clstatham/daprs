@@ -31,7 +31,7 @@ impl Default for Constant {
     }
 }
 
-impl Process for Constant {
+impl Processor for Constant {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
@@ -42,8 +42,8 @@ impl Process for Constant {
 
     fn process(
         &mut self,
-        _inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        _inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let out = outputs.iter_output_mut_as_samples(0)?;
 
@@ -80,7 +80,7 @@ impl GraphBuilder {
 #[derive(Clone, Debug, Default)]
 pub struct MidiToFreq;
 
-impl Process for MidiToFreq {
+impl Processor for MidiToFreq {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("note", 69.0)]
     }
@@ -91,8 +91,8 @@ impl Process for MidiToFreq {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (note, freq) in itertools::izip!(
             inputs.iter_input_as_samples(0)?,
@@ -121,7 +121,7 @@ impl Process for MidiToFreq {
 #[derive(Clone, Debug, Default)]
 pub struct FreqToMidi;
 
-impl Process for FreqToMidi {
+impl Processor for FreqToMidi {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("freq", 440.0)]
     }
@@ -132,8 +132,8 @@ impl Process for FreqToMidi {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (freq, note) in itertools::izip!(
             inputs.iter_input_as_samples(0)?,
@@ -152,7 +152,7 @@ macro_rules! impl_binary_proc {
         #[doc = $doc]
         pub struct $name;
 
-        impl Process for $name {
+        impl Processor for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![
                     SignalSpec::unbounded("a", 0.0),
@@ -166,8 +166,8 @@ macro_rules! impl_binary_proc {
 
             fn process(
                 &mut self,
-                inputs: ProcessInputs,
-                mut outputs: ProcessOutputs,
+                inputs: ProcessorInputs,
+                mut outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {
                 for (sample, in1, in2) in itertools::izip!(
                     outputs.iter_output_mut_as_samples(0)?,
@@ -448,7 +448,7 @@ macro_rules! impl_unary_proc {
         #[doc = $doc]
         pub struct $name;
 
-        impl Process for $name {
+        impl Processor for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![SignalSpec::unbounded("in", 0.0)]
             }
@@ -459,8 +459,8 @@ macro_rules! impl_unary_proc {
 
             fn process(
                 &mut self,
-                inputs: ProcessInputs,
-                mut outputs: ProcessOutputs,
+                inputs: ProcessorInputs,
+                mut outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {
                 for (sample, in1) in itertools::izip!(
                     outputs.iter_output_mut_as_samples(0)?,

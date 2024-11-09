@@ -8,8 +8,8 @@ use rustc_hash::FxBuildHasher;
 
 use crate::{
     graph::{Graph, GraphRunError, NodeIndex},
-    prelude::{Param, ProcessInputs, SignalSpec},
-    processor::{ProcessOutputs, ProcessorError},
+    prelude::{Param, ProcessorInputs, SignalSpec},
+    processor::{ProcessorError, ProcessorOutputs},
     signal::{Sample, Signal, SignalBuffer},
 };
 
@@ -288,12 +288,12 @@ impl Runtime {
                 let node = graph.digraph_mut().node_weight_mut(node_id).unwrap();
 
                 node.process(
-                    ProcessInputs {
+                    ProcessorInputs {
                         input_spec: &buffers.input_spec,
                         input_spec_defaults: &buffers.input_spec_defaults,
                         inputs: &inputs,
                     },
-                    ProcessOutputs {
+                    ProcessorOutputs {
                         output_spec: &buffers.output_spec,
                         outputs: &mut buffers.outputs,
                     },

@@ -58,7 +58,7 @@ impl Default for PeakLimiter {
     }
 }
 
-impl Process for PeakLimiter {
+impl Processor for PeakLimiter {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", 0.0),
@@ -78,8 +78,8 @@ impl Process for PeakLimiter {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, in_signal, threshold, attack, release) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,

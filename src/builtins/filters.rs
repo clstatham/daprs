@@ -64,7 +64,7 @@ impl MoogLadder {
     }
 }
 
-impl Process for MoogLadder {
+impl Processor for MoogLadder {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", 0.0),
@@ -83,8 +83,8 @@ impl Process for MoogLadder {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         // based on: https://github.com/ddiakopoulos/MoogLadders/blob/fd147415573e723ba102dfc63dc46af0b7fe55b9/src/HuovilainenModel.h
         for (out, in_signal, cutoff, resonance) in itertools::izip!(
@@ -212,7 +212,7 @@ impl Biquad {
     }
 }
 
-impl Process for Biquad {
+impl Processor for Biquad {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", 0.0),
@@ -234,8 +234,8 @@ impl Process for Biquad {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, in_signal, a0, a1, a2, b1, b2) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
@@ -559,7 +559,7 @@ impl AutoBiquad {
     }
 }
 
-impl Process for AutoBiquad {
+impl Processor for AutoBiquad {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", 0.0),
@@ -580,8 +580,8 @@ impl Process for AutoBiquad {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, in_signal, frequency, q, gain) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,

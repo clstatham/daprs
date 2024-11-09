@@ -3,6 +3,7 @@
 use std::collections::VecDeque;
 
 use edge::Edge;
+use node::BuiltNode;
 use petgraph::{
     prelude::{Direction, EdgeRef, StableDiGraph},
     visit::DfsPostOrder,
@@ -11,15 +12,16 @@ use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::{
     prelude::{Param, Passthrough},
-    processor::{Process, Processor, ProcessorError},
+    processor::{Processor, ProcessorError},
 };
 
 pub mod edge;
+pub mod node;
 
 pub(crate) type GraphIx = u32;
 pub(crate) type NodeIndex = petgraph::graph::NodeIndex<GraphIx>;
 
-pub(crate) type DiGraph = StableDiGraph<Processor, Edge, GraphIx>;
+pub(crate) type DiGraph = StableDiGraph<BuiltNode, Edge, GraphIx>;
 
 /// An error that can occur during graph processing.
 #[derive(Debug, thiserror::Error)]
@@ -133,28 +135,22 @@ impl Graph {
 
     /// Adds a new input [`Passthrough`] node to the graph.
     pub fn add_input(&mut self) -> NodeIndex {
-        let idx = self.digraph.add_node(Processor::new(Passthrough));
+        let idx = self.digraph.add_node(BuiltNode::new(Passthrough));
         self.input_nodes.push(idx);
         idx
     }
 
     /// Adds a new output [`Passthrough`] node to the graph.
     pub fn add_output(&mut self) -> NodeIndex {
-        let idx = self.digraph.add_node(Processor::new(Passthrough));
+        let idx = self.digraph.add_node(BuiltNode::new(Passthrough));
         self.output_nodes.push(idx);
         idx
     }
 
     /// Adds a new [`Processor`] to the graph.
-    pub fn add_processor_object(&mut self, processor: Processor) -> NodeIndex {
+    pub fn add_processor(&mut self, processor: impl Processor) -> NodeIndex {
         self.needs_visitor_alloc = true;
-        self.digraph.add_node(processor)
-    }
-
-    /// Adds a new [`Processor`] to the graph with the given [`Process`] implementation.
-    pub fn add_processor(&mut self, processor: impl Process) -> NodeIndex {
-        self.needs_visitor_alloc = true;
-        self.digraph.add_node(Processor::new(processor))
+        self.digraph.add_node(BuiltNode::new(processor))
     }
 
     /// Adds a new [`Processor`] representing a [`Param`] to the graph.
@@ -166,8 +162,8 @@ impl Graph {
     }
 
     /// Replaces the [`Processor`] at the given node with a new [`Processor`] and returns the old one.
-    pub fn replace_processor(&mut self, node: NodeIndex, processor: impl Process) -> Processor {
-        std::mem::replace(&mut self.digraph[node], Processor::new(processor))
+    pub fn replace_processor(&mut self, node: NodeIndex, processor: impl Processor) -> BuiltNode {
+        std::mem::replace(&mut self.digraph[node], BuiltNode::new(processor))
     }
 
     /// Connects two [`Processor`]s with a new [`Edge`].

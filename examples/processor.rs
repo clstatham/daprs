@@ -5,7 +5,7 @@ struct GainProc {
     gain: f64,
 }
 
-impl Process for GainProc {
+impl Processor for GainProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("in", 0.0)]
     }
@@ -16,8 +16,8 @@ impl Process for GainProc {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (input, output) in itertools::izip!(
             inputs.iter_input_as_samples(0)?,

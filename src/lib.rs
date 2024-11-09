@@ -23,7 +23,7 @@ pub mod prelude {
     pub use crate::graph::Graph;
     pub use crate::message::*;
     pub use crate::processor::{
-        Process, ProcessInputs, ProcessOutputs, Processor, ProcessorError, SignalSpec,
+        Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, SignalSpec,
     };
     pub use crate::runtime::{Backend, Device, Runtime, RuntimeHandle};
     pub use crate::signal::{Buffer, Sample, Signal, SignalBuffer};

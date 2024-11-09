@@ -2,7 +2,7 @@
 
 use crate::{
     message::Message,
-    prelude::{Process, ProcessInputs, ProcessOutputs, SignalSpec},
+    prelude::{Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
     signal::{Buffer, Sample, Signal, SignalBuffer},
 };
@@ -63,7 +63,7 @@ impl Default for Metro {
     }
 }
 
-impl Process for Metro {
+impl Processor for Metro {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded(
             "period",
@@ -81,8 +81,8 @@ impl Process for Metro {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (period, out) in itertools::izip!(
             inputs.iter_input_as_messages(0)?,
@@ -132,7 +132,7 @@ impl UnitDelay {
     }
 }
 
-impl Process for UnitDelay {
+impl Processor for UnitDelay {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("in", Signal::new_sample(0.0))]
     }
@@ -143,8 +143,8 @@ impl Process for UnitDelay {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, in_signal) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
@@ -191,7 +191,7 @@ impl SampleDelay {
     }
 }
 
-impl Process for SampleDelay {
+impl Processor for SampleDelay {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", Signal::new_sample(0.0)),
@@ -205,8 +205,8 @@ impl Process for SampleDelay {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let buffer = self.buffer.as_sample_mut().unwrap();
 

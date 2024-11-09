@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     graph::Graph,
-    prelude::{Param, Process},
+    prelude::{Param, Processor},
     runtime::Runtime,
 };
 
@@ -42,7 +42,7 @@ impl GraphBuilder {
     }
 
     /// Adds the given processor to the graph.
-    pub fn add<T: Process>(&self, processor: T) -> Node {
+    pub fn add<T: Processor>(&self, processor: T) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
             node_id: graph.add_processor(processor),

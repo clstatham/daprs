@@ -2,7 +2,7 @@
 
 use rand::prelude::Distribution;
 
-use crate::{prelude::*, processor::ProcessOutputs};
+use crate::{prelude::*, processor::ProcessorOutputs};
 
 /// A phase accumulator.
 ///
@@ -29,7 +29,7 @@ pub struct PhaseAccumulator {
     t_step: f64,
 }
 
-impl Process for PhaseAccumulator {
+impl Processor for PhaseAccumulator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("increment", 0.0),
@@ -43,8 +43,8 @@ impl Process for PhaseAccumulator {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, increment, reset) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
@@ -119,7 +119,7 @@ impl Default for SineOscillator {
     }
 }
 
-impl Process for SineOscillator {
+impl Processor for SineOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("frequency", self.frequency),
@@ -138,8 +138,8 @@ impl Process for SineOscillator {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, frequency, phase, reset) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
@@ -216,7 +216,7 @@ impl SawOscillator {
     }
 }
 
-impl Process for SawOscillator {
+impl Processor for SawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("frequency", self.frequency),
@@ -235,8 +235,8 @@ impl Process for SawOscillator {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, frequency, phase, reset) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
@@ -294,7 +294,7 @@ impl Default for NoiseOscillator {
     }
 }
 
-impl Process for NoiseOscillator {
+impl Processor for NoiseOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
@@ -305,8 +305,8 @@ impl Process for NoiseOscillator {
 
     fn process(
         &mut self,
-        _inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        _inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for out in itertools::izip!(outputs.iter_output_mut_as_samples(0)?) {
             // generate a random number
@@ -365,7 +365,7 @@ impl BlSawOscillator {
     }
 }
 
-impl Process for BlSawOscillator {
+impl Processor for BlSawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::unbounded("frequency", 440.0)]
     }
@@ -380,8 +380,8 @@ impl Process for BlSawOscillator {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         // algorithm courtesy of https://www.musicdsp.org/en/latest/Synthesis/12-bandlimited-waveforms.html
         for (out, frequency) in itertools::izip!(
@@ -460,7 +460,7 @@ impl BlSquareOscillator {
     }
 }
 
-impl Process for BlSquareOscillator {
+impl Processor for BlSquareOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("frequency", 440.0),
@@ -478,8 +478,8 @@ impl Process for BlSquareOscillator {
 
     fn process(
         &mut self,
-        inputs: ProcessInputs,
-        mut outputs: ProcessOutputs,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, frequency, pulse_width) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
