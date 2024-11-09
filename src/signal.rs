@@ -13,6 +13,16 @@ pub type Sample = f32;
 #[cfg(not(feature = "f32_samples"))]
 pub type Sample = f64;
 
+#[cfg(feature = "f32_samples")]
+pub const PI: Sample = std::f32::consts::PI;
+#[cfg(not(feature = "f32_samples"))]
+pub const PI: Sample = std::f64::consts::PI;
+
+#[cfg(feature = "f32_samples")]
+pub const TAU: Sample = std::f32::consts::TAU;
+#[cfg(not(feature = "f32_samples"))]
+pub const TAU: Sample = std::f64::consts::TAU;
+
 /// An owning, fixed-length array of [`Sample`]s.
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
 /// It can also be [`collected`](std::iter::Iterator::collect) from an iterator of [`Sample`]s.
@@ -95,10 +105,7 @@ impl Buffer<Sample> {
         if reader.spec().channels == 1 {
             let samples: Result<Vec<_>, hound::Error> = reader
                 .into_samples::<f32>()
-                .map(|sample| {
-                    #[allow(clippy::useless_conversion)]
-                    Ok(sample?.into())
-                })
+                .map(|sample| Ok(sample?.into()))
                 .collect();
             let samples = samples?;
 
@@ -109,10 +116,7 @@ impl Buffer<Sample> {
             let samples: Result<Vec<_>, hound::Error> = reader
                 .into_samples::<f32>()
                 .step_by(channels as usize)
-                .map(|sample| {
-                    #[allow(clippy::useless_conversion)]
-                    Ok(sample?.into())
-                })
+                .map(|sample| Ok(sample?.into()))
                 .collect();
             let samples = samples?;
 
@@ -132,7 +136,6 @@ impl Buffer<Sample> {
         };
         let mut writer = hound::WavWriter::create(path, spec)?;
         for sample in self.buf.iter() {
-            #[allow(clippy::useless_conversion)]
             writer.write_sample(*sample as f32)?;
         }
         writer.finalize()?;
@@ -159,7 +162,6 @@ impl Buffer<Sample> {
 
     /// Returns the mean of all values in the buffer.
     #[inline]
-    #[allow(clippy::useless_conversion)]
     pub fn mean(&self) -> Sample {
         self.sum() / self.len() as Sample
     }
@@ -172,7 +174,6 @@ impl Buffer<Sample> {
 
     /// Returns the variance of all values in the buffer.
     #[inline]
-    #[allow(clippy::useless_conversion)]
     pub fn variance(&self) -> Sample {
         let mean = self.mean();
         let sum = self
@@ -338,7 +339,7 @@ pub enum Signal {
 
 impl Signal {
     /// Creates a new sample signal with the given value.
-    pub const fn new_sample(value: f64) -> Self {
+    pub const fn new_sample(value: Sample) -> Self {
         Self::Sample(value)
     }
 

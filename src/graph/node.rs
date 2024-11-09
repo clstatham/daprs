@@ -2,7 +2,10 @@
 
 use std::fmt::Debug;
 
-use crate::prelude::{Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, SignalSpec};
+use crate::{
+    prelude::{Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, SignalSpec},
+    signal::Sample,
+};
 
 /// A node in the audio graph that processes signals.
 #[derive(Clone)]
@@ -66,7 +69,7 @@ impl ProcessorNode {
     }
 
     /// Resizes the input and output buffers to match the given sample rates and block size.
-    pub fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {
+    pub fn resize_buffers(&mut self, sample_rate: Sample, block_size: usize) {
         self.processor.resize_buffers(sample_rate, block_size);
     }
 

@@ -19,7 +19,7 @@ fn bench_demo(c: &mut Criterion) {
     let mut group = c.benchmark_group("demo");
 
     for &buffer_size in BUFFER_SIZES {
-        runtime.reset(SAMPLE_RATE as f64, buffer_size).unwrap();
+        runtime.reset(SAMPLE_RATE as Sample, buffer_size).unwrap();
         runtime.prepare().unwrap();
 
         group.throughput(criterion::Throughput::Elements(buffer_size as u64));
@@ -48,13 +48,13 @@ fn bench_demo_realtime_simulation(c: &mut Criterion) {
     let mut group = c.benchmark_group("demo_realtime_simulation");
 
     for &buffer_size in BUFFER_SIZES {
-        runtime.reset(SAMPLE_RATE as f64, buffer_size).unwrap();
+        runtime.reset(SAMPLE_RATE as Sample, buffer_size).unwrap();
         runtime.prepare().unwrap();
 
         group.throughput(criterion::Throughput::Elements(buffer_size as u64));
         group.bench_function(format!("buffer_size_{}", buffer_size), |b| {
             b.iter(|| {
-                runtime.reset(SAMPLE_RATE as f64, buffer_size).unwrap();
+                runtime.reset(SAMPLE_RATE as Sample, buffer_size).unwrap();
                 runtime.process().unwrap();
             });
         });
@@ -81,7 +81,7 @@ fn bench_big_graph(c: &mut Criterion) {
     let mut group = c.benchmark_group("big_graph");
 
     for &buffer_size in BUFFER_SIZES {
-        runtime.reset(SAMPLE_RATE as f64, buffer_size).unwrap();
+        runtime.reset(SAMPLE_RATE as Sample, buffer_size).unwrap();
         runtime.prepare().unwrap();
 
         group.throughput(criterion::Throughput::Elements(buffer_size as u64));

@@ -1,5 +1,8 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(doc, warn(missing_docs))]
+#![allow(clippy::useless_conversion)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(clippy::excessive_precision)]
 
 use cpal::traits::{DeviceTrait, HostTrait};
 use runtime::Backend;

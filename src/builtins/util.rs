@@ -384,7 +384,7 @@ impl Processor for AudioToMessage {
 /// | `0` | `sample_rate` | `Sample` | The sample rate. |
 #[derive(Clone, Debug, Default)]
 pub struct SampleRate {
-    sample_rate: f64,
+    sample_rate: Sample,
 }
 
 impl Processor for SampleRate {
@@ -396,7 +396,7 @@ impl Processor for SampleRate {
         vec![SignalSpec::unbounded("sample_rate", 0.0)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -422,7 +422,7 @@ impl GraphBuilder {
 }
 
 #[inline(always)]
-fn lerp(a: f64, b: f64, t: f64) -> f64 {
+fn lerp(a: Sample, b: Sample, t: Sample) -> Sample {
     a + (b - a) * t
 }
 
@@ -442,7 +442,7 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
 /// | `0` | `out` | `Sample` | The current value of the interpolation. |
 #[derive(Clone, Debug, Default)]
 pub struct Smooth {
-    current: f64,
+    current: Sample,
 }
 
 impl Processor for Smooth {
@@ -494,14 +494,14 @@ impl Processor for Smooth {
 /// | `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
 #[derive(Clone, Debug, Default)]
 pub struct Changed {
-    last: f64,
+    last: Sample,
 }
 
 impl Processor for Changed {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::unbounded("in", 0.0),
-            SignalSpec::unbounded("threshold", f64::EPSILON),
+            SignalSpec::unbounded("threshold", Sample::EPSILON),
         ]
     }
 
@@ -547,7 +547,7 @@ impl Processor for Changed {
 /// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
 #[derive(Clone, Debug, Default)]
 pub struct ZeroCrossing {
-    last: f64,
+    last: Sample,
 }
 
 impl Processor for ZeroCrossing {

@@ -16,7 +16,7 @@
   - `builder` API for ergonomically building signal flow graphs
 - Runtime capable of running signal flow graphs, either in realtime or offline
 - Save rendered audio to WAV files
-- Exclusively uses `f64` audio samples internally for highest precision
+- Uses `f64` audio samples by default (can be set to `f32` with cargo feature `f32_samples`)
 - No custom unsafe code, completely safe API
 
 ## Examples

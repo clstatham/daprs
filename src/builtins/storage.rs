@@ -27,8 +27,8 @@ use crate::prelude::*;
 #[derive(Clone, Debug)]
 pub struct AudioBuffer {
     buffer: SignalBuffer,
-    sample_rate: f64,
-    index: f64,
+    sample_rate: Sample,
+    index: Sample,
 }
 
 impl AudioBuffer {
@@ -57,7 +57,7 @@ impl Processor for AudioBuffer {
         ]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -105,9 +105,9 @@ impl Processor for AudioBuffer {
                     let index = index as i64;
 
                     if index < 0 {
-                        self.index = buffer.len() as f64 + index as f64;
+                        self.index = buffer.len() as Sample + index as Sample;
                     } else {
-                        self.index = index as f64;
+                        self.index = index as Sample;
                     }
 
                     *out = buffer[self.index as usize];

@@ -15,12 +15,12 @@ use std::ops::{
 #[derive(Clone, Debug)]
 
 pub struct Constant {
-    value: f64,
+    value: Sample,
 }
 
 impl Constant {
     /// Creates a new constant processor with the given value.
-    pub fn new(value: f64) -> Self {
+    pub fn new(value: Sample) -> Self {
         Self { value }
     }
 }
@@ -57,7 +57,7 @@ impl GraphBuilder {
     /// A processor that outputs a constant value.
     ///
     /// See also: [`Constant`].
-    pub fn constant(&self, value: f64) -> Node {
+    pub fn constant(&self, value: Sample) -> Node {
         self.add(Constant::new(value))
     }
 }
@@ -96,7 +96,7 @@ impl Processor for MidiToFreq {
             inputs.iter_input_as_samples(0)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
-            *freq = (2.0_f64).powf((note - 69.0) / 12.0) * 440.0;
+            *freq = Sample::powf(2.0, (note - 69.0) / 12.0) * 440.0;
         }
 
         Ok(())
@@ -174,7 +174,7 @@ macro_rules! impl_binary_proc {
                 ) {
                     debug_assert!(in1.is_finite());
                     debug_assert!(in2.is_finite());
-                    *sample = f64::$method(in1, in2);
+                    *sample = Sample::$method(in1, in2);
                 }
 
                 Ok(())

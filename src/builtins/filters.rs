@@ -1,10 +1,8 @@
 //! Built-in filters for processing audio signals.
 
-use std::f64::consts::PI;
+use crate::{prelude::*, signal::PI};
 
-use crate::prelude::*;
-
-const THERMAL: f64 = 0.000025;
+const THERMAL: Sample = 0.000025;
 
 /// A 4-pole low-pass filter based on the Moog ladder filter.
 ///
@@ -23,18 +21,18 @@ const THERMAL: f64 = 0.000025;
 /// | `0` | `out` | `Sample` | The filtered output signal. |
 #[derive(Clone, Debug)]
 pub struct MoogLadder {
-    sample_rate: f64,
-    stage: [f64; 4],
-    stage_tanh: [f64; 3],
-    delay: [f64; 6],
-    tune: f64,
-    acr: f64,
-    res_quad: f64,
+    sample_rate: Sample,
+    stage: [Sample; 4],
+    stage_tanh: [Sample; 3],
+    delay: [Sample; 6],
+    tune: Sample,
+    acr: Sample,
+    res_quad: Sample,
 
     /// The cutoff frequency of the filter.
-    pub cutoff: f64,
+    pub cutoff: Sample,
     /// The resonance of the filter.
-    pub resonance: f64,
+    pub resonance: Sample,
 }
 
 impl Default for MoogLadder {
@@ -55,7 +53,7 @@ impl Default for MoogLadder {
 
 impl MoogLadder {
     /// Creates a new Moog ladder filter with the given cutoff frequency and resonance.
-    pub fn new(cutoff: f64, resonance: f64) -> Self {
+    pub fn new(cutoff: Sample, resonance: Sample) -> Self {
         Self {
             cutoff,
             resonance,
@@ -77,7 +75,7 @@ impl Processor for MoogLadder {
         vec![SignalSpec::unbounded("out", 0.0)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -105,22 +103,22 @@ impl Processor for MoogLadder {
 
             let fcr = 1.8730 * fc3 + 0.4955 * fc2 - 0.6490 * fc + 0.9988;
             self.acr = -3.9364 * fc2 + 1.8409 * fc + 0.9968;
-            self.tune = (1.0 - f64::exp(-((2.0 * PI) * f * fcr))) / THERMAL;
+            self.tune = (1.0 - Sample::exp(-((2.0 * PI) * f * fcr))) / THERMAL;
             self.res_quad = 4.0 * self.resonance * self.acr;
 
             // oversample
             for _ in 0..2 {
                 let mut inp = in_signal - self.res_quad * self.delay[5];
                 self.stage[0] =
-                    self.delay[0] + self.tune * (f64::tanh(inp * THERMAL) - self.stage_tanh[0]);
+                    self.delay[0] + self.tune * (Sample::tanh(inp * THERMAL) - self.stage_tanh[0]);
                 self.delay[0] = self.stage[0];
                 for k in 1..4 {
                     inp = self.stage[k - 1];
-                    self.stage_tanh[k - 1] = f64::tanh(inp * THERMAL);
+                    self.stage_tanh[k - 1] = Sample::tanh(inp * THERMAL);
                     if k == 3 {
                         self.stage[k] = self.delay[k]
                             + self.tune
-                                * (self.stage_tanh[k - 1] - f64::tanh(self.delay[k] * THERMAL));
+                                * (self.stage_tanh[k - 1] - Sample::tanh(self.delay[k] * THERMAL));
                     } else {
                         self.stage[k] = self.delay[k]
                             + self.tune * (self.stage_tanh[k - 1] - self.stage_tanh[k]);
@@ -158,25 +156,25 @@ impl Processor for MoogLadder {
 /// | `0` | `out` | `Sample` | The filtered output signal. |
 #[derive(Clone, Debug)]
 pub struct Biquad {
-    sample_rate: f64,
+    sample_rate: Sample,
     /// The a0 coefficient: amount of input signal that contributes to the output.
-    pub a0: f64,
+    pub a0: Sample,
     /// The a1 coefficient: amount of input signal delayed by 1 sample that contributes to the output.
-    pub a1: f64,
+    pub a1: Sample,
     /// The a2 coefficient: amount of input signal delayed by 2 samples that contributes to the output.
-    pub a2: f64,
+    pub a2: Sample,
     /// The b1 coefficient: amount of output signal delayed by 1 sample that contributes to the output.
-    pub b1: f64,
+    pub b1: Sample,
     /// The b2 coefficient: amount of output signal delayed by 2 samples that contributes to the output.
-    pub b2: f64,
+    pub b2: Sample,
 
     // input state
-    x1: f64,
-    x2: f64,
+    x1: Sample,
+    x2: Sample,
 
     // output state
-    y1: f64,
-    y2: f64,
+    y1: Sample,
+    y2: Sample,
 }
 
 impl Default for Biquad {
@@ -198,7 +196,7 @@ impl Default for Biquad {
 
 impl Biquad {
     /// Creates a new biquad filter with the given coefficients.
-    pub fn new(a0: f64, a1: f64, a2: f64, b1: f64, b2: f64) -> Self {
+    pub fn new(a0: Sample, a1: Sample, a2: Sample, b1: Sample, b2: Sample) -> Self {
         Self {
             a0,
             a1,
@@ -226,7 +224,7 @@ impl Processor for Biquad {
         vec![SignalSpec::unbounded("out", 0.0)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -334,28 +332,28 @@ impl std::fmt::Display for BiquadType {
 /// | `0` | `out` | `Sample` | The filtered output signal. |
 #[derive(Clone, Debug)]
 pub struct AutoBiquad {
-    sample_rate: f64,
+    sample_rate: Sample,
 
     // biquad state
-    a0: f64,
-    a1: f64,
-    a2: f64,
-    b1: f64,
-    b2: f64,
-    x1: f64,
-    x2: f64,
-    y1: f64,
-    y2: f64,
+    a0: Sample,
+    a1: Sample,
+    a2: Sample,
+    b1: Sample,
+    b2: Sample,
+    x1: Sample,
+    x2: Sample,
+    y1: Sample,
+    y2: Sample,
 
     // the type of biquad filter
     biquad_type: BiquadType,
 
     /// The cutoff frequency of the filter.
-    pub cutoff: f64,
+    pub cutoff: Sample,
     /// The Q/resonance factor of the filter.
-    pub q: f64,
+    pub q: Sample,
     /// The gain of the filter.
-    pub gain: f64,
+    pub gain: Sample,
 }
 
 impl Default for AutoBiquad {
@@ -381,7 +379,7 @@ impl Default for AutoBiquad {
 
 impl AutoBiquad {
     /// Creates a new auto biquad filter with the given type, frequency, Q, and gain.
-    pub fn new(biquad_type: BiquadType, cutoff: f64, q: f64, gain: f64) -> Self {
+    pub fn new(biquad_type: BiquadType, cutoff: Sample, q: Sample, gain: Sample) -> Self {
         let mut this = Self {
             biquad_type,
             cutoff,
@@ -399,49 +397,49 @@ impl AutoBiquad {
     }
 
     /// Creates a new low-pass biquad filter with the given frequency and Q.
-    pub fn lowpass(cutoff: f64, q: f64) -> Self {
+    pub fn lowpass(cutoff: Sample, q: Sample) -> Self {
         let mut this = Self::new(BiquadType::LowPass, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
     /// Creates a new high-pass biquad filter with the given frequency and Q.
-    pub fn highpass(cutoff: f64, q: f64) -> Self {
+    pub fn highpass(cutoff: Sample, q: Sample) -> Self {
         let mut this = Self::new(BiquadType::HighPass, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
     /// Creates a new band-pass biquad filter with the given frequency and Q.
-    pub fn bandpass(cutoff: f64, q: f64) -> Self {
+    pub fn bandpass(cutoff: Sample, q: Sample) -> Self {
         let mut this = Self::new(BiquadType::BandPass, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
     /// Creates a new notch biquad filter with the given frequency and Q.
-    pub fn notch(cutoff: f64, q: f64) -> Self {
+    pub fn notch(cutoff: Sample, q: Sample) -> Self {
         let mut this = Self::new(BiquadType::Notch, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
     /// Creates a new peak biquad filter with the given frequency, Q, and gain.
-    pub fn peak(cutoff: f64, q: f64, gain: f64) -> Self {
+    pub fn peak(cutoff: Sample, q: Sample, gain: Sample) -> Self {
         let mut this = Self::new(BiquadType::Peak, cutoff, q, gain);
         this.set_coefficients();
         this
     }
 
     /// Creates a new low-shelf biquad filter with the given frequency, Q, and gain.
-    pub fn lowshelf(cutoff: f64, q: f64, gain: f64) -> Self {
+    pub fn lowshelf(cutoff: Sample, q: Sample, gain: Sample) -> Self {
         let mut this = Self::new(BiquadType::LowShelf, cutoff, q, gain);
         this.set_coefficients();
         this
     }
 
     /// Creates a new high-shelf biquad filter with the given frequency, Q, and gain.
-    pub fn highshelf(cutoff: f64, q: f64, gain: f64) -> Self {
+    pub fn highshelf(cutoff: Sample, q: Sample, gain: Sample) -> Self {
         let mut this = Self::new(BiquadType::HighShelf, cutoff, q, gain);
         this.set_coefficients();
         this
@@ -454,8 +452,8 @@ impl AutoBiquad {
             self.q = 0.01;
         }
 
-        let v = 10.0_f64.powf(self.gain.abs() / 20.0);
-        let k = f64::tan(PI * self.cutoff / self.sample_rate);
+        let v = Sample::powf(10.0, self.gain.abs() / 20.0);
+        let k = Sample::tan(PI * self.cutoff / self.sample_rate);
 
         match self.biquad_type {
             BiquadType::LowPass => {
@@ -509,36 +507,36 @@ impl AutoBiquad {
             }
             BiquadType::LowShelf => {
                 if self.gain >= 0.0 {
-                    let norm = 1.0 / (1.0 + f64::sqrt(2.0) * k + k * k);
-                    self.a0 = (1.0 + f64::sqrt(2.0 * v) * k + v * k * k) * norm;
+                    let norm = 1.0 / (1.0 + Sample::sqrt(2.0) * k + k * k);
+                    self.a0 = (1.0 + Sample::sqrt(2.0 * v) * k + v * k * k) * norm;
                     self.a1 = 2.0 * (v * k * k - 1.0) * norm;
-                    self.a2 = (1.0 - f64::sqrt(2.0 * v) * k + v * k * k) * norm;
+                    self.a2 = (1.0 - Sample::sqrt(2.0 * v) * k + v * k * k) * norm;
                     self.b1 = 2.0 * (k * k - 1.0) * norm;
-                    self.b2 = (1.0 - f64::sqrt(2.0) * k + k * k) * norm;
+                    self.b2 = (1.0 - Sample::sqrt(2.0) * k + k * k) * norm;
                 } else {
-                    let norm = 1.0 / (1.0 + f64::sqrt(2.0) * k + k * k);
-                    self.a0 = (v + f64::sqrt(2.0 * v) * k + k * k) * norm;
+                    let norm = 1.0 / (1.0 + Sample::sqrt(2.0) * k + k * k);
+                    self.a0 = (v + Sample::sqrt(2.0 * v) * k + k * k) * norm;
                     self.a1 = 2.0 * (k * k - v) * norm;
-                    self.a2 = (v - f64::sqrt(2.0 * v) * k + k * k) * norm;
+                    self.a2 = (v - Sample::sqrt(2.0 * v) * k + k * k) * norm;
                     self.b1 = 2.0 * (k * k - 1.0) * norm;
-                    self.b2 = (1.0 - f64::sqrt(2.0) * k + k * k) * norm;
+                    self.b2 = (1.0 - Sample::sqrt(2.0) * k + k * k) * norm;
                 }
             }
             BiquadType::HighShelf => {
                 if self.gain >= 0.0 {
-                    let norm = 1.0 / (1.0 + f64::sqrt(2.0) * k + k * k);
-                    self.a0 = (v + f64::sqrt(2.0 * v) * k + k * k) * norm;
+                    let norm = 1.0 / (1.0 + Sample::sqrt(2.0) * k + k * k);
+                    self.a0 = (v + Sample::sqrt(2.0 * v) * k + k * k) * norm;
                     self.a1 = 2.0 * (k * k - v) * norm;
-                    self.a2 = (v - f64::sqrt(2.0 * v) * k + k * k) * norm;
+                    self.a2 = (v - Sample::sqrt(2.0 * v) * k + k * k) * norm;
                     self.b1 = 2.0 * (k * k - 1.0) * norm;
-                    self.b2 = (1.0 - f64::sqrt(2.0) * k + k * k) * norm;
+                    self.b2 = (1.0 - Sample::sqrt(2.0) * k + k * k) * norm;
                 } else {
-                    let norm = 1.0 / (v + f64::sqrt(2.0 * v) * k + k * k);
-                    self.a0 = (1.0 + f64::sqrt(2.0) * k + k * k) * norm;
+                    let norm = 1.0 / (v + Sample::sqrt(2.0 * v) * k + k * k);
+                    self.a0 = (1.0 + Sample::sqrt(2.0) * k + k * k) * norm;
                     self.a1 = 2.0 * (k * k - 1.0) * norm;
-                    self.a2 = (1.0 - f64::sqrt(2.0) * k + k * k) * norm;
+                    self.a2 = (1.0 - Sample::sqrt(2.0) * k + k * k) * norm;
                     self.b1 = 2.0 * (v * k * k - 1.0) * norm;
-                    self.b2 = (v - f64::sqrt(2.0 * v) * k + v * k * k) * norm;
+                    self.b2 = (v - Sample::sqrt(2.0 * v) * k + v * k * k) * norm;
                 }
             }
         }
@@ -569,7 +567,7 @@ impl Processor for AutoBiquad {
         vec![SignalSpec::unbounded("out", 0.0)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
         self.set_coefficients();
     }
@@ -586,9 +584,9 @@ impl Processor for AutoBiquad {
             inputs.iter_input_as_samples(2)?,
             inputs.iter_input_as_samples(3)?
         ) {
-            let frequency_changed = (frequency - self.cutoff).abs() > f64::EPSILON;
-            let q_changed = (q - self.q).abs() > f64::EPSILON;
-            let gain_changed = (gain - self.gain).abs() > f64::EPSILON;
+            let frequency_changed = (frequency - self.cutoff).abs() > Sample::EPSILON;
+            let q_changed = (q - self.q).abs() > Sample::EPSILON;
+            let gain_changed = (gain - self.gain).abs() > Sample::EPSILON;
 
             if frequency_changed || q_changed || gain_changed {
                 self.cutoff = frequency;

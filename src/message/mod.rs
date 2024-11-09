@@ -2,6 +2,8 @@
 
 use std::fmt::{Debug, Display};
 
+use crate::signal::Sample;
+
 /// A message that can be sent between processors.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -11,7 +13,7 @@ pub enum Message {
     /// An integer message.
     Int(i64),
     /// A float message.
-    Float(f64),
+    Float(Sample),
     /// A string message.
     String(String),
     /// A list of messages.
@@ -67,7 +69,7 @@ impl Message {
     ///
     /// This does not attempt to *cast* the message to a float, but rather checks if the message is already `Message::Float`.
     #[inline]
-    pub fn as_float(&self) -> Option<f64> {
+    pub fn as_float(&self) -> Option<Sample> {
         match self {
             Message::Float(x) => Some(*x),
             _ => None,
@@ -140,9 +142,9 @@ impl Message {
 
     /// Attempts to cast the message to a float using whatever method is most appropriate.
     #[inline]
-    pub fn cast_to_float(&self) -> Option<f64> {
+    pub fn cast_to_float(&self) -> Option<Sample> {
         match self {
-            Message::Int(i) => Some(*i as f64),
+            Message::Int(i) => Some(*i as Sample),
             Message::Float(x) => Some(*x),
             Message::String(s) => s.parse().ok(),
             _ => None,
@@ -168,8 +170,8 @@ impl From<i64> for Message {
     }
 }
 
-impl From<f64> for Message {
-    fn from(x: f64) -> Self {
+impl From<Sample> for Message {
+    fn from(x: Sample) -> Self {
         Message::Float(x)
     }
 }

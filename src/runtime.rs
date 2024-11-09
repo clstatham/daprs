@@ -174,7 +174,7 @@ impl Runtime {
     /// Resets the runtime with the given sample rate and block size.
     /// This will potentially reallocate internal buffers.
     #[inline(never)]
-    pub fn reset(&mut self, sample_rate: f64, block_size: usize) -> RuntimeResult<()> {
+    pub fn reset(&mut self, sample_rate: Sample, block_size: usize) -> RuntimeResult<()> {
         self.graph.allocate_visitor();
 
         let mut max_edges = 0;
@@ -339,7 +339,7 @@ impl Runtime {
     pub fn run_offline(
         &mut self,
         duration: Duration,
-        sample_rate: f64,
+        sample_rate: Sample,
         block_size: usize,
     ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
         self.run_offline_inner(duration, sample_rate, block_size, false)
@@ -351,7 +351,7 @@ impl Runtime {
     pub fn simulate(
         &mut self,
         duration: Duration,
-        sample_rate: f64,
+        sample_rate: Sample,
         block_size: usize,
     ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
         self.run_offline_inner(duration, sample_rate, block_size, true)
@@ -360,11 +360,11 @@ impl Runtime {
     fn run_offline_inner(
         &mut self,
         duration: Duration,
-        sample_rate: f64,
+        sample_rate: Sample,
         block_size: usize,
         add_delay: bool,
     ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
-        let secs = duration.as_secs_f64();
+        let secs = duration.as_secs_f64() as Sample;
         let samples = (sample_rate * secs) as usize;
 
         self.reset(sample_rate, block_size)?;
@@ -399,7 +399,7 @@ impl Runtime {
 
             if add_delay {
                 std::thread::sleep(Duration::from_secs_f64(
-                    actual_block_size as f64 / sample_rate,
+                    actual_block_size as f64 / sample_rate as f64,
                 ));
             }
 
@@ -414,7 +414,7 @@ impl Runtime {
         &mut self,
         file_path: impl AsRef<std::path::Path>,
         duration: Duration,
-        sample_rate: f64,
+        sample_rate: Sample,
         block_size: usize,
     ) -> RuntimeResult<()> {
         let outputs = self.run_offline(duration, sample_rate, block_size)?;
@@ -522,7 +522,7 @@ impl Runtime {
 
         log::info!("Configuration: {:#?}", config);
 
-        let audio_rate = config.sample_rate().0 as f64;
+        let audio_rate = config.sample_rate().0 as Sample;
         let initial_block_size = audio_rate as usize / 100;
 
         self.reset(audio_rate, initial_block_size)?;
@@ -590,10 +590,10 @@ impl Runtime {
         graph_rx: mpsc::Receiver<Graph>,
     ) -> RuntimeResult<cpal::Stream>
     where
-        T: cpal::SizedSample + cpal::FromSample<f64>,
+        T: cpal::SizedSample + cpal::FromSample<Sample>,
     {
         let channels = config.channels as usize;
-        let audio_rate = config.sample_rate.0 as f64;
+        let audio_rate = config.sample_rate.0 as Sample;
 
         let stream = device
             .build_output_stream(

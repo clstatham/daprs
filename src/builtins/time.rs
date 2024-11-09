@@ -23,16 +23,16 @@ use crate::{
 #[derive(Debug, Clone)]
 
 pub struct Metro {
-    period: f64,
-    last_time: f64,
-    next_time: f64,
-    time: f64,
-    sample_rate: f64,
+    period: Sample,
+    last_time: Sample,
+    next_time: Sample,
+    time: Sample,
+    sample_rate: Sample,
 }
 
 impl Metro {
     /// Creates a new metronome processor with the given period.
-    pub fn new(period: f64) -> Self {
+    pub fn new(period: Sample) -> Self {
         Self {
             period,
             last_time: 0.0,
@@ -75,7 +75,7 @@ impl Processor for Metro {
         vec![SignalSpec::unbounded("out", Signal::new_message_none())]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 

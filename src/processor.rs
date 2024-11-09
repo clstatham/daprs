@@ -322,7 +322,7 @@ pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
 
     /// Called whenever the runtime's sample rates or block size change.
     #[allow(unused)]
-    fn resize_buffers(&mut self, sample_rate: f64, block_size: usize) {}
+    fn resize_buffers(&mut self, sample_rate: Sample, block_size: usize) {}
 
     /// Processes the given input buffers and writes the results to the given output buffers.
     ///

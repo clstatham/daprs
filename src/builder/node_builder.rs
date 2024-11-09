@@ -344,15 +344,13 @@ impl Output {
 }
 
 mod sealed {
-    use super::Param;
-
     pub trait Sealed {}
     impl Sealed for crate::graph::NodeIndex {}
     impl Sealed for super::Node {}
     impl Sealed for &super::Node {}
     impl Sealed for super::Message {}
-    impl Sealed for Param {}
-    impl Sealed for f64 {}
+    impl Sealed for super::Param {}
+    impl Sealed for crate::signal::Sample {}
     impl Sealed for i64 {}
     impl Sealed for u32 {}
     impl Sealed for &str {}
@@ -397,7 +395,7 @@ impl IntoNode for NodeIndex {
     }
 }
 
-impl IntoNode for f64 {
+impl IntoNode for Sample {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.constant(self)
     }
@@ -531,7 +529,7 @@ macro_rules! impl_binary_node_ops {
             }
         }
 
-        impl std::ops::$std_op<Node> for f64 {
+        impl std::ops::$std_op<Node> for Sample {
             type Output = Node;
 
             fn $name(self, other: Node) -> Node {
@@ -539,7 +537,7 @@ macro_rules! impl_binary_node_ops {
             }
         }
 
-        impl std::ops::$std_op<&Node> for f64 {
+        impl std::ops::$std_op<&Node> for Sample {
             type Output = Node;
 
             fn $name(self, other: &Node) -> Node {

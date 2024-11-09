@@ -2,7 +2,11 @@
 
 use rand::prelude::Distribution;
 
-use crate::{prelude::*, processor::ProcessorOutputs};
+use crate::{
+    prelude::*,
+    processor::ProcessorOutputs,
+    signal::{PI, TAU},
+};
 
 /// A phase accumulator.
 ///
@@ -24,9 +28,9 @@ use crate::{prelude::*, processor::ProcessorOutputs};
 #[derive(Clone, Debug, Default)]
 pub struct PhaseAccumulator {
     // phase accumulator
-    t: f64,
+    t: Sample,
     // phase increment per sample
-    t_step: f64,
+    t_step: Sample,
 }
 
 impl Processor for PhaseAccumulator {
@@ -85,21 +89,21 @@ impl Processor for PhaseAccumulator {
 #[derive(Clone, Debug)]
 pub struct SineOscillator {
     // phase accumulator
-    t: f64,
+    t: Sample,
     // phase increment per sample
-    t_step: f64,
+    t_step: Sample,
     // sample rate
-    sample_rate: f64,
+    sample_rate: Sample,
 
     /// The frequency of the sine wave in Hz.
-    pub frequency: f64,
+    pub frequency: Sample,
     /// The phase of the sine wave in radians.
-    pub phase: f64,
+    pub phase: Sample,
 }
 
 impl SineOscillator {
     /// Creates a new sine wave oscillator.
-    pub fn new(frequency: f64) -> Self {
+    pub fn new(frequency: Sample) -> Self {
         Self {
             frequency,
             ..Default::default()
@@ -132,7 +136,7 @@ impl Processor for SineOscillator {
         vec![SignalSpec::unbounded("out", 0.0)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -152,7 +156,7 @@ impl Processor for SineOscillator {
             }
 
             // calculate the sine wave using the phase accumulator
-            let sine = (self.t * std::f64::consts::TAU + phase).sin();
+            let sine = (self.t * TAU + phase).sin();
             *out = sine;
 
             // increment the phase accumulator
@@ -182,16 +186,16 @@ impl Processor for SineOscillator {
 #[derive(Clone, Debug)]
 pub struct SawOscillator {
     // phase accumulator
-    t: f64,
+    t: Sample,
     // phase increment per sample
-    t_step: f64,
+    t_step: Sample,
     // sample rate
-    sample_rate: f64,
+    sample_rate: Sample,
 
     /// The frequency of the sawtooth wave in Hz.
-    pub frequency: f64,
+    pub frequency: Sample,
     /// The phase of the sawtooth wave in radians.
-    pub phase: f64,
+    pub phase: Sample,
 }
 
 impl Default for SawOscillator {
@@ -208,7 +212,7 @@ impl Default for SawOscillator {
 
 impl SawOscillator {
     /// Creates a new sawtooth wave oscillator.
-    pub fn new(frequency: f64) -> Self {
+    pub fn new(frequency: Sample) -> Self {
         Self {
             frequency,
             ..Default::default()
@@ -229,7 +233,7 @@ impl Processor for SawOscillator {
         vec![SignalSpec::unbounded("out", 0.0)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -311,7 +315,7 @@ impl Processor for NoiseOscillator {
         let mut rng = rand::thread_rng();
         for out in itertools::izip!(outputs.iter_output_mut_as_samples(0)?) {
             // generate a random number
-            *out = self.distribution.sample(&mut rng);
+            *out = self.distribution.sample(&mut rng) as Sample;
         }
 
         Ok(())
@@ -335,13 +339,13 @@ impl Processor for NoiseOscillator {
 /// | `0` | `out` | `Sample` | The output sawtooth wave signal. |
 #[derive(Clone, Debug)]
 pub struct BlSawOscillator {
-    p: f64,
-    dp: f64,
-    saw: f64,
-    sample_rate: f64,
+    p: Sample,
+    dp: Sample,
+    saw: Sample,
+    sample_rate: Sample,
 
     /// The frequency of the sawtooth wave in Hz.
-    pub frequency: f64,
+    pub frequency: Sample,
 }
 
 impl Default for BlSawOscillator {
@@ -358,7 +362,7 @@ impl Default for BlSawOscillator {
 
 impl BlSawOscillator {
     /// Creates a new band-limited sawtooth wave oscillator.
-    pub fn new(frequency: f64) -> Self {
+    pub fn new(frequency: Sample) -> Self {
         Self {
             frequency,
             ..Default::default()
@@ -375,7 +379,7 @@ impl Processor for BlSawOscillator {
         vec![SignalSpec::unbounded("out", 0.0)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -406,7 +410,7 @@ impl Processor for BlSawOscillator {
                 self.dp = -self.dp;
             }
 
-            let mut x = std::f64::consts::PI * self.p;
+            let mut x = PI * self.p;
             if x < 0.00001 {
                 x = 0.00001;
             }
@@ -425,20 +429,20 @@ const BL_SQUARE_MAX_HARMONICS: usize = 512;
 /// A free-running band-limited square wave oscillator.
 #[derive(Clone, Debug)]
 pub struct BlSquareOscillator {
-    sample_rate: f64,
+    sample_rate: Sample,
 
     // phase accumulator
-    t: f64,
+    t: Sample,
     // phase increment per sample
-    t_step: f64,
+    t_step: Sample,
 
     // band-limited square wave coefficients
-    coeff: Box<[f64; BL_SQUARE_MAX_HARMONICS]>,
+    coeff: Box<[Sample; BL_SQUARE_MAX_HARMONICS]>,
 
     /// The frequency of the square wave in Hz.
-    pub frequency: f64,
+    pub frequency: Sample,
     /// The pulse width of the square wave.
-    pub pulse_width: f64,
+    pub pulse_width: Sample,
 }
 
 impl Default for BlSquareOscillator {
@@ -449,7 +453,7 @@ impl Default for BlSquareOscillator {
 
 impl BlSquareOscillator {
     /// Creates a new band-limited square wave oscillator.
-    pub fn new(frequency: f64, pulse_width: f64) -> Self {
+    pub fn new(frequency: Sample, pulse_width: Sample) -> Self {
         Self {
             frequency,
             pulse_width,
@@ -473,7 +477,7 @@ impl Processor for BlSquareOscillator {
         vec![SignalSpec::unbounded("out", 0.0)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -500,15 +504,15 @@ impl Processor for BlSquareOscillator {
             let n_harm = (self.sample_rate / (self.frequency * 4.0)) as usize;
             self.coeff[0] = self.pulse_width - 0.5;
             for i in 1..n_harm + 1 {
-                self.coeff[i] = f64::sin(i as f64 * std::f64::consts::PI * self.pulse_width) * 2.0
-                    / (i as f64 * std::f64::consts::PI);
+                self.coeff[i] =
+                    Sample::sin(i as Sample * PI * self.pulse_width) * 2.0 / (i as Sample * PI);
             }
 
-            let theta = self.t * 2.0 * std::f64::consts::PI;
+            let theta = self.t * TAU;
 
             let mut square = 0.0;
             for i in 0..n_harm + 1 {
-                square += self.coeff[i] * (theta * i as f64).cos();
+                square += self.coeff[i] * (theta * i as Sample).cos();
             }
 
             self.t += self.t_step;

@@ -20,21 +20,21 @@ use crate::prelude::*;
 /// | `0` | `out` | `Sample` | The limited output signal. |
 #[derive(Debug, Clone)]
 pub struct PeakLimiter {
-    gain: f64,
-    sample_rate: f64,
-    envelope: f64,
+    gain: Sample,
+    sample_rate: Sample,
+    envelope: Sample,
 
     /// The threshold amplitude.
-    pub threshold: f64,
+    pub threshold: Sample,
     /// The attack factor.
-    pub attack: f64,
+    pub attack: Sample,
     /// The release factor.
-    pub release: f64,
+    pub release: Sample,
 }
 
 impl PeakLimiter {
     /// Creates a new peak limiter processor with the given default threshold, attack coefficient, and release coefficient.
-    pub fn new(threshold: f64, attack: f64, release: f64) -> Self {
+    pub fn new(threshold: Sample, attack: Sample, release: Sample) -> Self {
         Self {
             threshold,
             attack,
@@ -72,7 +72,7 @@ impl Processor for PeakLimiter {
         vec![SignalSpec::unbounded("out", 0.0)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: f64, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 

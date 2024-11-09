@@ -2,7 +2,7 @@ use raug::prelude::*;
 
 #[derive(Debug, Clone)]
 struct GainProc {
-    gain: f64,
+    gain: Sample,
 }
 
 impl Processor for GainProc {
