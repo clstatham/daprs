@@ -322,7 +322,9 @@ impl Processor for MessageToAudio {
         ) {
             if let Some(message) = message {
                 if let Some(sample) = message.cast_to_float() {
-                    *sample_out = Sample::new(sample);
+                    *sample_out = sample;
+                } else {
+                    *sample_out = 0.0;
                 }
             }
         }
@@ -366,7 +368,7 @@ impl Processor for AudioToMessage {
             inputs.iter_input_as_samples(0)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            *message_out = Some(Message::Float(sample.value()));
+            *message_out = Some(Message::Float(sample));
         }
 
         Ok(())
@@ -403,9 +405,8 @@ impl Processor for SampleRate {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        // let sample_rate_out = outputs.iter_output_mut_as_samples(0)?;
-        let sample_rate_out = outputs.output(0).as_sample_mut().unwrap();
-        sample_rate_out.fill(Sample::new(self.sample_rate));
+        let sample_rate_out = outputs.output_as_samples(0)?;
+        sample_rate_out.fill(self.sample_rate);
 
         Ok(())
     }
@@ -466,14 +467,11 @@ impl Processor for Smooth {
             inputs.iter_input_as_samples(1)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
-            let target = **target;
-            let factor = **factor;
-
             let factor = factor.clamp(0.0, 1.0);
 
             self.current = lerp(self.current, target, factor);
 
-            **out = self.current;
+            *out = self.current;
         }
 
         Ok(())
@@ -521,9 +519,6 @@ impl Processor for Changed {
             inputs.iter_input_as_samples(1)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            let in_signal = **in_signal;
-            let threshold = **threshold;
-
             if (self.last - in_signal).abs() > threshold {
                 *out_signal = Some(Message::Bang);
             } else {
@@ -573,8 +568,6 @@ impl Processor for ZeroCrossing {
             inputs.iter_input_as_samples(0)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            let in_signal = **in_signal;
-
             if (self.last < 0.0 && in_signal >= 0.0) || (self.last > 0.0 && in_signal <= 0.0) {
                 *out_signal = Some(Message::Bang);
             } else {
@@ -1068,16 +1061,14 @@ impl Processor for SampleAndHold {
             inputs.iter_input_as_messages(1)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
-            let in_signal = **in_signal;
-
             if trig.is_some() {
-                self.last = Some(Sample::new(in_signal));
+                self.last = Some(in_signal);
             }
 
             if let Some(last) = self.last {
                 *out_signal = last;
             } else {
-                *out_signal = Sample::new(0.0);
+                *out_signal = 0.0;
             }
         }
 

@@ -373,8 +373,7 @@ impl Runtime {
         let num_outputs: usize = self.graph.num_outputs();
 
         let mut outputs: Box<[Box<[Sample]>]> =
-            vec![vec![Sample::new(0.0); samples].into_boxed_slice(); num_outputs]
-                .into_boxed_slice();
+            vec![vec![0.0; samples].into_boxed_slice(); num_outputs].into_boxed_slice();
 
         let mut sample_count = 0;
         let mut last_block_size = 0;
@@ -434,7 +433,7 @@ impl Runtime {
         for sample_index in 0..num_samples {
             for channel_index in 0..num_channels {
                 let i = sample_index * num_channels + channel_index;
-                samples[i] = *outputs[channel_index][sample_index];
+                samples[i] = outputs[channel_index][sample_index];
             }
         }
 
@@ -617,7 +616,7 @@ impl Runtime {
                                 panic!("output {channel_idx} signal type mismatch");
                             };
                             let value = buffer[frame_idx];
-                            *sample = T::from_sample(*value);
+                            *sample = T::from_sample(value);
                         }
                     }
                 },

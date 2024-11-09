@@ -56,10 +56,10 @@ impl Processor for PhaseAccumulator {
             }
 
             // output the phase accumulator value
-            **out = self.t;
+            *out = self.t;
 
             // increment the phase accumulator
-            self.t_step = **increment;
+            self.t_step = increment;
             self.t += self.t_step;
         }
 
@@ -152,11 +152,11 @@ impl Processor for SineOscillator {
             }
 
             // calculate the sine wave using the phase accumulator
-            let sine = (self.t * std::f64::consts::TAU + **phase).sin();
-            **out = sine;
+            let sine = (self.t * std::f64::consts::TAU + phase).sin();
+            *out = sine;
 
             // increment the phase accumulator
-            self.t_step = **frequency / self.sample_rate;
+            self.t_step = frequency / self.sample_rate;
             self.t += self.t_step;
         }
 
@@ -249,10 +249,10 @@ impl Processor for SawOscillator {
             }
 
             // calculate the sawtooth wave using the phase accumulator
-            **out = (self.t + **phase) % 1.0;
+            *out = (self.t + phase) % 1.0;
 
             // increment the phase accumulator
-            self.t_step = **frequency / self.sample_rate;
+            self.t_step = frequency / self.sample_rate;
             self.t += self.t_step;
         }
 
@@ -308,9 +308,10 @@ impl Processor for NoiseOscillator {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
+        let mut rng = rand::thread_rng();
         for out in itertools::izip!(outputs.iter_output_mut_as_samples(0)?) {
             // generate a random number
-            **out = self.distribution.sample(&mut rand::thread_rng());
+            *out = self.distribution.sample(&mut rng);
         }
 
         Ok(())
@@ -388,12 +389,12 @@ impl Processor for BlSawOscillator {
             outputs.iter_output_mut_as_samples(0)?,
             inputs.iter_input_as_samples(0)?
         ) {
-            if **frequency <= 0.0 {
-                **out = 0.0;
+            if frequency <= 0.0 {
+                *out = 0.0;
                 continue;
             }
 
-            let pmax = 0.5 * self.sample_rate / **frequency;
+            let pmax = 0.5 * self.sample_rate / frequency;
             let dc = -0.498 / pmax;
 
             self.p += self.dp;
@@ -412,7 +413,7 @@ impl Processor for BlSawOscillator {
 
             self.saw = 0.995 * self.saw + dc + x.sin() / x;
 
-            **out = self.saw;
+            *out = self.saw;
         }
 
         Ok(())
@@ -486,13 +487,13 @@ impl Processor for BlSquareOscillator {
             inputs.iter_input_as_samples(0)?,
             inputs.iter_input_as_samples(1)?
         ) {
-            if **frequency <= 0.0 {
-                **out = 0.0;
+            if frequency <= 0.0 {
+                *out = 0.0;
                 continue;
             }
 
-            self.frequency = **frequency;
-            self.pulse_width = **pulse_width;
+            self.frequency = frequency;
+            self.pulse_width = pulse_width;
 
             self.t_step = self.frequency / self.sample_rate;
 
@@ -512,7 +513,7 @@ impl Processor for BlSquareOscillator {
 
             self.t += self.t_step;
 
-            **out = square;
+            *out = square;
         }
 
         Ok(())

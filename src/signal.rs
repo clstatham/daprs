@@ -1,268 +1,17 @@
 //! Signal types and operations.
 
 use std::{
-    fmt::{Debug, Display},
-    ops::{
-        Add, AddAssign, Deref, DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub,
-        SubAssign,
-    },
+    fmt::Debug,
+    ops::{Deref, DerefMut},
     path::Path,
 };
 
 use crate::{message::Message, prelude::SignalSpec};
 
-/// A single 64-bit floating-point sample of signal data.
-#[derive(Default, Clone, Copy, PartialEq, PartialOrd)]
-#[repr(transparent)]
-pub struct Sample(f64);
-
-impl Sample {
-    /// The maximum value of a sample.
-    pub const MAX: Self = Sample(f64::MAX);
-    /// The minimum value of a sample.
-    pub const MIN: Self = Sample(f64::MIN);
-    /// The value `1.0`.
-    pub const ONE: Self = Sample(1.0);
-    /// The value `0.0`.
-    pub const ZERO: Self = Sample(0.0);
-    /// The value `-1.0`.
-    pub const NEG_ONE: Self = Sample(-1.0);
-    /// The value `e` (Euler's number).
-    pub const E: Self = Sample(std::f64::consts::E);
-    /// The value `π` (pi).
-    pub const PI: Self = Sample(std::f64::consts::PI);
-    /// The value `τ` (tau).
-    pub const TAU: Self = Sample(std::f64::consts::TAU);
-    /// The value `2π`.
-    pub const TWO_PI: Self = Sample(std::f64::consts::TAU);
-
-    /// Creates a new sample with the given value.
-    #[inline]
-    pub const fn new(value: f64) -> Self {
-        Sample(value)
-    }
-
-    /// Returns the floating-point value of the sample.
-    #[inline]
-    pub const fn value(self) -> f64 {
-        self.0
-    }
-
-    /// Returns `true` if the sample is greater than zero.
-    #[inline]
-    pub fn is_truthy(self) -> bool {
-        self.0 > 0.0
-    }
-
-    /// Returns `true` if the sample is less than or equal to zero.
-    #[inline]
-    pub fn is_falsy(self) -> bool {
-        self.0 <= 0.0
-    }
-
-    /// Returns the absolute value of the sample.
-    #[inline]
-    pub fn abs(self) -> Self {
-        Sample(self.0.abs())
-    }
-
-    /// Returns the sine of the value.
-    #[inline]
-    pub fn sin(self) -> Self {
-        Sample(self.0.sin())
-    }
-
-    /// Returns the cosine of the value.
-    #[inline]
-    pub fn cos(self) -> Self {
-        Sample(self.0.cos())
-    }
-
-    /// Returns the tangent of the value.
-    #[inline]
-    pub fn tan(self) -> Self {
-        Sample(self.0.tan())
-    }
-
-    /// Returns the arcsine sine of the value.
-    #[inline]
-    pub fn asin(self) -> Self {
-        Sample(self.0.asin())
-    }
-
-    /// Returns the arccosine of the value.
-    #[inline]
-    pub fn acos(self) -> Self {
-        Sample(self.0.acos())
-    }
-
-    /// Returns the arctangent of the value.
-    #[inline]
-    pub fn atan(self) -> Self {
-        Sample(self.0.atan())
-    }
-
-    /// Returns the arctangent of the ratio of the two values.
-    #[inline]
-    pub fn atan2(self, other: Self) -> Self {
-        Sample(self.0.atan2(other.0))
-    }
-
-    /// Converts an amplitude value to a decibel value.
-    #[inline]
-    pub fn amp_to_db(self) -> Self {
-        if self.0 <= 0.0 {
-            Self::MIN
-        } else {
-            Self(20.0 * self.0.log10())
-        }
-    }
-
-    /// Converts a decibel value to an amplitude value.
-    #[inline]
-    pub fn db_to_amp(self) -> Self {
-        Self(10.0f64.powf(self.0 / 20.0))
-    }
-}
-
-impl Debug for Sample {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-impl From<Sample> for f64 {
-    #[inline]
-    fn from(sample: Sample) -> Self {
-        sample.0
-    }
-}
-
-impl From<f64> for Sample {
-    #[inline]
-    fn from(value: f64) -> Self {
-        Sample(value)
-    }
-}
-
-impl AsRef<f64> for Sample {
-    #[inline]
-    fn as_ref(&self) -> &f64 {
-        &self.0
-    }
-}
-
-impl Deref for Sample {
-    type Target = f64;
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Sample {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Add for Sample {
-    type Output = Self;
-
-    #[inline]
-    fn add(self, rhs: Self) -> Self::Output {
-        Sample(self.0 + rhs.0)
-    }
-}
-
-impl Sub for Sample {
-    type Output = Self;
-
-    #[inline]
-    fn sub(self, rhs: Self) -> Self::Output {
-        Sample(self.0 - rhs.0)
-    }
-}
-
-impl Mul for Sample {
-    type Output = Self;
-
-    #[inline]
-    fn mul(self, rhs: Self) -> Self::Output {
-        Sample(self.0 * rhs.0)
-    }
-}
-
-impl Div for Sample {
-    type Output = Self;
-
-    #[inline]
-    fn div(self, rhs: Self) -> Self::Output {
-        Sample(self.0 / rhs.0)
-    }
-}
-
-impl Rem for Sample {
-    type Output = Self;
-
-    #[inline]
-    fn rem(self, rhs: Self) -> Self::Output {
-        Sample(self.0 % rhs.0)
-    }
-}
-
-impl AddAssign for Sample {
-    #[inline]
-    fn add_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0;
-    }
-}
-
-impl SubAssign for Sample {
-    #[inline]
-    fn sub_assign(&mut self, rhs: Self) {
-        self.0 -= rhs.0;
-    }
-}
-
-impl MulAssign for Sample {
-    #[inline]
-    fn mul_assign(&mut self, rhs: Self) {
-        self.0 *= rhs.0;
-    }
-}
-
-impl DivAssign for Sample {
-    #[inline]
-    fn div_assign(&mut self, rhs: Self) {
-        self.0 /= rhs.0;
-    }
-}
-
-impl RemAssign for Sample {
-    #[inline]
-    fn rem_assign(&mut self, rhs: Self) {
-        self.0 %= rhs.0;
-    }
-}
-
-impl Neg for Sample {
-    type Output = Self;
-
-    #[inline]
-    fn neg(self) -> Self::Output {
-        Sample(-self.0)
-    }
-}
-
-impl Display for Sample {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+#[cfg(feature = "f32_samples")]
+pub type Sample = f32;
+#[cfg(not(feature = "f32_samples"))]
+pub type Sample = f64;
 
 /// An owning, fixed-length array of [`Sample`]s.
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
@@ -346,7 +95,10 @@ impl Buffer<Sample> {
         if reader.spec().channels == 1 {
             let samples: Result<Vec<_>, hound::Error> = reader
                 .into_samples::<f32>()
-                .map(|sample| Ok(Sample(sample? as f64)))
+                .map(|sample| {
+                    #[allow(clippy::useless_conversion)]
+                    Ok(sample?.into())
+                })
                 .collect();
             let samples = samples?;
 
@@ -357,7 +109,10 @@ impl Buffer<Sample> {
             let samples: Result<Vec<_>, hound::Error> = reader
                 .into_samples::<f32>()
                 .step_by(channels as usize)
-                .map(|sample| Ok(Sample(sample? as f64)))
+                .map(|sample| {
+                    #[allow(clippy::useless_conversion)]
+                    Ok(sample?.into())
+                })
                 .collect();
             let samples = samples?;
 
@@ -377,7 +132,8 @@ impl Buffer<Sample> {
         };
         let mut writer = hound::WavWriter::create(path, spec)?;
         for sample in self.buf.iter() {
-            writer.write_sample(sample.0 as f32)?;
+            #[allow(clippy::useless_conversion)]
+            writer.write_sample(*sample as f32)?;
         }
         writer.finalize()?;
         Ok(())
@@ -386,58 +142,51 @@ impl Buffer<Sample> {
     /// Returns the maximum value in the buffer.
     #[inline]
     pub fn max(&self) -> Sample {
-        self.buf
-            .iter()
-            .cloned()
-            .fold(Sample::MIN, |a, b| a.max(*b).into())
+        self.buf.iter().copied().fold(Sample::MIN, |a, b| a.max(b))
     }
 
     /// Returns the minimum value in the buffer.
     #[inline]
     pub fn min(&self) -> Sample {
-        self.buf
-            .iter()
-            .cloned()
-            .fold(Sample::MAX, |a, b| a.min(*b).into())
+        self.buf.iter().copied().fold(Sample::MAX, |a, b| a.min(b))
     }
 
     /// Returns the sum of all values in the buffer.
     #[inline]
     pub fn sum(&self) -> Sample {
-        self.buf.iter().cloned().fold(Sample::ZERO, |a, b| a + b)
+        self.buf.iter().copied().fold(0.0, |a, b| a + b)
     }
 
     /// Returns the mean of all values in the buffer.
     #[inline]
+    #[allow(clippy::useless_conversion)]
     pub fn mean(&self) -> Sample {
-        self.sum() / Sample(self.len() as f64)
+        self.sum() / self.len() as Sample
     }
 
     /// Returns the root mean square of all values in the buffer.
     #[inline]
     pub fn rms(&self) -> Sample {
-        self.buf
-            .iter()
-            .cloned()
-            .fold(Sample::ZERO, |a, b| a + b * b)
+        self.buf.iter().copied().fold(0.0, |a, b| a + b * b)
     }
 
     /// Returns the variance of all values in the buffer.
     #[inline]
+    #[allow(clippy::useless_conversion)]
     pub fn variance(&self) -> Sample {
         let mean = self.mean();
         let sum = self
             .buf
             .iter()
-            .cloned()
-            .fold(Sample::ZERO, |a, b| a + (b - mean) * (b - mean));
-        sum / Sample((self.len() - 1) as f64)
+            .copied()
+            .fold(0.0, |a, b| a + (b - mean) * (b - mean));
+        sum / (self.len() - 1) as Sample
     }
 
     /// Returns the standard deviation of all values in the buffer.
     #[inline]
     pub fn stddev(&self) -> Sample {
-        self.variance().sqrt().into()
+        self.variance().sqrt()
     }
 }
 
@@ -590,7 +339,7 @@ pub enum Signal {
 impl Signal {
     /// Creates a new sample signal with the given value.
     pub const fn new_sample(value: f64) -> Self {
-        Self::Sample(Sample(value))
+        Self::Sample(value)
     }
 
     /// Creates a new message signal with the given message.
@@ -642,13 +391,6 @@ impl Signal {
 impl Into<Signal> for Sample {
     fn into(self) -> Signal {
         Signal::Sample(self)
-    }
-}
-
-#[allow(clippy::from_over_into)]
-impl Into<Signal> for f64 {
-    fn into(self) -> Signal {
-        Signal::Sample(Sample(self))
     }
 }
 

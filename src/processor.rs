@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::{
     message::Message,
-    signal::{Sample, Signal, SignalBuffer, SignalKind},
+    signal::{Buffer, Sample, Signal, SignalBuffer, SignalKind},
 };
 
 /// An error that can occur when processing signals.
@@ -54,7 +54,7 @@ impl Default for SignalSpec {
             name: "".into(),
             min: None,
             max: None,
-            default_value: Signal::Sample(0.0.into()),
+            default_value: Signal::Sample(0.0),
         }
     }
 }
@@ -126,7 +126,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     pub fn iter_input_as_samples(
         &self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &Sample> + '_, ProcessorError> {
+    ) -> Result<impl Iterator<Item = Sample> + '_, ProcessorError> {
         let buffer = self.input(index);
 
         if let Some(buffer) = buffer {
@@ -134,12 +134,12 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
                 .as_sample()
                 .ok_or(ProcessorError::InputSpecMismatch(index))?;
 
-            Ok(itertools::Either::Left(buffer.iter()))
+            Ok(itertools::Either::Left(buffer.iter().copied()))
         } else {
             let default_value = self.input_spec_defaults[index]
                 .as_sample()
                 .ok_or(ProcessorError::InputSpecMismatch(index))?;
-            Ok(itertools::Either::Right(std::iter::repeat(default_value)))
+            Ok(itertools::Either::Right(std::iter::repeat(*default_value)))
         }
     }
 
@@ -179,6 +179,28 @@ impl<'a> ProcessorOutputs<'a> {
     #[inline]
     pub fn output(&mut self, index: usize) -> &mut SignalBuffer {
         &mut self.outputs[index]
+    }
+
+    /// Returns the output buffer at the given index, if it is a sample buffer.
+    #[inline]
+    pub fn output_as_samples(
+        &mut self,
+        index: usize,
+    ) -> Result<&mut Buffer<Sample>, ProcessorError> {
+        self.output(index)
+            .as_sample_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(index))
+    }
+
+    /// Returns the output buffer at the given index, if it is a message buffer.
+    #[inline]
+    pub fn output_as_messages(
+        &mut self,
+        index: usize,
+    ) -> Result<&mut Buffer<Option<Message>>, ProcessorError> {
+        self.output(index)
+            .as_message_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(index))
     }
 
     /// Returns an iterator over the output buffers.

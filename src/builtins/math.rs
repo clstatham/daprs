@@ -45,11 +45,9 @@ impl Processor for Constant {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let out = outputs.iter_output_mut_as_samples(0)?;
+        let out = outputs.output_as_samples(0)?;
 
-        for sample in out {
-            **sample = self.value;
-        }
+        out.fill(self.value);
 
         Ok(())
     }
@@ -98,7 +96,7 @@ impl Processor for MidiToFreq {
             inputs.iter_input_as_samples(0)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
-            **freq = (2.0_f64).powf((**note - 69.0) / 12.0) * 440.0;
+            *freq = (2.0_f64).powf((note - 69.0) / 12.0) * 440.0;
         }
 
         Ok(())
@@ -139,7 +137,7 @@ impl Processor for FreqToMidi {
             inputs.iter_input_as_samples(0)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
-            **note = 69.0 + 12.0 * (**freq / 440.0).log2();
+            *note = 69.0 + 12.0 * (freq / 440.0).log2();
         }
 
         Ok(())
@@ -176,7 +174,7 @@ macro_rules! impl_binary_proc {
                 ) {
                     debug_assert!(in1.is_finite());
                     debug_assert!(in2.is_finite());
-                    **sample = f64::$method(**in1, **in2);
+                    *sample = f64::$method(in1, in2);
                 }
 
                 Ok(())
@@ -467,7 +465,7 @@ macro_rules! impl_unary_proc {
                     inputs.iter_input_as_samples(0)?
                 ) {
                     debug_assert!(in1.is_finite());
-                    *sample = (**in1).$method().into();
+                    *sample = in1.$method().into();
                 }
 
                 Ok(())

@@ -12,6 +12,7 @@ name = "raug"
 
 [features]
 default = []
+f32_samples = []
 jack = ["cpal/jack"]
 
 [dependencies]

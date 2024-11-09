@@ -88,7 +88,7 @@ impl Processor for AudioBuffer {
                         .cast_to_float()
                         .ok_or(ProcessorError::InputSpecMismatch(1))?;
 
-                    *buffer[self.index as usize] = set;
+                    buffer[self.index as usize] = set;
                 }
 
                 if index.fract() != 0.0 {
@@ -100,7 +100,7 @@ impl Processor for AudioBuffer {
 
                     let t = index.fract();
 
-                    *out = value_floor + (value_ceil - value_floor) * t.into();
+                    *out = value_floor + (value_ceil - value_floor) * t;
                 } else {
                     let index = index as i64;
 

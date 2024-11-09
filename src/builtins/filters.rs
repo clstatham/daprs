@@ -108,8 +108,6 @@ impl Processor for MoogLadder {
             self.tune = (1.0 - f64::exp(-((2.0 * PI) * f * fcr))) / THERMAL;
             self.res_quad = 4.0 * self.resonance * self.acr;
 
-            let in_signal = **in_signal;
-
             // oversample
             for _ in 0..2 {
                 let mut inp = in_signal - self.res_quad * self.delay[5];
@@ -133,7 +131,7 @@ impl Processor for MoogLadder {
                 self.delay[4] = self.stage[3];
             }
 
-            **out = self.delay[5];
+            *out = self.delay[5];
         }
 
         Ok(())
@@ -246,13 +244,11 @@ impl Processor for Biquad {
             inputs.iter_input_as_samples(4)?,
             inputs.iter_input_as_samples(5)?
         ) {
-            self.a0 = **a0;
-            self.a1 = **a1;
-            self.a2 = **a2;
-            self.b1 = **b1;
-            self.b2 = **b2;
-
-            let in_signal = **in_signal;
+            self.a0 = a0;
+            self.a1 = a1;
+            self.a2 = a2;
+            self.b1 = b1;
+            self.b2 = b2;
 
             let filtered = self.a0 * in_signal + self.a1 * self.x1 + self.a2 * self.x2
                 - self.b1 * self.y1
@@ -263,7 +259,7 @@ impl Processor for Biquad {
             self.y2 = self.y1;
             self.y1 = filtered;
 
-            **out = filtered;
+            *out = filtered;
         }
 
         Ok(())
@@ -590,19 +586,17 @@ impl Processor for AutoBiquad {
             inputs.iter_input_as_samples(2)?,
             inputs.iter_input_as_samples(3)?
         ) {
-            let frequency_changed = (**frequency - self.cutoff).abs() > f64::EPSILON;
-            let q_changed = (**q - self.q).abs() > f64::EPSILON;
-            let gain_changed = (**gain - self.gain).abs() > f64::EPSILON;
+            let frequency_changed = (frequency - self.cutoff).abs() > f64::EPSILON;
+            let q_changed = (q - self.q).abs() > f64::EPSILON;
+            let gain_changed = (gain - self.gain).abs() > f64::EPSILON;
 
             if frequency_changed || q_changed || gain_changed {
-                self.cutoff = **frequency;
-                self.q = **q;
-                self.gain = **gain;
+                self.cutoff = frequency;
+                self.q = q;
+                self.gain = gain;
 
                 self.set_coefficients();
             }
-
-            let in_signal = **in_signal;
 
             let filtered = self.a0 * in_signal + self.a1 * self.x1 + self.a2 * self.x2
                 - self.b1 * self.y1
@@ -613,7 +607,7 @@ impl Processor for AutoBiquad {
             self.y2 = self.y1;
             self.y1 = filtered;
 
-            **out = filtered;
+            *out = filtered;
         }
 
         Ok(())

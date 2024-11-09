@@ -151,7 +151,7 @@ impl Processor for UnitDelay {
             inputs.iter_input_as_samples(0)?
         ) {
             *out = self.value.unwrap_or_default();
-            self.value = Some(*in_signal);
+            self.value = Some(in_signal);
         }
 
         Ok(())
@@ -221,7 +221,7 @@ impl Processor for SampleDelay {
                 0
             };
 
-            buffer[self.play_head] = *in_signal;
+            buffer[self.play_head] = in_signal;
 
             self.play_head = (self.play_head + 1) % buffer.len();
 

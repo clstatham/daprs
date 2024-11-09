@@ -88,9 +88,9 @@ impl Processor for PeakLimiter {
             inputs.iter_input_as_samples(2)?,
             inputs.iter_input_as_samples(3)?
         ) {
-            self.threshold = **threshold;
-            self.release = **release;
-            self.attack = **attack;
+            self.threshold = threshold;
+            self.release = release;
+            self.attack = attack;
 
             self.envelope = in_signal.abs().max(self.envelope * self.release);
 
@@ -102,7 +102,7 @@ impl Processor for PeakLimiter {
 
             self.gain = self.gain * self.attack + target_gain * (1.0 - self.attack);
 
-            **out = **in_signal * self.gain;
+            *out = in_signal * self.gain;
         }
 
         Ok(())
