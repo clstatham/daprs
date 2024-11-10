@@ -1,8 +1,21 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use raug::prelude::*;
 
-const SAMPLE_RATE: u32 = 48_000;
-const BUFFER_SIZES: &[usize] = &[32, 128, 256, 512, 1024, 2048, 4096];
+const SAMPLE_RATE: Sample = 48_000.0;
+const BLOCK_SIZES: &[usize] = &[128, 512, 2048];
+
+mod generative1;
+
+fn name(name: &str) -> String {
+    #[cfg(feature = "f32_samples")]
+    {
+        format!("{}_f32", name)
+    }
+    #[cfg(not(feature = "f32_samples"))]
+    {
+        format!("{}_f64", name)
+    }
+}
 
 fn bench_demo(c: &mut Criterion) {
     let graph = GraphBuilder::new();
@@ -16,14 +29,14 @@ fn bench_demo(c: &mut Criterion) {
 
     let mut runtime = graph.build_runtime();
 
-    let mut group = c.benchmark_group("demo");
+    let mut group = c.benchmark_group(name("demo"));
 
-    for &buffer_size in BUFFER_SIZES {
-        runtime.reset(SAMPLE_RATE as Sample, buffer_size).unwrap();
+    for &block_size in BLOCK_SIZES {
+        runtime.reset(SAMPLE_RATE, block_size).unwrap();
         runtime.prepare().unwrap();
 
-        group.throughput(criterion::Throughput::Elements(buffer_size as u64));
-        group.bench_function(format!("buffer_size_{}", buffer_size), |b| {
+        group.throughput(criterion::Throughput::Elements(block_size as u64));
+        group.bench_function(format!("block_size_{}", block_size), |b| {
             b.iter(|| {
                 runtime.process().unwrap();
             });
@@ -33,7 +46,7 @@ fn bench_demo(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_demo_realtime_simulation(c: &mut Criterion) {
+fn bench_demo_reset(c: &mut Criterion) {
     let graph = GraphBuilder::new();
 
     let out1 = graph.add_output();
@@ -45,16 +58,15 @@ fn bench_demo_realtime_simulation(c: &mut Criterion) {
 
     let mut runtime = graph.build_runtime();
 
-    let mut group = c.benchmark_group("demo_realtime_simulation");
+    let mut group = c.benchmark_group(name("demo_reset"));
 
-    for &buffer_size in BUFFER_SIZES {
-        runtime.reset(SAMPLE_RATE as Sample, buffer_size).unwrap();
+    for &block_size in BLOCK_SIZES {
+        runtime.reset(SAMPLE_RATE, block_size).unwrap();
         runtime.prepare().unwrap();
 
-        group.throughput(criterion::Throughput::Elements(buffer_size as u64));
-        group.bench_function(format!("buffer_size_{}", buffer_size), |b| {
+        group.bench_function(format!("block_size_{}", block_size), |b| {
             b.iter(|| {
-                runtime.reset(SAMPLE_RATE as Sample, buffer_size).unwrap();
+                runtime.reset(SAMPLE_RATE, block_size).unwrap();
                 runtime.process().unwrap();
             });
         });
@@ -63,29 +75,20 @@ fn bench_demo_realtime_simulation(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_big_graph(c: &mut Criterion) {
-    let graph = GraphBuilder::new();
-
-    let out1 = graph.add_output();
-
-    let sine = graph.add(SineOscillator::default());
-    sine.input("frequency").set(440.0);
-    let mut sine = sine * 0.2;
-    for _ in 0..1000 {
-        sine = sine * 0.99;
-    }
-    sine.output(0).connect(&out1.input(0));
+fn bench_generative1(c: &mut Criterion) {
+    let num_tones = 20;
+    let graph = generative1::generative1(num_tones);
 
     let mut runtime = graph.build_runtime();
 
-    let mut group = c.benchmark_group("big_graph");
+    let mut group = c.benchmark_group(name(&format!("generative1_{}", num_tones)));
 
-    for &buffer_size in BUFFER_SIZES {
-        runtime.reset(SAMPLE_RATE as Sample, buffer_size).unwrap();
+    for &block_size in BLOCK_SIZES {
+        runtime.reset(SAMPLE_RATE, block_size).unwrap();
         runtime.prepare().unwrap();
 
-        group.throughput(criterion::Throughput::Elements(buffer_size as u64));
-        group.bench_function(format!("buffer_size_{}", buffer_size), |b| {
+        group.throughput(criterion::Throughput::Elements(block_size as u64));
+        group.bench_function(format!("block_size_{}", block_size), |b| {
             b.iter(|| {
                 runtime.process().unwrap();
             });
@@ -97,8 +100,8 @@ fn bench_big_graph(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    bench_demo,
-    bench_demo_realtime_simulation,
-    bench_big_graph
+    // bench_demo,
+    // bench_demo_reset,
+    bench_generative1
 );
 criterion_main!(benches);
