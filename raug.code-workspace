@@ -10,4 +10,7 @@
 			"path": "../raug-python"
 		}
 	],
+	"settings": {
+		"rust-analyzer.checkOnSave": false
+	},
 }

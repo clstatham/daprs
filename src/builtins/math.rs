@@ -161,6 +161,7 @@ impl Processor for FreqToMidi {
 /// | Index | Name | Default | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `0.0` | The result of the expression. |
+#[cfg(feature = "expr")]
 #[derive(Clone, Debug)]
 pub struct Expr {
     context: evalexpr::HashMapContext<evalexpr::DefaultNumericTypes>,
@@ -169,6 +170,7 @@ pub struct Expr {
     input_values: Vec<(String, Sample)>,
 }
 
+#[cfg(feature = "expr")]
 impl Expr {
     /// Creates a new `Eval` processor with the given expression.
     pub fn new(expr: impl AsRef<str>) -> Self {
@@ -200,6 +202,7 @@ impl Expr {
     }
 }
 
+#[cfg(feature = "expr")]
 impl Processor for Expr {
     fn input_spec(&self) -> Vec<SignalSpec> {
         self.inputs

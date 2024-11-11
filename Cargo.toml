@@ -11,9 +11,10 @@ repository = "https://github.com/clstatham/raug"
 name = "raug"
 
 [features]
-default = []
+default = ["expr"]
 f32_samples = []
 jack = ["cpal/jack"]
+expr = ["dep:evalexpr"]
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }
@@ -28,7 +29,7 @@ hashbrown = "0.15"
 crossbeam-channel = "0.5"
 rand = "0.8"
 midir = "0.10.0"
-evalexpr = "12.0.1"
+evalexpr = { version = "12.0", optional = true }
 
 [dev-dependencies]
 env_logger = "0.11"
@@ -37,3 +38,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 [[bench]]
 name = "bench"
 harness = false
+
+[[example]]
+name = "expr"
+required-features = ["expr"]
