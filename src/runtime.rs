@@ -1,6 +1,9 @@
 //! The audio graph processing runtime.
 
-use std::{sync::mpsc, time::Duration};
+use std::{
+    sync::{mpsc, Arc, Mutex},
+    time::Duration,
+};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use petgraph::prelude::*;
@@ -498,8 +501,6 @@ impl Runtime {
         let (kill_tx, kill_rx) = mpsc::channel();
         let (graph_tx, graph_rx) = mpsc::channel();
 
-        let handle = RuntimeHandle { kill_tx, graph_tx };
-
         let host_id = match backend {
             AudioBackend::Default => cpal::default_host().id(),
             #[cfg(target_os = "linux")]
@@ -578,18 +579,24 @@ impl Runtime {
         let audio_runtime = self.clone();
         let midi_runtime = self.clone();
 
-        std::thread::spawn(move || -> RuntimeResult<()> {
-            let _midi_in = midi_connection.connect(
-                &midi_port,
-                "raug midir input",
-                move |_stamp, message, _data| {
-                    for (_name, param) in midi_runtime.graph().midi_input_iter() {
-                        param.set(message.to_vec());
-                    }
-                },
-                (),
-            )?;
+        let midi_in = midi_connection.connect(
+            &midi_port,
+            "raug midir input",
+            move |_stamp, message, _data| {
+                for (_name, param) in midi_runtime.graph().midi_input_iter() {
+                    param.set(message.to_vec());
+                }
+            },
+            (),
+        )?;
 
+        let handle = RuntimeHandle {
+            kill_tx,
+            graph_tx,
+            midi_in: Arc::new(Mutex::new(Some(midi_in))),
+        };
+
+        std::thread::spawn(move || -> RuntimeResult<()> {
             let stream = match config.sample_format() {
                 cpal::SampleFormat::I8 => {
                     audio_runtime.run_inner::<i8>(&device, &config.config(), graph_rx)?
@@ -694,6 +701,7 @@ impl Runtime {
 #[must_use = "The runtime handle must be kept alive for the runtime to continue running"]
 #[derive(Clone)]
 pub struct RuntimeHandle {
+    midi_in: Arc<Mutex<Option<midir::MidiInputConnection<()>>>>,
     kill_tx: mpsc::Sender<()>,
     graph_tx: mpsc::Sender<Graph>,
 }
@@ -702,6 +710,11 @@ impl RuntimeHandle {
     /// Stops the running runtime.
     pub fn stop(&self) {
         self.kill_tx.send(()).ok();
+        if let Ok(mut midi_in) = self.midi_in.lock() {
+            if let Some(midi_in) = midi_in.take() {
+                midi_in.close();
+            }
+        }
     }
 
     /// Hot-reloads the audio graph with the given graph.
