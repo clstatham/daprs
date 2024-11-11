@@ -60,7 +60,7 @@ impl Processor for MidiVelocity {
             *out = None;
             if let Some(Message::Midi(msg)) = midi {
                 if msg.len() == 3 {
-                    let velocity = msg[2] as f64 / 127.0;
+                    let velocity = msg[2] as f64;
                     *out = Some(Message::Float(velocity));
                 }
             }

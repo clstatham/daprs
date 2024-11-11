@@ -144,6 +144,101 @@ impl Processor for FreqToMidi {
     }
 }
 
+/// A processor that evaluates an expression.
+///
+/// The expression uses a simple syntax based on the [`evalexpr`] crate.
+///
+/// # Inputs
+///
+/// The inputs are the variables that are referenced in the expression.
+///
+/// The names of the inputs are extracted from the expression itself.
+///
+/// The inputs are expected to be of type `Sample`, that is, a floating-point number. They default to `0.0`.
+///
+/// # Outputs
+///
+/// | Index | Name | Default | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `0.0` | The result of the expression. |
+#[derive(Clone, Debug)]
+pub struct Expr {
+    context: evalexpr::HashMapContext<evalexpr::DefaultNumericTypes>,
+    expr: evalexpr::Node<evalexpr::DefaultNumericTypes>,
+    inputs: Vec<String>,
+    input_values: Vec<(String, Sample)>,
+}
+
+impl Expr {
+    /// Creates a new `Eval` processor with the given expression.
+    pub fn new(expr: impl AsRef<str>) -> Self {
+        let expr: evalexpr::Node<evalexpr::DefaultNumericTypes> =
+            evalexpr::build_operator_tree(expr.as_ref()).unwrap();
+        let inputs: Vec<String> = expr
+            .iter_read_variable_identifiers()
+            .map(|s| s.to_string())
+            .collect();
+        Self {
+            context: evalexpr::HashMapContext::new(),
+            expr,
+            input_values: Vec::with_capacity(inputs.len()),
+            inputs,
+        }
+    }
+
+    fn eval(&mut self) -> Sample {
+        use evalexpr::ContextWithMutableVariables;
+        self.context.clear_variables();
+        for (name, value) in self.input_values.iter() {
+            self.context
+                .set_value(name.to_string(), evalexpr::Value::from_float(*value))
+                .unwrap();
+        }
+        let result = self.expr.eval_with_context(&self.context).unwrap();
+        result.as_float().unwrap()
+    }
+}
+
+impl Processor for Expr {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        self.inputs
+            .iter()
+            .map(|name| SignalSpec::unbounded(name, 0.0))
+            .collect()
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::unbounded("out", 0.0)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        let out = outputs.output_as_samples(0)?;
+
+        for (samp_idx, out) in out.iter_mut().enumerate() {
+            self.input_values.clear();
+
+            for (inp_idx, name) in self.inputs.iter().enumerate() {
+                let buffer = inputs
+                    .input(inp_idx)
+                    .ok_or(ProcessorError::InputSpecMismatch(inp_idx))?;
+                let buffer = buffer
+                    .as_sample()
+                    .ok_or(ProcessorError::InputSpecMismatch(inp_idx))?;
+
+                self.input_values.push((name.to_string(), buffer[samp_idx]));
+            }
+
+            *out = self.eval();
+        }
+
+        Ok(())
+    }
+}
+
 macro_rules! impl_binary_proc {
     ($name:ident, $method:ident, $shortdoc:literal, $doc:literal) => {
         #[derive(Clone, Debug, Default)]

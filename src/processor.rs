@@ -299,6 +299,9 @@ pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
     /// Returns the name of this [`Processor`].
     fn name(&self) -> &str {
         std::any::type_name::<Self>()
+            .split("::")
+            .last()
+            .unwrap_or_default()
     }
 
     /// Returns information about the inputs this [`Processor`] expects.

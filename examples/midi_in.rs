@@ -19,8 +19,7 @@ fn main() {
     let vel = graph.add(MidiVelocity);
     vel.input("midi").connect(&midi.output(0));
     let vel = vel.make_register().smooth(0.001);
-
-    let vel = vel * 0.5;
+    let vel = vel / 127.0 * 0.5;
 
     let mix = sine * vel;
 

@@ -122,7 +122,7 @@ impl GraphBuilder {
 
     /// Writes the graph to the given writer in the DOT format.
     /// This is useful for visualizing the graph.
-    pub fn write_dot(&self, writer: &mut impl Write) {
-        self.with_graph(|graph| graph.write_dot(writer)).unwrap();
+    pub fn write_dot(&self, writer: &mut impl Write) -> std::io::Result<()> {
+        self.with_graph(|graph| graph.write_dot(writer))
     }
 }
