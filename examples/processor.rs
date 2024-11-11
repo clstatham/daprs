@@ -34,8 +34,8 @@ fn main() {
 
     let graph = GraphBuilder::new();
 
-    let out1 = graph.add_output();
-    let out2 = graph.add_output();
+    let out1 = graph.add_audio_output();
+    let out2 = graph.add_audio_output();
 
     let sine = graph.add(SineOscillator::default());
     sine.input("frequency").set(440.0);
@@ -50,6 +50,11 @@ fn main() {
     let mut runtime = graph.build_runtime();
 
     runtime
-        .run_for(Duration::from_secs(1), Backend::Default, Device::Default)
+        .run_for(
+            Duration::from_secs(1),
+            AudioBackend::Default,
+            AudioDevice::Default,
+            MidiPort::Default,
+        )
         .unwrap();
 }

@@ -5,7 +5,7 @@
 #![allow(clippy::excessive_precision)]
 
 use cpal::traits::{DeviceTrait, HostTrait};
-use runtime::Backend;
+use runtime::AudioBackend;
 
 pub mod builder;
 pub mod builtins;
@@ -28,27 +28,27 @@ pub mod prelude {
     pub use crate::processor::{
         Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, SignalSpec,
     };
-    pub use crate::runtime::{Backend, Device, Runtime, RuntimeHandle};
+    pub use crate::runtime::{AudioBackend, AudioDevice, MidiPort, Runtime, RuntimeHandle};
     pub use crate::signal::{Buffer, Sample, Signal, SignalBuffer};
     pub use std::time::Duration;
 }
 
 /// Returns a Vec of available backends.
-pub fn available_backends() -> Vec<Backend> {
-    let mut backends = vec![Backend::Default];
+pub fn available_audio_backends() -> Vec<AudioBackend> {
+    let mut backends = vec![AudioBackend::Default];
     for host in cpal::available_hosts() {
         match host {
             #[cfg(all(target_os = "linux", feature = "jack"))]
             cpal::HostId::Jack => {
-                backends.push(Backend::Jack);
+                backends.push(AudioBackend::Jack);
             }
             #[cfg(target_os = "linux")]
             cpal::HostId::Alsa => {
-                backends.push(Backend::Alsa);
+                backends.push(AudioBackend::Alsa);
             }
             #[cfg(target_os = "windows")]
             cpal::HostId::Wasapi => {
-                backends.push(Backend::Wasapi);
+                backends.push(AudioBackend::Wasapi);
             }
             #[allow(unreachable_patterns)]
             _ => {}
@@ -59,26 +59,41 @@ pub fn available_backends() -> Vec<Backend> {
 }
 
 /// Prints the available backends.
-pub fn list_backends() {
+pub fn list_audio_backends() {
     println!("Listing available backends:");
-    for (i, backend) in available_backends().into_iter().enumerate() {
+    for (i, backend) in available_audio_backends().into_iter().enumerate() {
         println!("  {}: {:?}", i, backend);
     }
 }
 
 /// Prints the available devices for the given backend.
-pub fn list_devices(backend: Backend) {
+pub fn list_audio_devices(backend: AudioBackend) {
     println!("Listing devices for backend: {:?}", backend);
     let host = match backend {
-        Backend::Default => cpal::default_host(),
+        AudioBackend::Default => cpal::default_host(),
         #[cfg(all(target_os = "linux", feature = "jack"))]
-        Backend::Jack => cpal::host_from_id(cpal::HostId::Jack).unwrap(),
+        AudioBackend::Jack => cpal::host_from_id(cpal::HostId::Jack).unwrap(),
         #[cfg(target_os = "linux")]
-        Backend::Alsa => cpal::host_from_id(cpal::HostId::Alsa).unwrap(),
+        AudioBackend::Alsa => cpal::host_from_id(cpal::HostId::Alsa).unwrap(),
         #[cfg(target_os = "windows")]
-        Backend::Wasapi => cpal::host_from_id(cpal::HostId::Wasapi).unwrap(),
+        AudioBackend::Wasapi => cpal::host_from_id(cpal::HostId::Wasapi).unwrap(),
     };
     for (i, device) in host.output_devices().unwrap().enumerate() {
         println!("  {}: {:?}", i, device.name());
+    }
+}
+
+/// Prints the available MIDI ports.
+pub fn list_midi_ports() {
+    let input = midir::MidiInput::new("raug").unwrap();
+    println!("Listing available MIDI ports:");
+    for (i, port) in input.ports().iter().enumerate() {
+        println!(
+            "  {}: {:?}",
+            i,
+            input
+                .port_name(port)
+                .unwrap_or_else(|_| "Unknown".to_string())
+        );
     }
 }

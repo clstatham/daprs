@@ -53,7 +53,7 @@ pub fn decay_env(graph: &GraphBuilder, trig: &Node, decay: &Node) -> Node {
 
     let env = (-&time + 1.0).powf(decay.recip());
 
-    env.smooth()
+    env.smooth(0.001)
 }
 
 pub fn midi_to_freq(midi: Sample) -> Sample {
@@ -167,10 +167,10 @@ pub fn generative1(num_tones: usize) -> GraphBuilder {
 
     let graph = GraphBuilder::new();
 
-    let out1 = graph.add_output();
-    let out2 = graph.add_output();
+    let out1 = graph.add_audio_output();
+    let out2 = graph.add_audio_output();
 
-    let amp = graph.add_param(Param::new("amp", Some(0.5)));
+    let amp = graph.add_param(Param::new("amp", Some(Message::Float(0.5))));
 
     let mut tones = vec![];
     for i in 0..num_tones {

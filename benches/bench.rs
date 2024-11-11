@@ -17,10 +17,10 @@ fn name(name: &str) -> String {
     }
 }
 
-fn bench_demo(c: &mut Criterion) {
+pub fn bench_demo(c: &mut Criterion) {
     let graph = GraphBuilder::new();
 
-    let out1 = graph.add_output();
+    let out1 = graph.add_audio_output();
 
     let sine = graph.add(SineOscillator::default());
     sine.input("frequency").set(440.0);
@@ -46,10 +46,10 @@ fn bench_demo(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_demo_reset(c: &mut Criterion) {
+pub fn bench_demo_reset(c: &mut Criterion) {
     let graph = GraphBuilder::new();
 
-    let out1 = graph.add_output();
+    let out1 = graph.add_audio_output();
 
     let sine = graph.add(SineOscillator::default());
     sine.input("frequency").set(440.0);
@@ -75,7 +75,7 @@ fn bench_demo_reset(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_generative1(c: &mut Criterion) {
+pub fn bench_generative1(c: &mut Criterion) {
     let num_tones = 20;
     let graph = generative1::generative1(num_tones);
 

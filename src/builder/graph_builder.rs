@@ -26,18 +26,26 @@ impl GraphBuilder {
     }
 
     /// Adds an input node to the graph.
-    pub fn add_input(&self) -> Node {
+    pub fn add_audio_input(&self) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
-            node_id: graph.add_input(),
+            node_id: graph.add_audio_input(),
         })
     }
 
     /// Adds an output node to the graph.
-    pub fn add_output(&self) -> Node {
+    pub fn add_audio_output(&self) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
-            node_id: graph.add_output(),
+            node_id: graph.add_audio_output(),
+        })
+    }
+
+    /// Adds a MIDI input node to the graph.
+    pub fn add_midi_input(&self, name: impl Into<String>) -> Node {
+        self.with_graph_mut(|graph| Node {
+            graph: self.clone(),
+            node_id: graph.add_midi_input(name),
         })
     }
 

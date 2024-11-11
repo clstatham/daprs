@@ -8,8 +8,8 @@ fn main() {
     let graph = GraphBuilder::new();
 
     // add some outputs
-    let out1 = graph.add_output();
-    let out2 = graph.add_output();
+    let out1 = graph.add_audio_output();
+    let out2 = graph.add_audio_output();
 
     // add a buffer reader
     let buf = Buffer::load_wav("examples/assets/piano1.wav").unwrap();

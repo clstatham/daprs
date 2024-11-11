@@ -32,7 +32,7 @@ pub enum RuntimeError {
 
     /// An error occurred during audio device configuration (device unavailable).
     #[error("Requested device is unavailable: {0:?}")]
-    DeviceUnavailable(Device),
+    DeviceUnavailable(AudioDevice),
 
     /// An error occurred during audio device configuration (error getting the device's name).
     DeviceNameError(#[from] cpal::DeviceNameError),
@@ -43,6 +43,15 @@ pub enum RuntimeError {
     /// An error occurred during audio device configuration (invalid sample format).
     #[error("Unsupported sample format: {0}")]
     UnsupportedSampleFormat(cpal::SampleFormat),
+
+    /// An error occurred during MIDI device configuration (error initializing input).
+    MidirInitError(#[from] midir::InitError),
+
+    /// An error occurred during MIDI device configuration (port unavailable).
+    MidiPortUnavailable(MidiPort),
+
+    /// An error occurred during MIDI device configuration (error connecting to port).
+    MidiConnectError(#[from] midir::ConnectError<midir::MidiInput>),
 
     /// An error occurred during graph processing.
     GraphRunError(#[from] GraphRunError),
@@ -63,7 +72,7 @@ pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
 /// The audio backend to use for the runtime.
 #[derive(Default, Debug, Clone)]
-pub enum Backend {
+pub enum AudioBackend {
     #[default]
     /// Default audio backend for the current platform.
     Default,
@@ -80,13 +89,22 @@ pub enum Backend {
 
 /// The audio device to use for the runtime.
 #[derive(Default, Debug, Clone)]
-pub enum Device {
+pub enum AudioDevice {
     /// Use the default audio device as returned by [`cpal::Host::default_output_device`].
     #[default]
     Default,
     /// Use the audio device at the given index.
     Index(usize),
     /// Substring of the device name to match. The first device with a name containing this substring will be used.
+    Name(String),
+}
+
+/// The MIDI port to use for the runtime.
+#[derive(Default, Debug, Clone)]
+pub enum MidiPort {
+    #[default]
+    Default,
+    Index(usize),
     Name(String),
 }
 
@@ -459,36 +477,43 @@ impl Runtime {
     pub fn run_for(
         &mut self,
         duration: Duration,
-        backend: Backend,
-        device: Device,
+        backend: AudioBackend,
+        device: AudioDevice,
+        midi_port: MidiPort,
     ) -> RuntimeResult<()> {
-        let handle = self.run(backend, device)?;
+        let handle = self.run(backend, device, midi_port)?;
         std::thread::sleep(duration);
         handle.stop();
         Ok(())
     }
 
     /// Runs the audio graph in real-time using the specified audio backend and device.
-    pub fn run(&mut self, backend: Backend, device: Device) -> RuntimeResult<RuntimeHandle> {
+    pub fn run(
+        &mut self,
+        backend: AudioBackend,
+        device: AudioDevice,
+
+        midi_port: MidiPort,
+    ) -> RuntimeResult<RuntimeHandle> {
         let (kill_tx, kill_rx) = mpsc::channel();
         let (graph_tx, graph_rx) = mpsc::channel();
 
         let handle = RuntimeHandle { kill_tx, graph_tx };
 
         let host_id = match backend {
-            Backend::Default => cpal::default_host().id(),
+            AudioBackend::Default => cpal::default_host().id(),
             #[cfg(target_os = "linux")]
-            Backend::Alsa => cpal::available_hosts()
+            AudioBackend::Alsa => cpal::available_hosts()
                 .into_iter()
                 .find(|h| *h == cpal::HostId::Alsa)
                 .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
             #[cfg(all(target_os = "linux", feature = "jack"))]
-            Backend::Jack => cpal::available_hosts()
+            AudioBackend::Jack => cpal::available_hosts()
                 .into_iter()
                 .find(|h| *h == cpal::HostId::Jack)
                 .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
             #[cfg(target_os = "windows")]
-            Backend::Wasapi => cpal::available_hosts()
+            AudioBackend::Wasapi => cpal::available_hosts()
                 .into_iter()
                 .find(|h| *h == cpal::HostId::Wasapi)
                 .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
@@ -498,9 +523,9 @@ impl Runtime {
         log::info!("Using host: {:?}", host.id());
 
         let cpal_device = match &device {
-            Device::Default => host.default_output_device(),
-            Device::Index(index) => host.output_devices().unwrap().nth(*index),
-            Device::Name(name) => host
+            AudioDevice::Default => host.default_output_device(),
+            AudioDevice::Index(index) => host.output_devices().unwrap().nth(*index),
+            AudioDevice::Name(name) => host
                 .output_devices()
                 .unwrap()
                 .find(|d| d.name().unwrap().contains(name)),
@@ -525,43 +550,76 @@ impl Runtime {
         let audio_rate = config.sample_rate().0 as Sample;
         let initial_block_size = audio_rate as usize / 100;
 
+        let midi_connection = midir::MidiInput::new("raug midir input")?;
+
+        let midi_port = match &midi_port {
+            MidiPort::Default => midi_connection.ports().into_iter().next(),
+            MidiPort::Index(index) => midi_connection.ports().into_iter().nth(*index),
+            MidiPort::Name(name) => midi_connection
+                .ports()
+                .into_iter()
+                .find(|port| midi_connection.port_name(port).unwrap().contains(name)),
+        }
+        .ok_or_else(|| RuntimeError::MidiPortUnavailable(midi_port))?;
+
+        log::info!(
+            "Using MIDI port: {:?}",
+            midi_connection
+                .port_name(&midi_port)
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or("unknown")
+        );
+
         self.reset(audio_rate, initial_block_size)?;
 
         self.prepare()?;
 
-        let runtime = self.clone();
+        let audio_runtime = self.clone();
+        let midi_runtime = self.clone();
 
         std::thread::spawn(move || -> RuntimeResult<()> {
+            let _midi_in = midi_connection.connect(
+                &midi_port,
+                "raug midir input",
+                move |_stamp, message, _data| {
+                    for (_name, param) in midi_runtime.graph().midi_input_iter() {
+                        param.set(message.to_vec());
+                    }
+                },
+                (),
+            )?;
+
             let stream = match config.sample_format() {
                 cpal::SampleFormat::I8 => {
-                    runtime.run_inner::<i8>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<i8>(&device, &config.config(), graph_rx)?
                 }
                 cpal::SampleFormat::I16 => {
-                    runtime.run_inner::<i16>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<i16>(&device, &config.config(), graph_rx)?
                 }
                 cpal::SampleFormat::I32 => {
-                    runtime.run_inner::<i32>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<i32>(&device, &config.config(), graph_rx)?
                 }
                 cpal::SampleFormat::I64 => {
-                    runtime.run_inner::<i64>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<i64>(&device, &config.config(), graph_rx)?
                 }
                 cpal::SampleFormat::U8 => {
-                    runtime.run_inner::<u8>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<u8>(&device, &config.config(), graph_rx)?
                 }
                 cpal::SampleFormat::U16 => {
-                    runtime.run_inner::<u16>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<u16>(&device, &config.config(), graph_rx)?
                 }
                 cpal::SampleFormat::U32 => {
-                    runtime.run_inner::<u32>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<u32>(&device, &config.config(), graph_rx)?
                 }
                 cpal::SampleFormat::U64 => {
-                    runtime.run_inner::<u64>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<u64>(&device, &config.config(), graph_rx)?
                 }
                 cpal::SampleFormat::F32 => {
-                    runtime.run_inner::<f32>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<f32>(&device, &config.config(), graph_rx)?
                 }
                 cpal::SampleFormat::F64 => {
-                    runtime.run_inner::<f64>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<f64>(&device, &config.config(), graph_rx)?
                 }
 
                 sample_format => {
@@ -574,6 +632,7 @@ impl Runtime {
                     drop(stream);
                     break;
                 }
+
                 std::thread::yield_now();
             }
 

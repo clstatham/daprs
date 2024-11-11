@@ -8,15 +8,17 @@ fn main() {
     let graph = GraphBuilder::new();
 
     // add some outputs
-    let out1 = graph.add_output();
-    let out2 = graph.add_output();
+    let out1 = graph.add_audio_output();
+    let out2 = graph.add_audio_output();
 
     // create a sine oscillator
     let sine = graph.add(SineOscillator::default());
 
     // create a parameter for the frequency
     // this will allow us to change the frequency of the sine oscillator while the graph is running
-    let freq_param = sine.input("frequency").param("freq", Some(440.0));
+    let freq_param = sine
+        .input("frequency")
+        .param("freq", Some(Message::Float(440.0)));
 
     // set the amplitude of the sine oscillator
     let sine = sine * 0.2;
@@ -29,7 +31,13 @@ fn main() {
     let mut runtime = graph.build_runtime();
 
     // run the graph for 1 second
-    let handle = runtime.run(Backend::Default, Device::Default).unwrap();
+    let handle = runtime
+        .run(
+            AudioBackend::Default,
+            AudioDevice::Default,
+            MidiPort::Default,
+        )
+        .unwrap();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     // change the frequency of the sine oscillator a few times

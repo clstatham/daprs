@@ -18,6 +18,8 @@ pub enum Message {
     String(String),
     /// A list of messages.
     List(Vec<Message>),
+    /// A MIDI message.
+    Midi(Vec<u8>),
 }
 
 impl Display for Message {
@@ -36,6 +38,16 @@ impl Display for Message {
                     write!(f, "{}", item)?;
                 }
                 write!(f, "]")
+            }
+            Message::Midi(data) => {
+                write!(f, "MIDI(")?;
+                for (i, byte) in data.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{:02X}", byte)?;
+                }
+                write!(f, ")")
             }
         }
     }
@@ -111,6 +123,18 @@ impl Message {
         matches!(self, Message::String(_))
     }
 
+    /// Returns true if the message is a list.
+    #[inline]
+    pub fn is_list(&self) -> bool {
+        matches!(self, Message::List(_))
+    }
+
+    /// Returns true if the message is a MIDI message.
+    #[inline]
+    pub fn is_midi(&self) -> bool {
+        matches!(self, Message::Midi(_))
+    }
+
     /// Returns true if the message is truthy (can be reasonably interpreted as `true`).
     #[inline]
     pub fn is_truthy(&self) -> bool {
@@ -120,6 +144,7 @@ impl Message {
             Message::Float(x) => *x != 0.0,
             Message::String(s) => !s.is_empty(),
             Message::List(list) => !list.is_empty(),
+            Message::Midi(data) => !data.is_empty(),
         }
     }
 
@@ -185,5 +210,17 @@ impl From<&str> for Message {
 impl From<String> for Message {
     fn from(s: String) -> Self {
         Message::String(s)
+    }
+}
+
+impl From<Vec<Message>> for Message {
+    fn from(list: Vec<Message>) -> Self {
+        Message::List(list)
+    }
+}
+
+impl From<Vec<u8>> for Message {
+    fn from(data: Vec<u8>) -> Self {
+        Message::Midi(data)
     }
 }

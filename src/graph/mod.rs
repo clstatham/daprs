@@ -8,7 +8,7 @@ use petgraph::{
     prelude::{Direction, EdgeRef, StableDiGraph},
     visit::DfsPostOrder,
 };
-use rustc_hash::{FxBuildHasher, FxHashMap};
+use rustc_hash::FxHashMap;
 
 use crate::{
     prelude::{Param, Passthrough},
@@ -97,7 +97,10 @@ pub struct Graph {
     digraph: DiGraph,
 
     // parameters for the graph
-    params: hashbrown::HashMap<String, NodeIndex, FxBuildHasher>,
+    params: FxHashMap<String, NodeIndex>,
+
+    // MIDI input params
+    midi_params: Vec<NodeIndex>,
 
     // cached input/output nodes
     input_nodes: Vec<NodeIndex>,
@@ -135,14 +138,14 @@ impl Graph {
     }
 
     /// Adds a new input [`Passthrough`] node to the graph.
-    pub fn add_input(&mut self) -> NodeIndex {
+    pub fn add_audio_input(&mut self) -> NodeIndex {
         let idx = self.digraph.add_node(ProcessorNode::new(Passthrough));
         self.input_nodes.push(idx);
         idx
     }
 
     /// Adds a new output [`Passthrough`] node to the graph.
-    pub fn add_output(&mut self) -> NodeIndex {
+    pub fn add_audio_output(&mut self) -> NodeIndex {
         let idx = self.digraph.add_node(ProcessorNode::new(Passthrough));
         self.output_nodes.push(idx);
         idx
@@ -159,6 +162,14 @@ impl Graph {
         let name = param.name().to_string();
         let index = self.add_processor(param);
         self.params.insert(name, index);
+        index
+    }
+
+    /// Adds a new [`Processor`] representing a MIDI input to the graph.
+    pub fn add_midi_input(&mut self, name: impl Into<String>) -> NodeIndex {
+        let param = Param::new(name, None);
+        let index = self.add_param(param);
+        self.midi_params.push(index);
         index
     }
 
@@ -256,6 +267,23 @@ impl Graph {
             .get(name.as_ref())
             .and_then(|&idx| self.digraph.node_weight(idx))
             .and_then(|proc| (*proc.processor).downcast_ref())
+    }
+
+    /// Returns the index of the MIDI input [`Param`] with the given name.
+    #[inline]
+    pub fn midi_input_index(&self, name: &str) -> Option<NodeIndex> {
+        self.params
+            .get(name)
+            .copied()
+            .filter(|&idx| self.midi_params.contains(&idx))
+    }
+
+    /// Returns an iterator over the MIDI input [`Param`]s in the graph.
+    #[inline]
+    pub fn midi_input_iter(&self) -> impl Iterator<Item = (&str, Param)> + '_ {
+        self.param_iter()
+            .filter(|(name, _)| self.midi_params.contains(self.params.get(*name).unwrap()))
+            .map(|(name, param)| (name, param.clone()))
     }
 
     /// Returns the index of the input [`Processor`] at the given index.

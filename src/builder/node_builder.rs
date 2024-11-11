@@ -153,10 +153,10 @@ impl Node {
     /// Panics if the node has more than one output.
     #[inline]
     #[track_caller]
-    pub fn smooth(&self) -> Node {
+    pub fn smooth(&self, factor: Sample) -> Node {
         self.assert_single_output();
         let proc = self.graph.add(Smooth::default());
-        proc.input("factor").set(0.1);
+        proc.input("factor").set(factor);
         proc.input(0).connect(&self.output(0));
         proc
     }
@@ -250,10 +250,10 @@ impl Input {
 
     /// Creates a parameter for the input.
     #[inline]
-    pub fn param<T: Into<Message>>(
+    pub fn param(
         &self,
         name: impl Into<String>,
-        initial_value: Option<T>,
+        initial_value: impl Into<Option<Message>>,
     ) -> Param {
         let name = name.into();
         let param = Param::new(&name, initial_value);

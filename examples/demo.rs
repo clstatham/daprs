@@ -8,8 +8,8 @@ fn main() {
     let graph = GraphBuilder::new();
 
     // add some outputs
-    let out1 = graph.add_output();
-    let out2 = graph.add_output();
+    let out1 = graph.add_audio_output();
+    let out2 = graph.add_audio_output();
 
     // add a sine oscillator
     let sine = graph.add(SineOscillator::new(440.0));
@@ -26,7 +26,12 @@ fn main() {
 
     // run the runtime for 1 second and output to the default audio device
     runtime
-        .run_for(Duration::from_secs(1), Backend::Default, Device::Default)
+        .run_for(
+            Duration::from_secs(1),
+            AudioBackend::Default,
+            AudioDevice::Default,
+            MidiPort::Default,
+        )
         .unwrap();
 
     // // run the graph for 1 second
