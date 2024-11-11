@@ -105,9 +105,12 @@ pub enum AudioDevice {
 /// The MIDI port to use for the runtime.
 #[derive(Default, Debug, Clone)]
 pub enum MidiPort {
+    /// Use the default MIDI port.
     #[default]
     Default,
+    /// Use the MIDI port at the given index.
     Index(usize),
+    /// Substring of the port name to match. The first port with a name containing this substring will be used.
     Name(String),
 }
 

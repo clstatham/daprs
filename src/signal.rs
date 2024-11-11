@@ -9,18 +9,24 @@ use std::{
 use crate::{message::Message, prelude::SignalSpec};
 
 #[cfg(feature = "f32_samples")]
+/// The type of samples used in the signal processing system.
 pub type Sample = f32;
 #[cfg(not(feature = "f32_samples"))]
+/// The type of samples used in the signal processing system.
 pub type Sample = f64;
 
 #[cfg(feature = "f32_samples")]
+/// The value of π.
 pub const PI: Sample = std::f32::consts::PI;
+/// The value of π.
 #[cfg(not(feature = "f32_samples"))]
 pub const PI: Sample = std::f64::consts::PI;
 
 #[cfg(feature = "f32_samples")]
+/// The value of τ (2π).
 pub const TAU: Sample = std::f32::consts::TAU;
 #[cfg(not(feature = "f32_samples"))]
+/// The value of τ (2π).
 pub const TAU: Sample = std::f64::consts::TAU;
 
 /// An owning, fixed-length array of [`Sample`]s.

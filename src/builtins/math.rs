@@ -194,8 +194,9 @@ impl Expr {
                 .set_value(name.to_string(), evalexpr::Value::from_float(*value))
                 .unwrap();
         }
-        let result = self.expr.eval_with_context(&self.context).unwrap();
-        result.as_float().unwrap()
+        self.expr
+            .eval_float_with_context_mut(&mut self.context)
+            .unwrap()
     }
 }
 
