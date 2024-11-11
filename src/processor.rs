@@ -32,6 +32,10 @@ pub enum ProcessorError {
     /// The signal value is invalid for the given reason.
     #[error("Invalid value: {0}")]
     InvalidValue(&'static str),
+
+    /// Message conversion failed for the given reason.
+    #[error("Message conversion failed: {0}")]
+    MessageConversionFailed(#[from] crate::message::MessageConversionError),
 }
 
 /// Information about an input/output of a [`Processor`] implementor.

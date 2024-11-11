@@ -4,8 +4,8 @@ use std::fmt::{Debug, Display};
 
 use crate::signal::Sample;
 
-#[derive(Debug, thiserror::Error)]
-pub enum MessageError {
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum MessageConversionError {
     #[error("Cannot convert message to boolean")]
     CannotConvertToBool,
     #[error("Cannot convert message to integer")]
@@ -24,7 +24,7 @@ pub enum MessageError {
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
 pub enum Message {
-    /// A disconnected message (no value).
+    /// A message with no value or meaning.
     #[default]
     None,
     /// A bang message ("do whatever it is you do").
@@ -97,7 +97,7 @@ impl Message {
     ///
     /// If the message is already the same type, it is left unchanged.
     #[inline]
-    pub fn make_compatible_with(&mut self, other: &Message) -> Result<(), MessageError> {
+    pub fn make_compatible_with(&mut self, other: &Message) -> Result<(), MessageConversionError> {
         if !self.is_same_type(other) {
             match other {
                 Message::None => *self = Message::None,
@@ -106,39 +106,39 @@ impl Message {
                     *self = self
                         .cast_to_bool()
                         .map(Message::Bool)
-                        .ok_or(MessageError::CannotConvertToBool)?
+                        .ok_or(MessageConversionError::CannotConvertToBool)?
                 }
                 Message::Int(_) => {
                     *self = self
                         .cast_to_int()
                         .map(Message::Int)
-                        .ok_or(MessageError::CannotConvertToInt)?
+                        .ok_or(MessageConversionError::CannotConvertToInt)?
                 }
                 Message::Float(_) => {
                     *self = self
                         .cast_to_float()
                         .map(Message::Float)
-                        .ok_or(MessageError::CannotConvertToFloat)?
+                        .ok_or(MessageConversionError::CannotConvertToFloat)?
                 }
                 Message::String(_) => {
                     *self = self
                         .cast_to_string()
                         .map(Message::String)
-                        .ok_or(MessageError::CannotConvertToString)?
+                        .ok_or(MessageConversionError::CannotConvertToString)?
                 }
                 Message::List(_) => {
                     *self = self
                         .as_list()
                         .cloned()
                         .map(Message::List)
-                        .ok_or(MessageError::CannotConvertToList)?
+                        .ok_or(MessageConversionError::CannotConvertToList)?
                 }
                 Message::Midi(_) => {
                     *self = self
                         .as_midi()
                         .map(<[u8]>::to_vec)
                         .map(Message::Midi)
-                        .ok_or(MessageError::CannotConvertToMidi)?
+                        .ok_or(MessageConversionError::CannotConvertToMidi)?
                 }
             }
         }
@@ -412,62 +412,64 @@ impl From<Option<Message>> for Message {
 }
 
 impl TryFrom<Message> for i64 {
-    type Error = MessageError;
+    type Error = MessageConversionError;
 
     fn try_from(value: Message) -> Result<Self, Self::Error> {
-        value.cast_to_int().ok_or(MessageError::CannotConvertToInt)
+        value
+            .cast_to_int()
+            .ok_or(MessageConversionError::CannotConvertToInt)
     }
 }
 
 impl TryFrom<Message> for Sample {
-    type Error = MessageError;
+    type Error = MessageConversionError;
 
     fn try_from(value: Message) -> Result<Self, Self::Error> {
         value
             .cast_to_float()
-            .ok_or(MessageError::CannotConvertToFloat)
+            .ok_or(MessageConversionError::CannotConvertToFloat)
     }
 }
 
 impl TryFrom<Message> for String {
-    type Error = MessageError;
+    type Error = MessageConversionError;
 
     fn try_from(value: Message) -> Result<Self, Self::Error> {
         value
             .cast_to_string()
-            .ok_or(MessageError::CannotConvertToString)
+            .ok_or(MessageConversionError::CannotConvertToString)
     }
 }
 
 impl TryFrom<Message> for Vec<Message> {
-    type Error = MessageError;
+    type Error = MessageConversionError;
 
     fn try_from(value: Message) -> Result<Self, Self::Error> {
         value
             .as_list()
             .cloned()
-            .ok_or(MessageError::CannotConvertToList)
+            .ok_or(MessageConversionError::CannotConvertToList)
     }
 }
 
 impl TryFrom<Message> for Vec<u8> {
-    type Error = MessageError;
+    type Error = MessageConversionError;
 
     fn try_from(value: Message) -> Result<Self, Self::Error> {
         value
             .as_midi()
             .map(<[u8]>::to_vec)
-            .ok_or(MessageError::CannotConvertToMidi)
+            .ok_or(MessageConversionError::CannotConvertToMidi)
     }
 }
 
 impl TryFrom<Message> for bool {
-    type Error = MessageError;
+    type Error = MessageConversionError;
 
     fn try_from(value: Message) -> Result<Self, Self::Error> {
         value
             .cast_to_bool()
-            .ok_or(MessageError::CannotConvertToBool)
+            .ok_or(MessageConversionError::CannotConvertToBool)
     }
 }
 
