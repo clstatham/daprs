@@ -15,16 +15,12 @@ fn main() {
     let counter = graph.add(Counter::default());
     counter.input(0).connect(&clock.output(0));
 
-    let expr = graph.add(Expr::new("if(counter % 2 < 1, a, b)"));
+    let mix = (counter % 2.0).eq(0.0).cond(&sine1, &sine2);
 
-    expr.input("counter").connect(&counter.output(0));
-    expr.input("a").connect(&sine1.output(0));
-    expr.input("b").connect(&sine2.output(0));
+    let mix = mix * 0.2;
 
-    let sine = expr * 0.2;
-
-    sine.output(0).connect(&out1.input(0));
-    sine.output(0).connect(&out2.input(0));
+    mix.output(0).connect(&out1.input(0));
+    mix.output(0).connect(&out2.input(0));
 
     let mut runtime = graph.build_runtime();
 

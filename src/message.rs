@@ -10,6 +10,8 @@ use crate::signal::Sample;
 pub enum Message {
     /// A bang message ("do whatever it is you do").
     Bang,
+    /// A boolean message.
+    Bool(bool),
     /// An integer message.
     Int(i64),
     /// A float message.
@@ -26,6 +28,7 @@ impl Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Message::Bang => write!(f, "bang"),
+            Message::Bool(b) => write!(f, "{}", b),
             Message::Int(i) => write!(f, "{}", i),
             Message::Float(x) => write!(f, "{}", x),
             Message::String(s) => write!(f, "{}", s),
@@ -60,10 +63,24 @@ impl Message {
         matches!(
             (self, other),
             (Message::Bang, Message::Bang)
+                | (Message::Bool(_), Message::Bool(_))
                 | (Message::Int(_), Message::Int(_))
                 | (Message::Float(_), Message::Float(_))
                 | (Message::String(_), Message::String(_))
+                | (Message::List(_), Message::List(_))
+                | (Message::Midi(_), Message::Midi(_))
         )
+    }
+
+    /// Attempts to convert the message to a boolean.
+    ///
+    /// This does not attempt to *cast* the message to a boolean, but rather checks if the message is already `Message::Bool`.
+    #[inline]
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Message::Bool(b) => Some(*b),
+            _ => None,
+        }
     }
 
     /// Attempts to convert the message to an integer.
@@ -99,10 +116,38 @@ impl Message {
         }
     }
 
+    /// Attempts to convert the message to a list.
+    ///
+    /// This does not attempt to *cast* the message to a list, but rather checks if the message is already `Message::List`.
+    #[inline]
+    pub fn as_list(&self) -> Option<&Vec<Message>> {
+        match self {
+            Message::List(list) => Some(list),
+            _ => None,
+        }
+    }
+
+    /// Attempts to convert the message to a MIDI message.
+    ///
+    /// This does not attempt to *cast* the message to a MIDI message, but rather checks if the message is already `Message::Midi`.
+    #[inline]
+    pub fn as_midi(&self) -> Option<&[u8]> {
+        match self {
+            Message::Midi(data) => Some(data),
+            _ => None,
+        }
+    }
+
     /// Returns true if the message is a bang.
     #[inline]
     pub fn is_bang(&self) -> bool {
         matches!(self, Message::Bang)
+    }
+
+    /// Returns true if the message is a boolean.
+    #[inline]
+    pub fn is_bool(&self) -> bool {
+        matches!(self, Message::Bool(_))
     }
 
     /// Returns true if the message is an integer.
@@ -135,41 +180,61 @@ impl Message {
         matches!(self, Message::Midi(_))
     }
 
-    /// Returns true if the message is truthy (can be reasonably interpreted as `true`).
-    #[inline]
-    pub fn is_truthy(&self) -> bool {
-        match self {
-            Message::Bang => true,
-            Message::Int(i) => *i != 0,
-            Message::Float(x) => *x != 0.0,
-            Message::String(s) => !s.is_empty(),
-            Message::List(list) => !list.is_empty(),
-            Message::Midi(data) => !data.is_empty(),
-        }
-    }
-
-    /// Returns true if the message is falsy (can be reasonably interpreted as `false`).
-    #[inline]
-    pub fn is_falsy(&self) -> bool {
-        !self.is_truthy()
-    }
-
     /// Attempts to cast the message to an integer using whatever method is most appropriate.
+    ///
+    /// Currently, this is defined as:
+    /// - `Message::Bool` is returned as `1` if `true`, `0` if `false`.
+    /// - `Message::Int` is returned as-is.
+    /// - `Message::Float` is rounded to the nearest integer.
+    /// - `Message::String` is parsed as an integer.
+    /// - All other types return `None`.
     #[inline]
     pub fn cast_to_int(&self) -> Option<i64> {
         match self {
             Message::Int(i) => Some(*i),
+            Message::Bool(b) => Some(if *b { 1 } else { 0 }),
             Message::Float(x) => Some(x.round() as i64),
             Message::String(s) => s.parse().ok(),
             _ => None,
         }
     }
 
+    /// Attempts to cast the message to a boolean using whatever method is most appropriate.
+    ///
+    /// Currently, this is defined as:
+    /// - `Message::Bool` is returned as-is.
+    /// - `Message::Int` is returned as `true` if not zero, `false` if zero.
+    /// - `Message::Float` is returned as `true` if not zero, `false` if zero.
+    /// - `Message::String` is returned as `true` if not empty, `false` if empty.
+    /// - `Message::List` is returned as `true` if not empty, `false` if empty.
+    /// - `Message::Midi` is returned as `true` if not empty, `false` if empty.
+    /// - All other types return `None`.
+    #[inline]
+    pub fn cast_to_bool(&self) -> Option<bool> {
+        match self {
+            Message::Bool(b) => Some(*b),
+            Message::Int(i) => Some(*i != 0),
+            Message::Float(x) => Some(*x != 0.0),
+            Message::String(s) => Some(!s.is_empty()),
+            Message::List(list) => Some(!list.is_empty()),
+            Message::Midi(data) => Some(!data.is_empty()),
+            _ => None,
+        }
+    }
+
     /// Attempts to cast the message to a float using whatever method is most appropriate.
+    ///
+    /// Currently, this is defined as:
+    /// - `Message::Bool` is returned as `1.0` if `true`, `0.0` if `false`.
+    /// - `Message::Int` is returned as-is, but converted to a float.
+    /// - `Message::Float` is returned as-is.
+    /// - `Message::String` is parsed as a float.
+    /// - All other types return `None`.
     #[inline]
     pub fn cast_to_float(&self) -> Option<Sample> {
         match self {
             Message::Int(i) => Some(*i as Sample),
+            Message::Bool(b) => Some(if *b { 1.0 } else { 0.0 }),
             Message::Float(x) => Some(*x),
             Message::String(s) => s.parse().ok(),
             _ => None,
@@ -177,10 +242,19 @@ impl Message {
     }
 
     /// Attempts to cast the message to a string using whatever method is most appropriate.
+    ///
+    /// Currently, this is defined as:
+    /// - `Message::Bang` is returned as `"bang"`.
+    /// - `Message::Bool` is returned as `"true"` or `"false"`.
+    /// - `Message::Int` is returned as the integer converted to a string.
+    /// - `Message::Float` is returned as the float converted to a string.
+    /// - `Message::String` is returned as-is.
+    /// - All other types return `None`.
     #[inline]
     pub fn cast_to_string(&self) -> Option<String> {
         match self {
             Message::Bang => Some("bang".to_string()),
+            Message::Bool(b) => Some(b.to_string()),
             Message::Int(i) => Some(i.to_string()),
             Message::Float(x) => Some(x.to_string()),
             Message::String(s) => Some(s.to_string()),

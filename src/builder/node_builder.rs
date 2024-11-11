@@ -155,10 +155,7 @@ impl Node {
     #[track_caller]
     pub fn smooth(&self, factor: Sample) -> Node {
         self.assert_single_output();
-        let proc = self.graph.add(Smooth::default());
-        proc.input("factor").set(factor);
-        proc.input(0).connect(&self.output(0));
-        proc
+        self.output(0).smooth(factor)
     }
 
     /// Converts the output signal from a MIDI note to a frequency in Hz.
@@ -170,9 +167,7 @@ impl Node {
     #[track_caller]
     pub fn midi2freq(&self) -> Node {
         self.assert_single_output();
-        let proc = self.graph.add(MidiToFreq);
-        proc.input(0).connect(&self.output(0));
-        proc
+        self.output(0).midi2freq()
     }
 
     /// Converts the output signal from a frequency in Hz to a MIDI note.
@@ -184,9 +179,7 @@ impl Node {
     #[track_caller]
     pub fn freq2midi(&self) -> Node {
         self.assert_single_output();
-        let proc = self.graph.add(FreqToMidi);
-        proc.input(0).connect(&self.output(0));
-        proc
+        self.output(0).freq2midi()
     }
 
     /// Creates a new, single-output node that holds and continuously outputs the last value of this node.
@@ -198,9 +191,18 @@ impl Node {
     #[track_caller]
     pub fn make_register(&self) -> Node {
         self.assert_single_output();
-        let node = self.graph.add(Register::default());
-        node.input(0).connect(&self.output(0));
-        node
+        self.output(0).make_register()
+    }
+
+    /// Creates a new [`Cond`] node that selects one of its two inputs based on a condition.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    pub fn cond(&self, then: impl IntoNode, else_: impl IntoNode) -> Node {
+        self.assert_single_output();
+        self.output(0).cond(then, else_)
     }
 }
 
@@ -340,6 +342,43 @@ impl Output {
         let node = self.node.graph().add(Register::default());
         node.input(0).connect(self);
         node
+    }
+
+    /// Creates a new, single-output node that smooths the output signal.
+    #[inline]
+    pub fn smooth(&self, factor: Sample) -> Node {
+        let proc = self.node.graph().add(Smooth::default());
+        proc.input("factor").set(factor);
+        proc.input(0).connect(self);
+        proc
+    }
+
+    /// Creates a new, single-output node that converts the output signal from a MIDI note to a frequency in Hz.
+    #[inline]
+    pub fn midi2freq(&self) -> Node {
+        let proc = self.node.graph().add(MidiToFreq);
+        proc.input(0).connect(self);
+        proc
+    }
+
+    /// Creates a new, single-output node that converts the output signal from a frequency in Hz to a MIDI note.
+    #[inline]
+    pub fn freq2midi(&self) -> Node {
+        let proc = self.node.graph().add(FreqToMidi);
+        proc.input(0).connect(self);
+        proc
+    }
+
+    /// Creates a new [`Cond`] node that selects one of its two inputs based on the condition given by this output signal.
+    #[inline]
+    pub fn cond(&self, then: impl IntoNode, else_: impl IntoNode) -> Node {
+        let then = then.into_node(self.node.graph());
+        let else_ = else_.into_node(self.node.graph());
+        let cond = self.node.graph().add(Cond);
+        cond.input("cond").connect(self);
+        cond.input("then").connect(&then.output(0));
+        cond.input("else").connect(&else_.output(0));
+        cond
     }
 }
 
@@ -574,6 +613,38 @@ impl_binary_node_ops!(
 );
 impl_binary_node_ops!(max, math::Max, "Returns the maximum of two signals.");
 impl_binary_node_ops!(min, math::Min, "Returns the minimum of two signals.");
+
+// comparison operations
+impl_binary_node_ops!(
+    eq,
+    control::Equal,
+    "Returns true if the two signals are equal."
+);
+impl_binary_node_ops!(
+    ne,
+    control::NotEqual,
+    "Returns true if the two signals are not equal."
+);
+impl_binary_node_ops!(
+    lt,
+    control::Less,
+    "Returns true if the first signal is less than the second signal."
+);
+impl_binary_node_ops!(
+    le,
+    control::LessOrEqual,
+    "Returns true if the first signal is less than or equal to the second signal."
+);
+impl_binary_node_ops!(
+    gt,
+    control::Greater,
+    "Returns true if the first signal is greater than the second signal."
+);
+impl_binary_node_ops!(
+    ge,
+    control::GreaterOrEqual,
+    "Returns true if the first signal is greater than or equal to the second signal."
+);
 
 macro_rules! impl_unary_node_ops {
     ($name:ident, $proc:ty, $doc:expr) => {
