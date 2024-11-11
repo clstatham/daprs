@@ -33,7 +33,7 @@ fn main() {
             Duration::from_secs(5),
             AudioBackend::Default,
             AudioDevice::Default,
-            MidiPort::Default,
+            None,
         )
         .unwrap();
 }

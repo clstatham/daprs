@@ -32,11 +32,7 @@ fn main() {
 
     // run the graph for 1 second
     let handle = runtime
-        .run(
-            AudioBackend::Default,
-            AudioDevice::Default,
-            MidiPort::Default,
-        )
+        .run(AudioBackend::Default, AudioDevice::Default, None)
         .unwrap();
     std::thread::sleep(std::time::Duration::from_secs(1));
 

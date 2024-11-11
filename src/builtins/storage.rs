@@ -76,14 +76,14 @@ impl Processor for AudioBuffer {
             inputs.iter_input_as_messages(0)?,
             inputs.iter_input_as_messages(1)?
         ) {
-            if let Some(index) = index {
+            if index.is_some() {
                 let Some(index) = index.cast_to_float() else {
                     return Err(ProcessorError::InputSpecMismatch(0));
                 };
 
                 self.index = index;
 
-                if let Some(set) = set {
+                if set.is_some() {
                     let set = set
                         .cast_to_float()
                         .ok_or(ProcessorError::InputSpecMismatch(1))?;
@@ -114,7 +114,7 @@ impl Processor for AudioBuffer {
                 }
             }
 
-            *length = Some(Message::Int(buffer.len() as i64));
+            *length = Message::Int(buffer.len() as i64);
         }
 
         Ok(())
@@ -137,7 +137,7 @@ impl Processor for AudioBuffer {
 /// | `0` | `out` | `Message` | The value stored in the register. |
 #[derive(Clone, Debug, Default)]
 pub struct Register {
-    value: Option<Message>,
+    value: Message,
 }
 
 impl Processor for Register {
@@ -162,12 +162,12 @@ impl Processor for Register {
             inputs.iter_input_as_messages(1)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            if let Some(set) = set {
-                self.value = Some(set.clone());
+            if set.is_some() {
+                self.value = set.clone();
             }
 
             if clear.is_some() {
-                self.value = None;
+                self.value = Message::None;
             }
 
             *out = self.value.clone();

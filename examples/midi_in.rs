@@ -32,7 +32,7 @@ fn main() {
         .run(
             AudioBackend::Default,
             AudioDevice::Default,
-            MidiPort::Name("MIDIIN2 (LPX MIDI)".to_string()), // change this to the name of your MIDI device
+            Some(MidiPort::Name("MIDIIN2 (LPX MIDI)".to_string())), // change this to the name of your MIDI device
         )
         .unwrap();
 

@@ -197,19 +197,15 @@ impl Buffer<Sample> {
     }
 }
 
-impl Buffer<Option<Message>> {
+impl Buffer<Message> {
     /// Returns `true` if all messages in the buffer are of the same message type.
     pub fn is_homogeneous(&self) -> bool {
         if self.buf.len() > 1 {
             let first_some = self.buf.iter().find(|message| message.is_some());
             if let Some(first_some) = first_some {
-                let first_some = first_some.as_ref().unwrap();
-                self.buf.iter().all(|message| {
-                    message.is_none()
-                        || message
-                            .as_ref()
-                            .is_some_and(|message| message.is_same_type(first_some))
-                })
+                self.buf
+                    .iter()
+                    .all(|message| message.is_none() || message.is_same_type(first_some))
             } else {
                 true
             }
@@ -228,39 +224,39 @@ impl Buffer<Option<Message>> {
     /// Returns `true` if all messages in the buffer are `None`.
     #[inline]
     pub fn is_all_none(&self) -> bool {
-        self.buf.iter().all(Option::is_none)
+        self.buf.iter().all(Message::is_none)
     }
 
     /// Returns `true` if all messages in the buffer are `Some(Message::Bang)`.
     #[inline]
     pub fn is_all_bang(&self) -> bool {
-        self.buf.iter().all(|message| {
-            message.is_none() || message.as_ref().is_some_and(|message| message.is_bang())
-        })
+        self.buf
+            .iter()
+            .all(|message| message.is_none() || message.is_bang())
     }
 
     /// Returns `true` if all messages in the buffer are `Some(Message::Int)`.
     #[inline]
     pub fn is_all_int(&self) -> bool {
-        self.buf.iter().all(|message| {
-            message.is_none() || message.as_ref().is_some_and(|message| message.is_int())
-        })
+        self.buf
+            .iter()
+            .all(|message| message.is_none() || message.is_int())
     }
 
     /// Returns `true` if all messages in the buffer are `Some(Message::Float)`.
     #[inline]
     pub fn is_all_float(&self) -> bool {
-        self.buf.iter().all(|message| {
-            message.is_none() || message.as_ref().is_some_and(|message| message.is_float())
-        })
+        self.buf
+            .iter()
+            .all(|message| message.is_none() || message.is_float())
     }
 
     /// Returns `true` if all messages in the buffer are `Some(Message::String)`.
     #[inline]
     pub fn is_all_string(&self) -> bool {
-        self.buf.iter().all(|message| {
-            message.is_none() || message.as_ref().is_some_and(|message| message.is_string())
-        })
+        self.buf
+            .iter()
+            .all(|message| message.is_none() || message.is_string())
     }
 }
 
@@ -340,7 +336,7 @@ pub enum Signal {
     /// A single sample.
     Sample(Sample),
     /// A single message.
-    Message(Option<Message>),
+    Message(Message),
 }
 
 impl Signal {
@@ -351,12 +347,12 @@ impl Signal {
 
     /// Creates a new message signal with the given message.
     pub fn new_message_some(message: Message) -> Self {
-        Self::Message(Some(message))
+        Self::Message(message)
     }
 
     /// Creates a new message signal with no message.
     pub fn new_message_none() -> Self {
-        Self::Message(None)
+        Self::Message(Message::None)
     }
 
     /// Returns `true` if this is a sample.
@@ -378,7 +374,7 @@ impl Signal {
     }
 
     /// Returns the message value, if this is a message.
-    pub const fn as_message(&self) -> Option<&Option<Message>> {
+    pub const fn as_message(&self) -> Option<&Message> {
         match self {
             Self::Sample(_) => None,
             Self::Message(message) => Some(message),
@@ -416,7 +412,7 @@ pub enum SignalBuffer {
     /// A buffer of samples.
     Sample(Buffer<Sample>),
     /// A buffer of messages.
-    Message(Buffer<Option<Message>>),
+    Message(Buffer<Message>),
 }
 
 impl SignalBuffer {
@@ -428,7 +424,7 @@ impl SignalBuffer {
     /// Creates a new message buffer of size `length`, filled with `None`.
     pub fn new_message(length: usize) -> Self {
         Self::Message(Buffer {
-            buf: vec![None; length],
+            buf: vec![Message::None; length],
         })
     }
 
@@ -472,7 +468,7 @@ impl SignalBuffer {
     }
 
     /// Returns a reference to the message buffer, if this is a message buffer.
-    pub fn as_message(&self) -> Option<&Buffer<Option<Message>>> {
+    pub fn as_message(&self) -> Option<&Buffer<Message>> {
         match self {
             Self::Sample(_) => None,
             Self::Message(buffer) => Some(buffer),
@@ -488,7 +484,7 @@ impl SignalBuffer {
     }
 
     /// Returns a mutable reference to the message buffer, if this is a message buffer.
-    pub fn as_message_mut(&mut self) -> Option<&mut Buffer<Option<Message>>> {
+    pub fn as_message_mut(&mut self) -> Option<&mut Buffer<Message>> {
         match self {
             Self::Sample(_) => None,
             Self::Message(buffer) => Some(buffer),

@@ -82,6 +82,16 @@ impl GraphBuilder {
         Runtime::new(self.build())
     }
 
+    /// Returns the number of nodes in the graph.
+    pub fn node_count(&self) -> usize {
+        self.with_graph(|graph| graph.digraph().node_count())
+    }
+
+    /// Returns the number of edges in the graph.
+    pub fn edge_count(&self) -> usize {
+        self.with_graph(|graph| graph.digraph().edge_count())
+    }
+
     /// Calls the given function with a reference to the graph.
     pub fn with_graph<F, R>(&self, f: F) -> R
     where

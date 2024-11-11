@@ -12,6 +12,18 @@ use crate::{
 };
 
 /// A processor that forwards its input to its output.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `in` | `Sample` | | The input signal to forward. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Sample` | The output signal. |
 #[derive(Clone, Debug)]
 pub struct Passthrough;
 
@@ -70,15 +82,13 @@ impl GraphBuilder {
 /// | `0` | `out` | `Message` | The message to send. |
 #[derive(Clone, Debug)]
 pub struct MessageSender {
-    message: Option<Message>,
+    message: Message,
 }
 
 impl MessageSender {
     /// Creates a new `MessageProc` with the given initial message.
     pub fn new(message: Message) -> Self {
-        Self {
-            message: Some(message),
-        }
+        Self { message }
     }
 }
 
@@ -104,14 +114,14 @@ impl Processor for MessageSender {
             inputs.iter_input_as_messages(1)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            if let Some(message) = message {
-                self.message = Some(message.clone());
+            if message.is_some() {
+                self.message = message.clone();
             }
 
             if bang.is_some() {
                 *out = self.message.clone();
             } else {
-                *out = None;
+                *out = Message::None;
             }
         }
 
@@ -159,10 +169,11 @@ impl Processor for ConstantMessageSender {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let message = outputs.iter_output_mut_as_messages(0)?;
-        for message in message {
-            *message = Some(self.0.clone());
-        }
+        outputs
+            .output(0)
+            .as_message_mut()
+            .unwrap()
+            .fill(self.0.clone());
 
         Ok(())
     }
@@ -246,7 +257,7 @@ impl Processor for Print {
             inputs.iter_input_as_messages(0)?,
             inputs.iter_input_as_messages(1)?
         ) {
-            if let Some(message) = message {
+            if message.is_some() {
                 self.msg = Some(format!("{}", message));
             }
 
@@ -287,6 +298,8 @@ impl GraphBuilder {
 
 /// A processor that converts a message to an audio signal.
 ///
+/// The message is converted to a float via [`Message::cast_to_float`]. If the conversion fails, the output is 0.0.
+///
 /// # Inputs
 ///
 /// | Index | Name | Type | Default | Description |
@@ -297,7 +310,7 @@ impl GraphBuilder {
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `sample` | `Sample` | The sample value. |
+/// | `0` | `audio` | `Sample` | The audio value. |
 #[derive(Clone, Debug, Default)]
 
 pub struct MessageToAudio;
@@ -308,7 +321,7 @@ impl Processor for MessageToAudio {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("sample", 0.0)]
+        vec![SignalSpec::unbounded("audio", 0.0)]
     }
 
     fn process(
@@ -320,12 +333,9 @@ impl Processor for MessageToAudio {
             inputs.iter_input_as_messages(0)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
-            if let Some(message) = message {
-                if let Some(sample) = message.cast_to_float() {
-                    *sample_out = sample;
-                } else {
-                    *sample_out = 0.0;
-                }
+            *sample_out = 0.0;
+            if let Some(sample) = message.cast_to_float() {
+                *sample_out = sample;
             }
         }
 
@@ -368,7 +378,7 @@ impl Processor for AudioToMessage {
             inputs.iter_input_as_samples(0)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            *message_out = Some(Message::Float(sample));
+            *message_out = Message::Float(sample);
         }
 
         Ok(())
@@ -520,9 +530,9 @@ impl Processor for Changed {
             outputs.iter_output_mut_as_messages(0)?
         ) {
             if (self.last - in_signal).abs() > threshold {
-                *out_signal = Some(Message::Bang);
+                *out_signal = Message::Bang;
             } else {
-                *out_signal = None;
+                *out_signal = Message::None;
             }
 
             self.last = in_signal;
@@ -569,9 +579,9 @@ impl Processor for ZeroCrossing {
             outputs.iter_output_mut_as_messages(0)?
         ) {
             if (self.last < 0.0 && in_signal >= 0.0) || (self.last > 0.0 && in_signal <= 0.0) {
-                *out_signal = Some(Message::Bang);
+                *out_signal = Message::Bang;
             } else {
-                *out_signal = None;
+                *out_signal = Message::None;
             }
 
             self.last = in_signal;
@@ -614,7 +624,7 @@ impl Processor for MessageTx {
     ) -> Result<(), ProcessorError> {
         let in_signal = inputs.iter_input_as_messages(0)?;
 
-        for message in in_signal.flatten() {
+        for message in in_signal {
             self.send(message.clone());
         }
 
@@ -657,9 +667,9 @@ impl Processor for MessageRx {
 
         for out in out {
             if let Some(msg) = self.recv() {
-                *out = Some(msg);
+                *out = msg;
             } else {
-                *out = None;
+                *out = Message::None;
             }
         }
 
@@ -782,14 +792,14 @@ impl Processor for Param {
             inputs.iter_input_as_messages(0)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            if let Some(set) = set {
+            if set.is_some() {
                 self.tx().send(set.clone());
             }
 
             if let Some(msg) = self.get() {
-                *get = Some(msg);
+                *get = msg;
             } else {
-                *get = None;
+                *get = Message::None;
             }
         }
 
@@ -862,10 +872,7 @@ impl Processor for Select {
         )
         .enumerate()
         {
-            let index = index
-                .as_ref()
-                .and_then(|index| index.cast_to_int())
-                .unwrap_or(0);
+            let index = index.cast_to_int().unwrap_or(0);
 
             self.last_index = index;
 
@@ -879,7 +886,7 @@ impl Processor for Select {
                         let out_signal = out_signal
                             .as_message_mut()
                             .ok_or(ProcessorError::OutputSpecMismatch(i))?;
-                        out_signal[sample_index] = None;
+                        out_signal[sample_index] = Message::None;
                     }
                 }
             }
@@ -953,8 +960,8 @@ impl Processor for Merge {
             let out_signal = outputs.iter_output_mut_as_messages(0)?;
 
             for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
-                if let Some(in_signal) = in_signal {
-                    *out_signal = Some(in_signal.clone());
+                if in_signal.is_some() {
+                    *out_signal = in_signal.clone();
                 }
             }
         }
@@ -1008,7 +1015,7 @@ impl Processor for Counter {
                 self.count = 0;
             }
 
-            *count = Some(Message::Int(self.count));
+            *count = Message::Int(self.count);
 
             if trig.is_some() {
                 self.count += 1;

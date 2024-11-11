@@ -148,7 +148,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     pub fn iter_input_as_messages(
         &self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &Option<Message>> + '_, ProcessorError> {
+    ) -> Result<impl Iterator<Item = &Message> + '_, ProcessorError> {
         let buffer = self.input(index);
 
         if let Some(buffer) = buffer {
@@ -197,7 +197,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn output_as_messages(
         &mut self,
         index: usize,
-    ) -> Result<&mut Buffer<Option<Message>>, ProcessorError> {
+    ) -> Result<&mut Buffer<Message>, ProcessorError> {
         self.output(index)
             .as_message_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(index))
@@ -228,7 +228,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn iter_output_mut_as_messages(
         &mut self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &mut Option<Message>> + '_, ProcessorError> {
+    ) -> Result<impl Iterator<Item = &mut Message> + '_, ProcessorError> {
         let buffer = self
             .output(index)
             .as_message_mut()

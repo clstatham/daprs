@@ -44,13 +44,8 @@ impl Processor for Cond {
             inputs.iter_input_as_messages(1)?,
             inputs.iter_input_as_messages(2)?
         ) {
-            let Some(cond) = cond else {
-                *out = None;
-                continue;
-            };
-
             let Some(cond) = cond.cast_to_bool() else {
-                *out = None;
+                *out = Message::None;
                 continue;
             };
 
@@ -93,19 +88,11 @@ macro_rules! comparison_op {
                     inputs.iter_input_as_messages(0)?,
                     inputs.iter_input_as_messages(1)?
                 ) {
-                    let Some(a) = a else {
-                        *out = None;
-                        continue;
-                    };
-                    let Some(b) = b else {
-                        *out = None;
-                        continue;
-                    };
 
                     if let (Some(a), Some(b)) = (a.cast_to_float(), b.cast_to_float()) {
-                        *out = Some(Message::Bool(a $op b));
+                        *out = Message::Bool(a $op b);
                     } else {
-                        *out = None;
+                        *out = Message::None;
                     }
                 }
 

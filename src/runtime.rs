@@ -360,6 +360,8 @@ impl Runtime {
     }
 
     /// Runs the audio graph as fast as possible for the given duration's worth of samples, and returns the rendered output channels.
+    ///
+    /// Note that MIDI input is not supported in offline mode.
     pub fn run_offline(
         &mut self,
         duration: Duration,
@@ -372,6 +374,8 @@ impl Runtime {
     /// Simulates the audio graph running for the given duration's worth of samples, and returns the rendered output channels.
     ///
     /// This method will add a delay between each block of samples to simulate real-time processing.
+    ///
+    /// Note that MIDI input is not supported in offline mode.
     pub fn simulate(
         &mut self,
         duration: Duration,
@@ -434,6 +438,8 @@ impl Runtime {
     }
 
     /// Runs the audio graph as fast as possible for the given duration's worth of samples, and writes the rendered output channels to a WAV file.
+    ///
+    /// Note that MIDI input is not supported in offline mode.
     pub fn run_offline_to_file(
         &mut self,
         file_path: impl AsRef<std::path::Path>,
@@ -479,13 +485,17 @@ impl Runtime {
         Ok(())
     }
 
-    /// Runs the audio graph in real-time for the given [`Duration`] using the specified audio backend and device.
+    /// Runs the audio graph in real-time for the given [`Duration`] using the specified audio backend, audio device, and optional MIDI port.
+    ///
+    /// This method will block the current thread until the runtime is stopped automatically after the given duration.
+    ///
+    /// If a MIDI port is not provided, the runtime will run without listening for MIDI messages.
     pub fn run_for(
         &mut self,
         duration: Duration,
         backend: AudioBackend,
         device: AudioDevice,
-        midi_port: MidiPort,
+        midi_port: Option<MidiPort>,
     ) -> RuntimeResult<()> {
         let handle = self.run(backend, device, midi_port)?;
         std::thread::sleep(duration);
@@ -494,12 +504,13 @@ impl Runtime {
     }
 
     /// Runs the audio graph in real-time using the specified audio backend and device.
+    ///
+    /// If a MIDI port is not provided, the runtime will run without listening for MIDI messages.
     pub fn run(
         &mut self,
         backend: AudioBackend,
         device: AudioDevice,
-
-        midi_port: MidiPort,
+        midi_port: Option<MidiPort>,
     ) -> RuntimeResult<RuntimeHandle> {
         let (kill_tx, kill_rx) = mpsc::channel();
         let (graph_tx, graph_rx) = mpsc::channel();
@@ -556,24 +567,30 @@ impl Runtime {
 
         let midi_connection = midir::MidiInput::new("raug midir input")?;
 
-        let midi_port = match &midi_port {
-            MidiPort::Default => midi_connection.ports().into_iter().next(),
-            MidiPort::Index(index) => midi_connection.ports().into_iter().nth(*index),
-            MidiPort::Name(name) => midi_connection
-                .ports()
-                .into_iter()
-                .find(|port| midi_connection.port_name(port).unwrap().contains(name)),
-        }
-        .ok_or_else(|| RuntimeError::MidiPortUnavailable(midi_port))?;
+        let midi_port = if let Some(midi_port) = midi_port {
+            let midi_port = match &midi_port {
+                MidiPort::Default => midi_connection.ports().into_iter().next(),
+                MidiPort::Index(index) => midi_connection.ports().into_iter().nth(*index),
+                MidiPort::Name(name) => midi_connection
+                    .ports()
+                    .into_iter()
+                    .find(|port| midi_connection.port_name(port).unwrap().contains(name)),
+            }
+            .ok_or_else(|| RuntimeError::MidiPortUnavailable(midi_port))?;
 
-        log::info!(
-            "Using MIDI port: {:?}",
-            midi_connection
-                .port_name(&midi_port)
-                .as_ref()
-                .map(|s| s.as_str())
-                .unwrap_or("unknown")
-        );
+            log::info!(
+                "Using MIDI port: {:?}",
+                midi_connection
+                    .port_name(&midi_port)
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .unwrap_or("unknown")
+            );
+
+            Some(midi_port)
+        } else {
+            None
+        };
 
         self.reset(audio_rate, initial_block_size)?;
 
@@ -582,21 +599,27 @@ impl Runtime {
         let audio_runtime = self.clone();
         let midi_runtime = self.clone();
 
-        let midi_in = midi_connection.connect(
-            &midi_port,
-            "raug midir input",
-            move |_stamp, message, _data| {
-                for (_name, param) in midi_runtime.graph().midi_input_iter() {
-                    param.set(message.to_vec());
-                }
-            },
-            (),
-        )?;
+        let midi_in = if let Some(midi_port) = midi_port {
+            let midi_in = midi_connection.connect(
+                &midi_port,
+                "raug midir input",
+                move |_stamp, message, _data| {
+                    for (_name, param) in midi_runtime.graph().midi_input_iter() {
+                        param.set(message.to_vec());
+                    }
+                },
+                (),
+            )?;
+
+            Some(midi_in)
+        } else {
+            None
+        };
 
         let handle = RuntimeHandle {
             kill_tx,
             graph_tx,
-            midi_in: Arc::new(Mutex::new(Some(midi_in))),
+            midi_in: Arc::new(Mutex::new(midi_in)),
         };
 
         std::thread::spawn(move || -> RuntimeResult<()> {

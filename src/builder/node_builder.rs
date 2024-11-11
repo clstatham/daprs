@@ -36,14 +36,14 @@ impl Node {
     #[inline]
     pub fn num_inputs(&self) -> usize {
         self.graph
-            .with_graph(|graph| graph.digraph()[self.id()].input_spec().len())
+            .with_graph(|graph| graph.digraph()[self.id()].num_inputs())
     }
 
     /// Returns the number of outputs of the node.
     #[inline]
     pub fn num_outputs(&self) -> usize {
         self.graph
-            .with_graph(|graph| graph.digraph()[self.id()].output_spec().len())
+            .with_graph(|graph| graph.digraph()[self.id()].num_outputs())
     }
 
     /// Returns the input of the node at the given index.
@@ -125,7 +125,7 @@ impl Node {
             return self.clone();
         }
         let proc = self.graph.add(MessageToAudio);
-        proc.connect_input(self, 0, 0);
+        proc.input(0).connect(&self.output(0));
         proc
     }
 
@@ -142,7 +142,7 @@ impl Node {
             return self.clone();
         }
         let proc = self.graph.add(AudioToMessage);
-        proc.connect_input(self, 0, 0);
+        proc.input(0).connect(&self.output(0));
         proc
     }
 
@@ -203,6 +203,30 @@ impl Node {
     pub fn cond(&self, then: impl IntoNode, else_: impl IntoNode) -> Node {
         self.assert_single_output();
         self.output(0).cond(then, else_)
+    }
+
+    /// Creates a new [`Index`] node that outputs the value of the given index of the output signal.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    pub fn index(&self, index: impl IntoNode) -> Node {
+        self.assert_single_output();
+        self.output(0).index(index)
+    }
+
+    /// Creates a new [`Len`] node that outputs the length of the output signal.
+    ///
+    /// The output signal must be a list.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node has more than one output.
+    #[inline]
+    pub fn len(&self) -> Node {
+        self.assert_single_output();
+        self.output(0).len()
     }
 }
 
@@ -380,6 +404,25 @@ impl Output {
         cond.input("else").connect(&else_.output(0));
         cond
     }
+
+    /// Creates a new [`Index`] node that outputs the value of the given index of the output signal.
+    #[inline]
+    pub fn index(&self, index: impl IntoNode) -> Node {
+        let proc = self.node.graph().add(Index);
+        proc.input(0).connect(self);
+        proc.input("index").set(index);
+        proc
+    }
+
+    /// Creates a new [`Len`] node that outputs the length of the output signal.
+    ///
+    /// The output signal must be a list.
+    #[inline]
+    pub fn len(&self) -> Node {
+        let proc = self.node.graph().add(Len);
+        proc.input(0).connect(self);
+        proc
+    }
 }
 
 mod sealed {
@@ -443,6 +486,18 @@ impl IntoNode for Sample {
 impl IntoNode for Message {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.constant_message(self)
+    }
+}
+
+impl IntoNode for i64 {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
+        graph.constant_message(Message::Int(self))
+    }
+}
+
+impl IntoNode for u32 {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
+        graph.constant_message(Message::Int(self as i64))
     }
 }
 
@@ -611,39 +666,39 @@ impl_binary_node_ops!(
     math::Hypot,
     "Calculates the hypotenuse of two signals."
 );
-impl_binary_node_ops!(max, math::Max, "Returns the maximum of two signals.");
-impl_binary_node_ops!(min, math::Min, "Returns the minimum of two signals.");
+impl_binary_node_ops!(max, math::Max, "Outputs the maximum of two signals.");
+impl_binary_node_ops!(min, math::Min, "Outputs the minimum of two signals.");
 
 // comparison operations
 impl_binary_node_ops!(
     eq,
     control::Equal,
-    "Returns true if the two signals are equal."
+    "Outputs true if the two signals are equal."
 );
 impl_binary_node_ops!(
     ne,
     control::NotEqual,
-    "Returns true if the two signals are not equal."
+    "Outputs true if the two signals are not equal."
 );
 impl_binary_node_ops!(
     lt,
     control::Less,
-    "Returns true if the first signal is less than the second signal."
+    "Outputs true if the first signal is less than the second signal."
 );
 impl_binary_node_ops!(
     le,
     control::LessOrEqual,
-    "Returns true if the first signal is less than or equal to the second signal."
+    "Outputs true if the first signal is less than or equal to the second signal."
 );
 impl_binary_node_ops!(
     gt,
     control::Greater,
-    "Returns true if the first signal is greater than the second signal."
+    "Outputs true if the first signal is greater than the second signal."
 );
 impl_binary_node_ops!(
     ge,
     control::GreaterOrEqual,
-    "Returns true if the first signal is greater than or equal to the second signal."
+    "Outputs true if the first signal is greater than or equal to the second signal."
 );
 
 macro_rules! impl_unary_node_ops {
@@ -677,17 +732,17 @@ impl std::ops::Neg for &Node {
 impl_unary_node_ops!(
     abs,
     math::Abs,
-    "Calculates the absolute value of the input signal."
+    "Outputs the absolute value of the input signal."
 );
 impl_unary_node_ops!(
     sqrt,
     math::Sqrt,
-    "Calculates the square root of the input signal."
+    "Outputs the square root of the input signal."
 );
 impl_unary_node_ops!(
     cbrt,
     math::Cbrt,
-    "Calculates the cube root of the input signal."
+    "Outputs the cube root of the input signal."
 );
 impl_unary_node_ops!(
     ceil,
@@ -704,26 +759,22 @@ impl_unary_node_ops!(
     math::Round,
     "Rounds the input signal to the nearest integer."
 );
-impl_unary_node_ops!(sin, math::Sin, "Calculates the sine of the input signal.");
-impl_unary_node_ops!(cos, math::Cos, "Calculates the cosine of the input signal.");
-impl_unary_node_ops!(
-    tan,
-    math::Tan,
-    "Calculates the tangent of the input signal."
-);
+impl_unary_node_ops!(sin, math::Sin, "Outputs the sine of the input signal.");
+impl_unary_node_ops!(cos, math::Cos, "Outputs the cosine of the input signal.");
+impl_unary_node_ops!(tan, math::Tan, "Outputs the tangent of the input signal.");
 
 impl_unary_node_ops!(
     recip,
     math::Recip,
-    "Calculates the reciprocal of the input signal."
+    "Outputs the reciprocal of the input signal."
 );
 impl_unary_node_ops!(
     signum,
     math::Signum,
-    "Returns the sign of the input signal."
+    "Outputs the sign of the input signal."
 );
 impl_unary_node_ops!(
     fract,
     math::Fract,
-    "Returns the fractional part of the input signal."
+    "Outputs the fractional part of the input signal."
 );

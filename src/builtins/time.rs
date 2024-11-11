@@ -88,16 +88,14 @@ impl Processor for Metro {
             inputs.iter_input_as_messages(0)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            if let Some(period) = period {
-                if let Some(period) = period.cast_to_float() {
-                    self.period = period;
-                }
+            if let Some(period) = period.cast_to_float() {
+                self.period = period;
             }
 
             if self.next_sample() {
-                *out = Some(Message::Bang);
+                *out = Message::Bang;
             } else {
-                *out = None;
+                *out = Message::None;
             }
         }
 
@@ -215,7 +213,7 @@ impl Processor for SampleDelay {
             inputs.iter_input_as_samples(0)?,
             inputs.iter_input_as_messages(1)?
         ) {
-            let delay = if let Some(delay) = delay {
+            let delay = if delay.is_some() {
                 delay.cast_to_int().unwrap_or(0).max(0) as usize
             } else {
                 0

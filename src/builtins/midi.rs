@@ -36,11 +36,11 @@ impl Processor for MidiNote {
             inputs.iter_input_as_messages(0)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            *out = None;
-            if let Some(Message::Midi(msg)) = midi {
+            *out = Message::None;
+            if let Message::Midi(msg) = midi {
                 if msg.len() == 3 {
                     let note = msg[1] as f64;
-                    *out = Some(Message::Float(note));
+                    *out = Message::Float(note);
                 }
             }
         }
@@ -85,11 +85,11 @@ impl Processor for MidiVelocity {
             inputs.iter_input_as_messages(0)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            *out = None;
-            if let Some(Message::Midi(msg)) = midi {
+            *out = Message::None;
+            if let Message::Midi(msg) = midi {
                 if msg.len() == 3 {
                     let velocity = msg[2] as f64;
-                    *out = Some(Message::Float(velocity));
+                    *out = Message::Float(velocity);
                 }
             }
         }
@@ -131,11 +131,11 @@ impl Processor for MidiChannel {
             inputs.iter_input_as_messages(0)?,
             outputs.iter_output_mut_as_messages(0)?
         ) {
-            *out = None;
-            if let Some(Message::Midi(msg)) = midi {
+            *out = Message::None;
+            if let Message::Midi(msg) = midi {
                 if msg.len() == 3 {
                     let channel = (msg[0] & 0x0F) as f64;
-                    *out = Some(Message::Float(channel));
+                    *out = Message::Float(channel);
                 }
             }
         }
