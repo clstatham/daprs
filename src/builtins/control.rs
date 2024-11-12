@@ -1,36 +1,27 @@
-use crate::prelude::*;
+use std::marker::PhantomData;
 
-/// A processor that selects one of its two inputs based on a condition.
-///
-/// The condition is considered truthy based on [`Message::is_truthy`].
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `cond` | `Message` | | The condition to evaluate for truthiness. |
-/// | `1` | `then` | `Message` | | The value to output if the condition is truthy. |
-/// | `2` | `else` | `Message` | | The value to output if the condition is falsy. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Message` | The selected value. |
-#[derive(Debug, Clone)]
-pub struct Cond;
+use crate::{prelude::*, signal::SignalData};
 
-impl Processor for Cond {
-    fn input_spec(&self) -> Vec<SignalSpec> {
+#[derive(Debug, Clone, Default)]
+pub struct Cond<S: SignalData>(PhantomData<S>);
+
+impl<S: SignalData> Cond<S> {
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<S: SignalData> Processor for Cond<S> {
+    fn input_names(&self) -> Vec<String> {
         vec![
-            SignalSpec::unbounded("cond", Signal::new_message_none()),
-            SignalSpec::unbounded("then", Signal::new_message_none()),
-            SignalSpec::unbounded("else", Signal::new_message_none()),
+            String::from("cond"),
+            String::from("then"),
+            String::from("else"),
         ]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", Signal::new_message_none())]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", S::KIND)]
     }
 
     fn process(
@@ -39,13 +30,13 @@ impl Processor for Cond {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, cond, if_true, if_false) in itertools::izip!(
-            outputs.iter_output_mut_as_messages(0)?,
-            inputs.iter_input_as_messages(0)?,
-            inputs.iter_input_as_messages(1)?,
-            inputs.iter_input_as_messages(2)?
+            outputs.iter_output_as::<S>(0)?,
+            inputs.iter_input_as_bools(0)?,
+            inputs.iter_input_as::<S>(1)?,
+            inputs.iter_input_as::<S>(2)?
         ) {
-            let Some(cond) = cond.cast_to_bool() else {
-                *out = Message::None;
+            let Some(cond) = cond else {
+                *out = S::buffer_element_default().clone();
                 continue;
             };
 
@@ -61,21 +52,18 @@ impl Processor for Cond {
 }
 
 macro_rules! comparison_op {
-    ($doc:literal, $name:ident, $op:tt) => {
+    ($doc:literal, $name:ident, $invert:literal, $op:tt) => {
         #[derive(Debug, Clone, Default)]
         #[doc = $doc]
-        pub struct $name;
+        pub struct $name<S: SignalData>(PhantomData<S>);
 
-        impl Processor for $name {
-            fn input_spec(&self) -> Vec<SignalSpec> {
-                vec![
-                    SignalSpec::unbounded("a", Signal::new_message_none()),
-                    SignalSpec::unbounded("b", Signal::new_message_none()),
-                ]
+        impl<S: SignalData> Processor for $name<S> {
+            fn input_names(&self) -> Vec<String> {
+                vec![String::from("a"), String::from("b")]
             }
 
-            fn output_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::unbounded("out", Signal::new_message_none())]
+            fn output_spec(&self) -> Vec<OutputSpec> {
+                vec![OutputSpec::new("out", SignalKind::Bool)]
             }
 
             fn process(
@@ -84,15 +72,19 @@ macro_rules! comparison_op {
                 mut outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {
                 for (out, a, b) in itertools::izip!(
-                    outputs.iter_output_mut_as_messages(0)?,
-                    inputs.iter_input_as_messages(0)?,
-                    inputs.iter_input_as_messages(1)?
+                    outputs.iter_output_mut_as_bools(0)?,
+                    inputs.iter_input_as::<S>(0)?,
+                    inputs.iter_input_as::<S>(1)?
                 ) {
-
-                    if let (Some(a), Some(b)) = (a.cast_to_float(), b.cast_to_float()) {
-                        *out = Message::Bool(a $op b);
+                    if let (Some(a), Some(b)) =
+                        (S::buffer_element_to_value(a), S::buffer_element_to_value(b))
+                    {
+                        *out = match a.partial_cmp(&b) {
+                            Some(std::cmp::Ordering::$op) => Some(!$invert),
+                            _ => Some($invert),
+                        };
                     } else {
-                        *out = Message::None;
+                        *out = None;
                     }
                 }
 
@@ -121,10 +113,13 @@ The comparison is done by casting the inputs to floats as implemented by the [`M
 | --- | --- | --- | --- |
 | `0` | `out` | `Message` | The result of the comparison. |
 "#,
-    Less, <);
+    Less,
+    false,
+    Less
+);
 
 comparison_op!(
-        r#"
+    r#"
 A processor that outputs `true` if `a` is greater than `b`, otherwise `false`.
 
 The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
@@ -142,10 +137,13 @@ The comparison is done by casting the inputs to floats as implemented by the [`M
 | --- | --- | --- | --- |
 | `0` | `out` | `Message` | The result of the comparison. |
 "#,
-    Greater, >);
+    Greater,
+    false,
+    Greater
+);
 
 comparison_op!(
-        r#"
+    r#"
 A processor that outputs `true` if `a` is equal to `b`, otherwise `false`.
 
 The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
@@ -163,10 +161,13 @@ The comparison is done by casting the inputs to floats as implemented by the [`M
 | --- | --- | --- | --- |
 | `0` | `out` | `Message` | The result of the comparison. |
 "#,
-    Equal, ==);
+    Equal,
+    false,
+    Equal
+);
 
 comparison_op!(
-        r#"
+    r#"
 A processor that outputs `true` if `a` is not equal to `b`, otherwise `false`.
 
 The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
@@ -184,10 +185,13 @@ The comparison is done by casting the inputs to floats as implemented by the [`M
 | --- | --- | --- | --- |
 | `0` | `out` | `Message` | The result of the comparison. |
 "#,
-    NotEqual, !=);
+    NotEqual,
+    true,
+    Equal
+);
 
 comparison_op!(
-        r#"
+    r#"
 A processor that outputs `true` if `a` is less than or equal to `b`, otherwise `false`.
 
 The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
@@ -205,10 +209,13 @@ The comparison is done by casting the inputs to floats as implemented by the [`M
 | --- | --- | --- | --- |
 | `0` | `out` | `Message` | The result of the comparison. |
 "#,
-    LessOrEqual, <=);
+    LessOrEqual,
+    true,
+    Greater
+);
 
 comparison_op!(
-        r#"
+    r#"
 A processor that outputs `true` if `a` is greater than or equal to `b`, otherwise `false`.
 
 The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
@@ -226,4 +233,7 @@ The comparison is done by casting the inputs to floats as implemented by the [`M
 | --- | --- | --- | --- |
 | `0` | `out` | `Message` | The result of the comparison. |
 "#,
-    GreaterOrEqual, >=);
+    GreaterOrEqual,
+    true,
+    Less
+);

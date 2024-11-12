@@ -59,17 +59,17 @@ impl Default for PeakLimiter {
 }
 
 impl Processor for PeakLimiter {
-    fn input_spec(&self) -> Vec<SignalSpec> {
+    fn input_names(&self) -> Vec<String> {
         vec![
-            SignalSpec::unbounded("in", 0.0),
-            SignalSpec::unbounded("threshold", self.threshold),
-            SignalSpec::unbounded("attack", self.attack),
-            SignalSpec::unbounded("release", self.release),
+            String::from("in"),
+            String::from("threshold"),
+            String::from("attack"),
+            String::from("release"),
         ]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -88,9 +88,22 @@ impl Processor for PeakLimiter {
             inputs.iter_input_as_samples(2)?,
             inputs.iter_input_as_samples(3)?
         ) {
-            self.threshold = threshold;
-            self.release = release;
-            self.attack = attack;
+            if let Some(threshold) = threshold {
+                self.threshold = threshold;
+            }
+
+            if let Some(attack) = attack {
+                self.attack = attack;
+            }
+
+            if let Some(release) = release {
+                self.release = release;
+            }
+
+            let Some(in_signal) = in_signal else {
+                *out = None;
+                continue;
+            };
 
             self.envelope = in_signal.abs().max(self.envelope * self.release);
 
@@ -102,7 +115,7 @@ impl Processor for PeakLimiter {
 
             self.gain = self.gain * self.attack + target_gain * (1.0 - self.attack);
 
-            *out = in_signal * self.gain;
+            *out = Some(in_signal * self.gain);
         }
 
         Ok(())

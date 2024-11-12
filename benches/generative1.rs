@@ -12,18 +12,20 @@ pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Nod
     let index = random(graph, trig);
     let index = index * (options.len() + 1) as Sample;
     let index = index % options.len() as Sample;
+    let cast = graph.add(Cast::<Sample, i64>::new());
+    index.output(0).connect(&cast.input(0));
 
-    let select = graph.add(Select::new(options.len()));
+    let select = graph.add(Select::<bool>::new(options.len()));
     select
         .input("in")
-        .connect(&graph.constant_message(Message::Bang).output(0));
-    select.input("index").connect(&index.output(0));
+        .connect(&graph.constant(Signal::new_bool(true)).output(0));
+    select.input("index").connect(&cast.output(0));
 
-    let merge = graph.add(Merge::new(options.len()));
+    let merge = graph.add(Merge::<Sample>::new(options.len()));
 
     let msgs = options
         .iter()
-        .map(|_| graph.message(Message::Bang))
+        .map(|_| graph.add(MessageSender::<Sample>::new(0.0)))
         .collect::<Vec<_>>();
 
     for (i, (option, msg)) in options.iter().zip(msgs.iter()).enumerate() {
@@ -170,7 +172,7 @@ pub fn generative1(num_tones: usize) -> GraphBuilder {
     let out1 = graph.add_audio_output();
     let out2 = graph.add_audio_output();
 
-    let amp = graph.add_param(Param::new("amp", Some(Message::Float(0.5))));
+    let amp = graph.add_param(Param::<Sample>::new("amp", Some(0.5)));
 
     let mut tones = vec![];
     for i in 0..num_tones {

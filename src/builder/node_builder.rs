@@ -2,7 +2,10 @@
 
 use petgraph::prelude::*;
 
-use crate::{prelude::*, signal::SignalKind};
+use crate::{
+    prelude::*,
+    signal::{SignalData, SignalKind},
+};
 
 use super::graph_builder::GraphBuilder;
 
@@ -64,20 +67,12 @@ impl Node {
         }
     }
 
-    /// Returns the signal type of the input at the given index.
-    #[inline]
-    pub fn input_kind(&self, index: impl IntoInputIdx) -> SignalKind {
-        let index = index.into_input_idx(self);
-        self.graph
-            .with_graph(|graph| graph.digraph()[self.id()].input_spec()[index as usize].kind())
-    }
-
     /// Returns the signal type of the output at the given index.
     #[inline]
     pub fn output_kind(&self, index: impl IntoOutputIdx) -> SignalKind {
         let index = index.into_output_idx(self);
         self.graph
-            .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].kind())
+            .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].kind)
     }
 
     /// Connects the given input of this node to the given output of another node.
@@ -110,40 +105,6 @@ impl Node {
         let target_input = target_input.into_input_idx(&target);
         self.graph
             .connect(self.id(), output_index, target.id(), target_input);
-    }
-
-    /// Converts the output message to a signal.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the node has more than one output.
-    #[inline]
-    #[track_caller]
-    pub fn to_audio(&self) -> Node {
-        self.assert_single_output();
-        if self.output_kind(0) == SignalKind::Sample {
-            return self.clone();
-        }
-        let proc = self.graph.add(MessageToAudio);
-        proc.input(0).connect(&self.output(0));
-        proc
-    }
-
-    /// Converts the output signal to a message.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the node has more than one output.
-    #[inline]
-    #[track_caller]
-    pub fn to_message(&self) -> Node {
-        self.assert_single_output();
-        if self.output_kind(0) == SignalKind::Message {
-            return self.clone();
-        }
-        let proc = self.graph.add(AudioToMessage);
-        proc.input(0).connect(&self.output(0));
-        proc
     }
 
     /// Smooths the output signal.
@@ -205,17 +166,6 @@ impl Node {
         self.output(0).cond(then, else_)
     }
 
-    /// Creates a new [`Index`] node that outputs the value of the given index of the output signal.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the node has more than one output.
-    #[inline]
-    pub fn index(&self, index: impl IntoNode) -> Node {
-        self.assert_single_output();
-        self.output(0).index(index)
-    }
-
     /// Creates a new [`Len`] node that outputs the length of the output signal.
     ///
     /// The output signal must be a list.
@@ -243,14 +193,7 @@ impl Input {
     pub fn set(&self, value: impl IntoNode) {
         let value = value.into_node(self.node.graph());
         value.assert_single_output();
-        match self.kind() {
-            SignalKind::Message => self
-                .node
-                .connect_input(value.to_message(), 0, self.input_index),
-            SignalKind::Sample => self
-                .node
-                .connect_input(value.to_audio(), 0, self.input_index),
-        }
+        self.node.connect_input(&value, 0, self.input_index);
     }
 
     /// Returns the node that the input belongs to.
@@ -259,35 +202,25 @@ impl Input {
         self.node.clone()
     }
 
-    /// Returns the signal type of the input.
-    #[inline]
-    pub fn kind(&self) -> SignalKind {
-        self.node.input_kind(self.input_index)
-    }
-
     /// Connects the input to the given output.
     #[inline]
     #[track_caller]
     pub fn connect(&self, output: &Output) {
-        let output = output.to_kind(self.kind());
         self.node
             .connect_input(&output.node, output.output_index, self.input_index);
     }
 
     /// Creates a parameter for the input.
     #[inline]
-    pub fn param(
+    pub fn param<S: SignalData>(
         &self,
         name: impl Into<String>,
-        initial_value: impl Into<Option<Message>>,
-    ) -> Param {
+        initial_value: impl Into<Option<S::Value>>,
+    ) -> Param<S> {
         let name = name.into();
-        let param = Param::new(&name, initial_value);
+        let param = Param::<S>::new(&name, initial_value);
         let proc = self.node.graph().add_param(param.clone());
-        match self.kind() {
-            SignalKind::Message => proc.output(0).connect(self),
-            SignalKind::Sample => proc.to_audio().output(0).connect(self),
-        }
+        proc.output(0).connect(self);
         param
     }
 }
@@ -304,8 +237,7 @@ impl Output {
     #[inline]
     #[track_caller]
     pub fn connect(&self, input: &Input) {
-        let this = self.to_kind(input.kind());
-        this.node
+        self.node
             .connect_output(self.output_index, &input.node, input.input_index);
     }
 
@@ -321,41 +253,18 @@ impl Output {
         self.node.output_kind(self.output_index)
     }
 
-    /// Converts the output to a sample signal.
-    #[inline]
-    pub fn to_audio(&self) -> Output {
-        if self.kind() == SignalKind::Sample {
-            return self.clone();
-        }
-        let proc = self.node.graph().add(MessageToAudio);
-        proc.input(0).connect(self);
-        proc.output(0)
-    }
-
-    /// Converts the output to a message signal.
-    #[inline]
-    pub fn to_message(&self) -> Output {
-        if self.kind() == SignalKind::Message {
-            return self.clone();
-        }
-        let proc = self.node.graph().add(AudioToMessage);
-        proc.input(0).connect(self);
-        proc.output(0)
-    }
-
-    /// Converts the output to the given signal type.
-    #[inline]
-    pub fn to_kind(&self, kind: SignalKind) -> Output {
-        match kind {
-            SignalKind::Message => self.to_message(),
-            SignalKind::Sample => self.to_audio(),
-        }
-    }
-
     /// Creates a new, single-output node that passes the value of this output through.
     #[inline]
     pub fn make_node(&self) -> Node {
-        let node = self.node.graph().add(Passthrough);
+        let kind = self.kind();
+        let node = match kind {
+            SignalKind::Bool => self.node.graph().add(Passthrough::<bool>::new()),
+            SignalKind::Int => self.node.graph().add(Passthrough::<i64>::new()),
+            SignalKind::Sample => self.node.graph().add(Passthrough::<Sample>::new()),
+            SignalKind::String => self.node.graph().add(Passthrough::<String>::new()),
+            SignalKind::List => self.node.graph().add(Passthrough::<Vec<Signal>>::new()),
+            SignalKind::Midi => self.node.graph().add(Passthrough::<Vec<u8>>::new()),
+        };
         node.input(0).connect(self);
         node
     }
@@ -363,7 +272,15 @@ impl Output {
     /// Creates a new, single-output node that holds and continuously outputs the last value of this output.
     #[inline]
     pub fn make_register(&self) -> Node {
-        let node = self.node.graph().add(Register::default());
+        let kind = self.kind();
+        let node = match kind {
+            SignalKind::Bool => self.node.graph().add(Register::<bool>::new()),
+            SignalKind::Int => self.node.graph().add(Register::<i64>::new()),
+            SignalKind::Sample => self.node.graph().add(Register::<Sample>::new()),
+            SignalKind::String => self.node.graph().add(Register::<String>::new()),
+            SignalKind::List => self.node.graph().add(Register::<Vec<Signal>>::new()),
+            SignalKind::Midi => self.node.graph().add(Register::<Vec<u8>>::new()),
+        };
         node.input(0).connect(self);
         node
     }
@@ -398,20 +315,26 @@ impl Output {
     pub fn cond(&self, then: impl IntoNode, else_: impl IntoNode) -> Node {
         let then = then.into_node(self.node.graph());
         let else_ = else_.into_node(self.node.graph());
-        let cond = self.node.graph().add(Cond);
+        then.assert_single_output();
+        else_.assert_single_output();
+        let kind = then.output_kind(0);
+        assert_eq!(
+            kind,
+            else_.output_kind(0),
+            "output signals must have the same type"
+        );
+        let cond = match kind {
+            SignalKind::Bool => self.node.graph().add(Cond::<bool>::new()),
+            SignalKind::Int => self.node.graph().add(Cond::<i64>::new()),
+            SignalKind::Sample => self.node.graph().add(Cond::<Sample>::new()),
+            SignalKind::String => self.node.graph().add(Cond::<String>::new()),
+            SignalKind::List => self.node.graph().add(Cond::<Vec<Signal>>::new()),
+            SignalKind::Midi => self.node.graph().add(Cond::<Vec<u8>>::new()),
+        };
         cond.input("cond").connect(self);
         cond.input("then").connect(&then.output(0));
         cond.input("else").connect(&else_.output(0));
         cond
-    }
-
-    /// Creates a new [`Index`] node that outputs the value of the given index of the output signal.
-    #[inline]
-    pub fn index(&self, index: impl IntoNode) -> Node {
-        let proc = self.node.graph().add(Index);
-        proc.input(0).connect(self);
-        proc.input("index").set(index);
-        proc
     }
 
     /// Creates a new [`Len`] node that outputs the length of the output signal.
@@ -426,12 +349,14 @@ impl Output {
 }
 
 mod sealed {
+    use crate::signal::SignalData;
+
     pub trait Sealed {}
     impl Sealed for crate::graph::NodeIndex {}
     impl Sealed for super::Node {}
     impl Sealed for &super::Node {}
-    impl Sealed for super::Message {}
-    impl Sealed for super::Param {}
+    impl Sealed for super::Signal {}
+    impl<S: SignalData> Sealed for super::Param<S> {}
     impl Sealed for crate::signal::Sample {}
     impl Sealed for i64 {}
     impl Sealed for u32 {}
@@ -462,7 +387,7 @@ impl IntoNode for &Node {
     }
 }
 
-impl IntoNode for Param {
+impl<S: SignalData> IntoNode for Param<S> {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.add(self)
     }
@@ -483,21 +408,21 @@ impl IntoNode for Sample {
     }
 }
 
-impl IntoNode for Message {
+impl IntoNode for Signal {
     fn into_node(self, graph: &GraphBuilder) -> Node {
-        graph.constant_message(self)
+        graph.constant(self)
     }
 }
 
 impl IntoNode for i64 {
     fn into_node(self, graph: &GraphBuilder) -> Node {
-        graph.constant_message(Message::Int(self))
+        graph.constant(Signal::Int(self))
     }
 }
 
 impl IntoNode for u32 {
     fn into_node(self, graph: &GraphBuilder) -> Node {
-        graph.constant_message(Message::Int(self as i64))
+        graph.constant(Signal::Int(self as i64))
     }
 }
 
@@ -538,9 +463,9 @@ impl IntoInputIdx for &str {
     fn into_input_idx(self, node: &Node) -> u32 {
         let Some(idx) = node.graph().with_graph(|graph| {
             graph.digraph()[node.id()]
-                .input_spec()
+                .input_names()
                 .iter()
-                .position(|s| s.name == self)
+                .position(|s| s == self)
         }) else {
             panic!("no input with name {self}")
         };
@@ -669,33 +594,67 @@ impl_binary_node_ops!(
 impl_binary_node_ops!(max, math::Max, "Outputs the maximum of two signals.");
 impl_binary_node_ops!(min, math::Min, "Outputs the minimum of two signals.");
 
-// comparison operations
-impl_binary_node_ops!(
+macro_rules! impl_comparison_node_ops {
+    ($name:ident, $proc:ty, $doc:expr) => {
+        impl Node {
+            #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
+            pub fn $name(&self, other: impl IntoNode) -> Node {
+                let other = other.into_node(self.graph());
+                self.assert_single_output();
+                other.assert_single_output();
+
+                let kind = self.output_kind(0);
+                assert_eq!(
+                    kind,
+                    other.output_kind(0),
+                    "output signals must have the same type"
+                );
+
+                let node = match kind {
+                    SignalKind::Bool => self.graph().add(control::Equal::<bool>::default()),
+                    SignalKind::Int => self.graph().add(control::Equal::<i64>::default()),
+                    SignalKind::Sample => self.graph().add(control::Equal::<Sample>::default()),
+                    SignalKind::String => self.graph().add(control::Equal::<String>::default()),
+                    SignalKind::List => self.graph().add(control::Equal::<Vec<Signal>>::default()),
+                    SignalKind::Midi => self.graph().add(control::Equal::<Vec<u8>>::default()),
+                };
+
+                node.input(0).connect(&self.output(0));
+                node.input(1).connect(&other.output(0));
+
+                node
+            }
+        }
+    };
+}
+
+impl_comparison_node_ops!(
     eq,
     control::Equal,
     "Outputs true if the two signals are equal."
 );
-impl_binary_node_ops!(
+impl_comparison_node_ops!(
     ne,
     control::NotEqual,
     "Outputs true if the two signals are not equal."
 );
-impl_binary_node_ops!(
+impl_comparison_node_ops!(
     lt,
     control::Less,
     "Outputs true if the first signal is less than the second signal."
 );
-impl_binary_node_ops!(
+impl_comparison_node_ops!(
     le,
     control::LessOrEqual,
     "Outputs true if the first signal is less than or equal to the second signal."
 );
-impl_binary_node_ops!(
+impl_comparison_node_ops!(
     gt,
     control::Greater,
     "Outputs true if the first signal is greater than the second signal."
 );
-impl_binary_node_ops!(
+impl_comparison_node_ops!(
     ge,
     control::GreaterOrEqual,
     "Outputs true if the first signal is greater than or equal to the second signal."

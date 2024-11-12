@@ -19,12 +19,12 @@ use crate::prelude::*;
 pub struct MidiNote;
 
 impl Processor for MidiNote {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("midi", Signal::new_message_none())]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("midi")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("note", Signal::new_message_none())]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("note", SignalKind::Sample)]
     }
 
     fn process(
@@ -33,14 +33,14 @@ impl Processor for MidiNote {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (midi, out) in itertools::izip!(
-            inputs.iter_input_as_messages(0)?,
-            outputs.iter_output_mut_as_messages(0)?
+            inputs.iter_input_as_midi(0)?,
+            outputs.iter_output_mut_as_samples(0)?
         ) {
-            *out = Message::None;
-            if let Message::Midi(msg) = midi {
+            *out = None;
+            if let Some(msg) = midi {
                 if msg.len() == 3 {
                     let note = msg[1] as f64;
-                    *out = Message::Float(note);
+                    *out = Some(note);
                 }
             }
         }
@@ -65,15 +65,12 @@ impl Processor for MidiNote {
 pub struct MidiVelocity;
 
 impl Processor for MidiVelocity {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("midi", Signal::new_message_none())]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("midi")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded(
-            "velocity",
-            Signal::new_message_none(),
-        )]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("velocity", SignalKind::Sample)]
     }
 
     fn process(
@@ -82,14 +79,14 @@ impl Processor for MidiVelocity {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (midi, out) in itertools::izip!(
-            inputs.iter_input_as_messages(0)?,
-            outputs.iter_output_mut_as_messages(0)?
+            inputs.iter_input_as_midi(0)?,
+            outputs.iter_output_mut_as_samples(0)?
         ) {
-            *out = Message::None;
-            if let Message::Midi(msg) = midi {
+            *out = None;
+            if let Some(msg) = midi {
                 if msg.len() == 3 {
                     let velocity = msg[2] as f64;
-                    *out = Message::Float(velocity);
+                    *out = Some(velocity);
                 }
             }
         }
@@ -114,12 +111,12 @@ impl Processor for MidiVelocity {
 pub struct MidiChannel;
 
 impl Processor for MidiChannel {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("midi", Signal::new_message_none())]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("midi")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("channel", Signal::new_message_none())]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("channel", SignalKind::Sample)]
     }
 
     fn process(
@@ -128,14 +125,14 @@ impl Processor for MidiChannel {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (midi, out) in itertools::izip!(
-            inputs.iter_input_as_messages(0)?,
-            outputs.iter_output_mut_as_messages(0)?
+            inputs.iter_input_as_midi(0)?,
+            outputs.iter_output_mut_as_samples(0)?
         ) {
-            *out = Message::None;
-            if let Message::Midi(msg) = midi {
+            *out = None;
+            if let Some(msg) = midi {
                 if msg.len() == 3 {
                     let channel = (msg[0] & 0x0F) as f64;
-                    *out = Message::Float(channel);
+                    *out = Some(channel);
                 }
             }
         }

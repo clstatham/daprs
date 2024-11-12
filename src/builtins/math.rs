@@ -15,29 +15,25 @@ use std::ops::{
 #[derive(Clone, Debug)]
 
 pub struct Constant {
-    value: Sample,
+    value: Signal,
 }
 
 impl Constant {
     /// Creates a new constant processor with the given value.
-    pub fn new(value: Sample) -> Self {
-        Self { value }
-    }
-}
-
-impl Default for Constant {
-    fn default() -> Self {
-        Self { value: 0.0 }
+    pub fn new(value: impl Into<Signal>) -> Self {
+        Self {
+            value: value.into(),
+        }
     }
 }
 
 impl Processor for Constant {
-    fn input_spec(&self) -> Vec<SignalSpec> {
+    fn input_names(&self) -> Vec<String> {
         vec![]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", self.value)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", self.value.kind())]
     }
 
     fn process(
@@ -45,9 +41,24 @@ impl Processor for Constant {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let out = outputs.output_as_samples(0)?;
-
-        out.fill(self.value);
+        match (outputs.output(0), &self.value) {
+            (SignalBuffer::Sample(out), Signal::Sample(value)) => {
+                out.fill(Some(*value));
+            }
+            (SignalBuffer::Int(out), Signal::Int(value)) => {
+                out.fill(Some(*value));
+            }
+            (SignalBuffer::Bool(out), Signal::Bool(value)) => {
+                out.fill(Some(*value));
+            }
+            (SignalBuffer::List(out), Signal::List(value)) => {
+                out.fill(Some(value.clone()));
+            }
+            (SignalBuffer::Midi(out), Signal::Midi(value)) => {
+                out.fill(Some(value.clone()));
+            }
+            (_, _) => return Err(ProcessorError::OutputSpecMismatch(0)),
+        }
 
         Ok(())
     }
@@ -57,7 +68,7 @@ impl GraphBuilder {
     /// A processor that outputs a constant value.
     ///
     /// See also: [`Constant`].
-    pub fn constant(&self, value: Sample) -> Node {
+    pub fn constant(&self, value: impl Into<Signal>) -> Node {
         self.add(Constant::new(value))
     }
 }
@@ -79,12 +90,12 @@ impl GraphBuilder {
 pub struct MidiToFreq;
 
 impl Processor for MidiToFreq {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("note", 69.0)]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("note")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("freq", 440.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("freq", SignalKind::Sample)]
     }
 
     fn process(
@@ -96,7 +107,11 @@ impl Processor for MidiToFreq {
             inputs.iter_input_as_samples(0)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
-            *freq = Sample::powf(2.0, (note - 69.0) / 12.0) * 440.0;
+            let Some(note) = note else {
+                *freq = None;
+                continue;
+            };
+            *freq = Some(Sample::powf(2.0, (note - 69.0) / 12.0) * 440.0);
         }
 
         Ok(())
@@ -120,12 +135,12 @@ impl Processor for MidiToFreq {
 pub struct FreqToMidi;
 
 impl Processor for FreqToMidi {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("freq", 440.0)]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("freq")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("note", 69.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("note", SignalKind::Sample)]
     }
 
     fn process(
@@ -137,7 +152,11 @@ impl Processor for FreqToMidi {
             inputs.iter_input_as_samples(0)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
-            *note = 69.0 + 12.0 * (freq / 440.0).log2();
+            let Some(freq) = freq else {
+                *note = None;
+                continue;
+            };
+            *note = Some(69.0 + 12.0 * (freq / 440.0).log2());
         }
 
         Ok(())
@@ -204,15 +223,12 @@ impl Expr {
 
 #[cfg(feature = "expr")]
 impl Processor for Expr {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        self.inputs
-            .iter()
-            .map(|name| SignalSpec::unbounded(name, 0.0))
-            .collect()
+    fn input_names(&self) -> Vec<String> {
+        self.inputs.iter().cloned().collect()
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(
@@ -233,10 +249,11 @@ impl Processor for Expr {
                     .as_sample()
                     .ok_or(ProcessorError::InputSpecMismatch(inp_idx))?;
 
-                self.input_values.push((name.to_string(), buffer[samp_idx]));
+                self.input_values
+                    .push((name.to_string(), buffer[samp_idx].unwrap()));
             }
 
-            *out = self.eval();
+            *out = Some(self.eval());
         }
 
         Ok(())
@@ -250,15 +267,12 @@ macro_rules! impl_binary_proc {
         pub struct $name;
 
         impl Processor for $name {
-            fn input_spec(&self) -> Vec<SignalSpec> {
-                vec![
-                    SignalSpec::unbounded("a", 0.0),
-                    SignalSpec::unbounded("b", 0.0),
-                ]
+            fn input_names(&self) -> Vec<String> {
+                vec![String::from("a"), String::from("b")]
             }
 
-            fn output_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::unbounded("out", 0.0)]
+            fn output_spec(&self) -> Vec<OutputSpec> {
+                vec![OutputSpec::new("out", SignalKind::Sample)]
             }
 
             fn process(
@@ -271,9 +285,14 @@ macro_rules! impl_binary_proc {
                     inputs.iter_input_as_samples(0)?,
                     inputs.iter_input_as_samples(1)?
                 ) {
+                    let (Some(in1), Some(in2)) = (in1, in2) else {
+                        *sample = None;
+                        continue;
+                    };
+
                     debug_assert!(in1.is_finite());
                     debug_assert!(in2.is_finite());
-                    *sample = Sample::$method(in1, in2);
+                    *sample = Some(Sample::$method(in1, in2));
                 }
 
                 Ok(())
@@ -546,12 +565,12 @@ macro_rules! impl_unary_proc {
         pub struct $name;
 
         impl Processor for $name {
-            fn input_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::unbounded("in", 0.0)]
+            fn input_names(&self) -> Vec<String> {
+                vec![String::from("in")]
             }
 
-            fn output_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::unbounded("out", 0.0)]
+            fn output_spec(&self) -> Vec<OutputSpec> {
+                vec![OutputSpec::new("out", SignalKind::Sample)]
             }
 
             fn process(
@@ -563,8 +582,12 @@ macro_rules! impl_unary_proc {
                     outputs.iter_output_mut_as_samples(0)?,
                     inputs.iter_input_as_samples(0)?
                 ) {
+                    let Some(in1) = in1 else {
+                        *sample = None;
+                        continue;
+                    };
                     debug_assert!(in1.is_finite());
-                    *sample = in1.$method().into();
+                    *sample = Some(in1.$method());
                 }
 
                 Ok(())

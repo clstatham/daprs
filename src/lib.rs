@@ -10,7 +10,6 @@ use runtime::AudioBackend;
 pub mod builder;
 pub mod builtins;
 pub mod graph;
-pub mod message;
 pub mod processor;
 pub mod runtime;
 pub mod signal;
@@ -24,12 +23,11 @@ pub mod prelude {
     };
     pub use crate::builtins::*;
     pub use crate::graph::Graph;
-    pub use crate::message::*;
     pub use crate::processor::{
-        Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, SignalSpec,
+        Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, OutputSpec,
     };
     pub use crate::runtime::{AudioBackend, AudioDevice, MidiPort, Runtime, RuntimeHandle};
-    pub use crate::signal::{Buffer, Sample, Signal, SignalBuffer};
+    pub use crate::signal::{Buffer, Sample, Signal, SignalBuffer, SignalKind};
     pub use std::time::Duration;
 }
 

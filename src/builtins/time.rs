@@ -1,10 +1,9 @@
 //! Time-related processors.
 
 use crate::{
-    message::Message,
-    prelude::{Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
+    prelude::{OutputSpec, Processor, ProcessorInputs, ProcessorOutputs},
     processor::ProcessorError,
-    signal::{Buffer, Sample, Signal, SignalBuffer},
+    signal::{Buffer, Sample, Signal, SignalBuffer, SignalKind},
 };
 
 /// A metronome that emits a bang at the given period.
@@ -64,15 +63,12 @@ impl Default for Metro {
 }
 
 impl Processor for Metro {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded(
-            "period",
-            Signal::new_message_some(Message::Float(self.period)),
-        )]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("period")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", Signal::new_message_none())]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Bool)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -85,17 +81,15 @@ impl Processor for Metro {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (period, out) in itertools::izip!(
-            inputs.iter_input_as_messages(0)?,
-            outputs.iter_output_mut_as_messages(0)?
+            inputs.iter_input_as_samples(0)?,
+            outputs.iter_output_mut_as_bools(0)?
         ) {
-            if let Some(period) = period.cast_to_float() {
-                self.period = period;
-            }
+            self.period = period.unwrap_or(self.period);
 
             if self.next_sample() {
-                *out = Message::Bang;
+                *out = Some(true);
             } else {
-                *out = Message::None;
+                *out = None;
             }
         }
 
@@ -131,12 +125,12 @@ impl UnitDelay {
 }
 
 impl Processor for UnitDelay {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("in", Signal::new_sample(0.0))]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("in")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", Signal::new_sample(0.0))]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(
@@ -148,8 +142,8 @@ impl Processor for UnitDelay {
             outputs.iter_output_mut_as_samples(0)?,
             inputs.iter_input_as_samples(0)?
         ) {
-            *out = self.value.unwrap_or_default();
-            self.value = Some(in_signal);
+            *out = self.value;
+            self.value = in_signal;
         }
 
         Ok(())
@@ -190,15 +184,12 @@ impl SampleDelay {
 }
 
 impl Processor for SampleDelay {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![
-            SignalSpec::unbounded("in", Signal::new_sample(0.0)),
-            SignalSpec::unbounded("delay", Signal::new_message_none()),
-        ]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("in"), String::from("delay")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", Signal::new_sample(0.0))]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(
@@ -211,13 +202,10 @@ impl Processor for SampleDelay {
         for (out, in_signal, delay) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
             inputs.iter_input_as_samples(0)?,
-            inputs.iter_input_as_messages(1)?
+            inputs.iter_input_as_ints(1)?
         ) {
-            let delay = if delay.is_some() {
-                delay.cast_to_int().unwrap_or(0).max(0) as usize
-            } else {
-                0
-            };
+            let delay = delay.unwrap_or_default() as usize;
+            let delay = delay.min(buffer.len() - 1);
 
             buffer[self.play_head] = in_signal;
 

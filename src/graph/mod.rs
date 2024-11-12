@@ -13,7 +13,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     prelude::{Param, Passthrough},
     processor::{Processor, ProcessorError},
-    signal::Sample,
+    signal::{Sample, SignalData},
 };
 
 pub mod edge;
@@ -139,14 +139,18 @@ impl Graph {
 
     /// Adds a new input [`Passthrough`] node to the graph.
     pub fn add_audio_input(&mut self) -> NodeIndex {
-        let idx = self.digraph.add_node(ProcessorNode::new(Passthrough));
+        let idx = self
+            .digraph
+            .add_node(ProcessorNode::new(Passthrough::<Sample>::default()));
         self.input_nodes.push(idx);
         idx
     }
 
     /// Adds a new output [`Passthrough`] node to the graph.
     pub fn add_audio_output(&mut self) -> NodeIndex {
-        let idx = self.digraph.add_node(ProcessorNode::new(Passthrough));
+        let idx = self
+            .digraph
+            .add_node(ProcessorNode::new(Passthrough::<Sample>::default()));
         self.output_nodes.push(idx);
         idx
     }
@@ -158,7 +162,7 @@ impl Graph {
     }
 
     /// Adds a new [`Processor`] representing a [`Param`] to the graph.
-    pub fn add_param(&mut self, param: Param) -> NodeIndex {
+    pub fn add_param<S: SignalData>(&mut self, param: Param<S>) -> NodeIndex {
         let name = param.name().to_string();
         let index = self.add_processor(param);
         self.params.insert(name, index);
@@ -167,7 +171,7 @@ impl Graph {
 
     /// Adds a new [`Processor`] representing a MIDI input to the graph.
     pub fn add_midi_input(&mut self, name: impl Into<String>) -> NodeIndex {
-        let param = Param::new(name, None);
+        let param = Param::<Vec<u8>>::new(name, None);
         let index = self.add_param(param);
         self.midi_params.push(index);
         index
@@ -252,23 +256,6 @@ impl Graph {
         self.params.get(name).copied()
     }
 
-    /// Returns an iterator over the [`Param`]s in the graph.
-    #[inline]
-    pub fn param_iter(&self) -> impl Iterator<Item = (&str, &Param)> + '_ {
-        self.params
-            .keys()
-            .map(|name| (name.as_str(), self.param_named(name).unwrap()))
-    }
-
-    /// Returns a reference to the [`Param`] with the given name.
-    #[inline]
-    pub fn param_named(&self, name: impl AsRef<str>) -> Option<&Param> {
-        self.params
-            .get(name.as_ref())
-            .and_then(|&idx| self.digraph.node_weight(idx))
-            .and_then(|proc| (*proc.processor).downcast_ref())
-    }
-
     /// Returns the index of the MIDI input [`Param`] with the given name.
     #[inline]
     pub fn midi_input_index(&self, name: &str) -> Option<NodeIndex> {
@@ -280,10 +267,19 @@ impl Graph {
 
     /// Returns an iterator over the MIDI input [`Param`]s in the graph.
     #[inline]
-    pub fn midi_input_iter(&self) -> impl Iterator<Item = (&str, Param)> + '_ {
-        self.param_iter()
+    pub fn midi_input_iter(&self) -> impl Iterator<Item = (&str, Param<Vec<u8>>)> + '_ {
+        self.params
+            .iter()
             .filter(|(name, _)| self.midi_params.contains(self.params.get(*name).unwrap()))
-            .map(|(name, param)| (name, param.clone()))
+            .map(|(name, idx)| {
+                (
+                    name.as_str(),
+                    (*self.digraph[*idx].processor)
+                        .downcast_ref::<Param<Vec<u8>>>()
+                        .unwrap()
+                        .clone(),
+                )
+            })
     }
 
     /// Returns the index of the input [`Processor`] at the given index.
@@ -353,132 +349,6 @@ impl Graph {
         Ok(())
     }
 
-    /// Partitions the graph into batches of nodes that can be processed in parallel using Kahn's algorithm.
-    ///
-    /// Calls the given closure with a mutable reference to the graph alongside each batch of nodes.
-    #[inline]
-    pub fn visit_batched<F, E>(&mut self, mut f: F) -> Result<(), E>
-    where
-        F: FnMut(&mut Graph, &[NodeIndex]) -> Result<(), E>,
-    {
-        if let Err(e) = self.make_acyclic() {
-            panic!("Failed to make graph acyclic: {:?}", e);
-        }
-
-        let mut in_degrees = FxHashMap::default();
-        let mut queue = VecDeque::new();
-
-        // initialize in-degrees
-        for node in self.digraph.node_indices() {
-            let in_degree = self
-                .digraph
-                .neighbors_directed(node, Direction::Incoming)
-                .count();
-            in_degrees.insert(node, in_degree);
-
-            // add nodes with no incoming edges to the queue
-            if in_degree == 0 {
-                queue.push_back(node);
-            }
-        }
-
-        // process nodes in batches
-        while !queue.is_empty() {
-            let mut batch = Vec::new();
-
-            // pop nodes with zero in-degree
-            for _ in 0..queue.len() {
-                let node = queue.pop_front().unwrap();
-                batch.push(node);
-
-                // decrement in-degrees of neighbors
-                for neighbor in self.digraph.neighbors_directed(node, Direction::Outgoing) {
-                    let in_degree = in_degrees.get_mut(&neighbor).unwrap();
-                    *in_degree -= 1;
-
-                    // add nodes with zero in-degree to the queue
-                    if *in_degree == 0 {
-                        queue.push_back(neighbor);
-                    }
-                }
-            }
-
-            f(self, &batch)?;
-        }
-
-        Ok(())
-    }
-
-    /// Detects cycles in the graph using Tarjan's strongly connected components algorithm.
-    ///
-    /// Returns `Ok(())` if the graph is acyclic, or `Err(cycles)` if the graph contains cycles.
-    #[inline]
-    pub fn detect_cycles(&self) -> Result<(), Vec<Vec<NodeIndex>>> {
-        if !petgraph::algo::is_cyclic_directed(&self.digraph) {
-            return Ok(());
-        }
-
-        Err(petgraph::algo::tarjan_scc(&self.digraph))
-    }
-
-    /// Fixes cycles in the graph by adding a [`MessageTx`](crate::builtins::util::MessageTx) and [`MessageRx`](crate::builtins::util::MessageRx) to break the cycle.
-    #[inline]
-    pub fn make_acyclic(&mut self) -> Result<(), GraphConstructionError> {
-        let Err(sccs) = self.detect_cycles() else {
-            return Ok(());
-        };
-
-        struct RemovedEdge {
-            source: NodeIndex,
-            target: NodeIndex,
-            edge: Edge,
-        }
-
-        // for each strongly connected component
-        for scc in sccs {
-            // the sccs are in post-order, so the last one is the "root" of the cycle
-            let root = scc.last().unwrap();
-
-            // disconnect the root node from the rest of the scc
-            let mut original_edges = Vec::new();
-            // `.iter().rev().skip(1)` skips the last (root) node
-            for node in scc.iter().rev().skip(1) {
-                if let Some(edge) = self.digraph.find_edge(*node, *root) {
-                    let edge = self.digraph.remove_edge(edge).unwrap();
-                    original_edges.push(RemovedEdge {
-                        source: *node,
-                        target: *root,
-                        edge,
-                    });
-                }
-            }
-
-            // for each edge that was originally connected to the root node, add a new message tx/rx pair
-            for edge in original_edges {
-                let RemovedEdge {
-                    source,
-                    target,
-                    edge,
-                } = edge;
-
-                let (tx, rx) = crate::builtins::util::message_channel();
-                let tx_node = self.add_processor(tx);
-                let rx_node = self.add_processor(rx);
-
-                self.connect(source, edge.source_output, tx_node, 0)
-                    .unwrap();
-                self.connect(rx_node, 0, target, edge.target_input).unwrap();
-            }
-        }
-
-        if petgraph::algo::is_cyclic_directed(&self.digraph) {
-            let cycles = petgraph::algo::tarjan_scc(&self.digraph);
-            panic!("Failed to make graph acyclic: {:?}", cycles);
-        }
-
-        Ok(())
-    }
-
     /// Sets the block size of all [`Processor`]s in the graph. This will implicitly reallocate all internal buffers and resources.
     pub fn resize_buffers(&mut self, sample_rate: Sample, block_size: usize) -> GraphRunResult<()> {
         self.visit(|graph, node| {
@@ -503,87 +373,5 @@ impl Graph {
     /// Writes a DOT representation of the graph to the given writer, suitable for rendering with Graphviz.
     pub fn write_dot<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         write!(writer, "{:?}", petgraph::dot::Dot::new(&self.digraph))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::prelude::Passthrough;
-
-    use super::*;
-
-    #[test]
-    fn test_cyclic_graph() {
-        let mut graph = Graph::new();
-
-        let a = graph.add_processor(Passthrough);
-        let b = graph.add_processor(Passthrough);
-        let c = graph.add_processor(Passthrough);
-        let d = graph.add_processor(Passthrough);
-
-        graph.connect(a, 0, b, 0).unwrap();
-        graph.connect(b, 0, c, 0).unwrap();
-        graph.connect(c, 0, d, 0).unwrap();
-        graph.connect(d, 0, a, 0).unwrap();
-
-        assert!(graph.detect_cycles().is_err());
-        assert!(graph.make_acyclic().is_ok());
-        assert!(graph.detect_cycles().is_ok());
-    }
-
-    #[test]
-    fn test_cyclic_complex_graph() {
-        let mut graph = Graph::new();
-
-        let a = graph.add_processor(Passthrough);
-        let b = graph.add_processor(Passthrough);
-        let c = graph.add_processor(Passthrough);
-        let d = graph.add_processor(Passthrough);
-        let e = graph.add_processor(Passthrough);
-        let f = graph.add_processor(Passthrough);
-        let g = graph.add_processor(Passthrough);
-
-        graph.connect(a, 0, b, 0).unwrap();
-        graph.connect(b, 0, c, 0).unwrap();
-        graph.connect(c, 0, d, 0).unwrap();
-        graph.connect(d, 0, e, 0).unwrap();
-        graph.connect(e, 0, f, 0).unwrap();
-        graph.connect(f, 0, g, 0).unwrap();
-        graph.connect(f, 0, g, 1).unwrap(); // connect to a different input as well
-        graph.connect(g, 0, c, 0).unwrap();
-
-        assert!(graph.detect_cycles().is_err());
-        assert!(graph.make_acyclic().is_ok());
-        assert!(graph.detect_cycles().is_ok());
-    }
-
-    #[test]
-    fn test_graph_batches() {
-        let mut graph = Graph::new();
-
-        let a = graph.add_processor(Passthrough);
-        let b = graph.add_processor(Passthrough);
-        let c = graph.add_processor(Passthrough);
-        let d = graph.add_processor(Passthrough);
-
-        // a -> b -> c
-        //  \-> d -/
-        graph.connect(a, 0, b, 0).unwrap();
-        graph.connect(b, 0, c, 0).unwrap();
-        graph.connect(a, 0, d, 0).unwrap();
-        graph.connect(d, 0, c, 0).unwrap();
-
-        let mut batches = Vec::new();
-        graph
-            .visit_batched(|_graph, batch| -> Result<(), ()> {
-                batches.push(batch.to_vec());
-                Ok(())
-            })
-            .unwrap();
-
-        assert_eq!(batches.len(), 3);
-        assert_eq!(batches[0], vec![a]);
-        assert_eq!(batches[1], vec![d, b]);
-        assert_eq!(batches[2], vec![c]);
     }
 }

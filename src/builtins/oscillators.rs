@@ -34,15 +34,12 @@ pub struct PhaseAccumulator {
 }
 
 impl Processor for PhaseAccumulator {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![
-            SignalSpec::unbounded("increment", 0.0),
-            SignalSpec::unbounded("reset", Signal::new_message_none()),
-        ]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("increment"), String::from("reset")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(
@@ -53,17 +50,19 @@ impl Processor for PhaseAccumulator {
         for (out, increment, reset) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
             inputs.iter_input_as_samples(0)?,
-            inputs.iter_input_as_messages(1)?
+            inputs.iter_input_as_bools(1)?
         ) {
-            if reset.is_some() {
+            if let Some(true) = reset {
                 self.t = 0.0;
             }
 
             // output the phase accumulator value
-            *out = self.t;
+            *out = Some(self.t);
 
             // increment the phase accumulator
-            self.t_step = increment;
+            if let Some(increment) = increment {
+                self.t_step = increment;
+            }
             self.t += self.t_step;
         }
 
@@ -124,16 +123,16 @@ impl Default for SineOscillator {
 }
 
 impl Processor for SineOscillator {
-    fn input_spec(&self) -> Vec<SignalSpec> {
+    fn input_names(&self) -> Vec<String> {
         vec![
-            SignalSpec::unbounded("frequency", self.frequency),
-            SignalSpec::unbounded("phase", self.phase),
-            SignalSpec::unbounded("reset", Signal::new_message_none()),
+            String::from("frequency"),
+            String::from("phase"),
+            String::from("reset"),
         ]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -149,18 +148,26 @@ impl Processor for SineOscillator {
             outputs.iter_output_mut_as_samples(0)?,
             inputs.iter_input_as_samples(0)?,
             inputs.iter_input_as_samples(1)?,
-            inputs.iter_input_as_messages(2)?
+            inputs.iter_input_as_bools(2)?
         ) {
-            if reset.is_some() {
+            if let Some(true) = reset {
                 self.t = 0.0;
             }
 
+            if let Some(frequency) = frequency {
+                self.frequency = frequency;
+            }
+
+            if let Some(phase) = phase {
+                self.phase = phase;
+            }
+
             // calculate the sine wave using the phase accumulator
-            let sine = (self.t * TAU + phase).sin();
-            *out = sine;
+            let sine = (self.t * TAU + self.phase).sin();
+            *out = Some(sine);
 
             // increment the phase accumulator
-            self.t_step = frequency / self.sample_rate;
+            self.t_step = self.frequency / self.sample_rate;
             self.t += self.t_step;
         }
 
@@ -221,16 +228,16 @@ impl SawOscillator {
 }
 
 impl Processor for SawOscillator {
-    fn input_spec(&self) -> Vec<SignalSpec> {
+    fn input_names(&self) -> Vec<String> {
         vec![
-            SignalSpec::unbounded("frequency", self.frequency),
-            SignalSpec::unbounded("phase", self.phase),
-            SignalSpec::unbounded("reset", Signal::new_message_none()),
+            String::from("frequency"),
+            String::from("phase"),
+            String::from("reset"),
         ]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -246,17 +253,25 @@ impl Processor for SawOscillator {
             outputs.iter_output_mut_as_samples(0)?,
             inputs.iter_input_as_samples(0)?,
             inputs.iter_input_as_samples(1)?,
-            inputs.iter_input_as_messages(2)?
+            inputs.iter_input_as_bools(2)?
         ) {
-            if reset.is_some() {
+            if let Some(true) = reset {
                 self.t = 0.0;
             }
 
+            if let Some(frequency) = frequency {
+                self.frequency = frequency;
+            }
+
+            if let Some(phase) = phase {
+                self.phase = phase;
+            }
+
             // calculate the sawtooth wave using the phase accumulator
-            *out = (self.t + phase) % 1.0;
+            *out = Some((self.t + self.phase) % 1.0);
 
             // increment the phase accumulator
-            self.t_step = frequency / self.sample_rate;
+            self.t_step = self.frequency / self.sample_rate;
             self.t += self.t_step;
         }
 
@@ -299,12 +314,12 @@ impl Default for NoiseOscillator {
 }
 
 impl Processor for NoiseOscillator {
-    fn input_spec(&self) -> Vec<SignalSpec> {
+    fn input_names(&self) -> Vec<String> {
         vec![]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(
@@ -313,9 +328,9 @@ impl Processor for NoiseOscillator {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let mut rng = rand::thread_rng();
-        for out in itertools::izip!(outputs.iter_output_mut_as_samples(0)?) {
+        for out in outputs.iter_output_mut_as_samples(0)? {
             // generate a random number
-            *out = self.distribution.sample(&mut rng) as Sample;
+            *out = Some(self.distribution.sample(&mut rng) as Sample);
         }
 
         Ok(())
@@ -371,12 +386,12 @@ impl BlSawOscillator {
 }
 
 impl Processor for BlSawOscillator {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("frequency", 440.0)]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("frequency")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -393,12 +408,13 @@ impl Processor for BlSawOscillator {
             outputs.iter_output_mut_as_samples(0)?,
             inputs.iter_input_as_samples(0)?
         ) {
-            if frequency <= 0.0 {
-                *out = 0.0;
+            self.frequency = frequency.unwrap_or(self.frequency);
+            if self.frequency <= 0.0 {
+                *out = None;
                 continue;
             }
 
-            let pmax = 0.5 * self.sample_rate / frequency;
+            let pmax = 0.5 * self.sample_rate / self.frequency;
             let dc = -0.498 / pmax;
 
             self.p += self.dp;
@@ -417,7 +433,7 @@ impl Processor for BlSawOscillator {
 
             self.saw = 0.995 * self.saw + dc + x.sin() / x;
 
-            *out = self.saw;
+            *out = Some(self.saw);
         }
 
         Ok(())
@@ -466,15 +482,12 @@ impl BlSquareOscillator {
 }
 
 impl Processor for BlSquareOscillator {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![
-            SignalSpec::unbounded("frequency", 440.0),
-            SignalSpec::unbounded("pulse_width", 0.5),
-        ]
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("frequency"), String::from("pulse_width")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -491,13 +504,13 @@ impl Processor for BlSquareOscillator {
             inputs.iter_input_as_samples(0)?,
             inputs.iter_input_as_samples(1)?
         ) {
-            if frequency <= 0.0 {
-                *out = 0.0;
+            self.frequency = frequency.unwrap_or(self.frequency);
+            if self.frequency <= 0.0 {
+                *out = None;
                 continue;
             }
 
-            self.frequency = frequency;
-            self.pulse_width = pulse_width;
+            self.pulse_width = pulse_width.unwrap_or(self.pulse_width);
 
             self.t_step = self.frequency / self.sample_rate;
 
@@ -517,7 +530,7 @@ impl Processor for BlSquareOscillator {
 
             self.t += self.t_step;
 
-            *out = square;
+            *out = Some(square);
         }
 
         Ok(())

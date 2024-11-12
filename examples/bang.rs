@@ -25,8 +25,11 @@ fn main() {
     // connect the metronome to trigger the print
     bang.output(0).connect(&print.input("trig"));
 
+    let cast = graph.add(Cast::<Sample, String>::default());
+    cast.input(0).connect(&sine.output(0));
+
     // connect the sine oscillator to the print
-    sine.output(0).connect(&print.input("message"));
+    cast.output(0).connect(&print.input("message"));
 
     // build the graph
     let graph = graph.build();

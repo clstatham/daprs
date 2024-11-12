@@ -5,10 +5,7 @@ use std::fmt::Debug;
 use downcast_rs::{impl_downcast, DowncastSync};
 use thiserror::Error;
 
-use crate::{
-    message::Message,
-    signal::{Buffer, Sample, Signal, SignalBuffer, SignalKind},
-};
+use crate::signal::{Buffer, Sample, Signal, SignalBuffer, SignalData, SignalKind};
 
 /// An error that can occur when processing signals.
 #[derive(Debug, Clone, Error)]
@@ -32,76 +29,42 @@ pub enum ProcessorError {
     /// The signal value is invalid for the given reason.
     #[error("Invalid value: {0}")]
     InvalidValue(&'static str),
-
-    /// Message conversion failed for the given reason.
-    #[error("Message conversion failed: {0}")]
-    MessageConversionFailed(#[from] crate::message::MessageConversionError),
 }
 
-/// Information about an input/output of a [`Processor`] implementor.
+/// Information about an output of a [`Processor`] implementor.
 #[derive(Debug, Clone)]
-pub struct SignalSpec {
+pub struct OutputSpec {
     /// The name of the signal.
     pub name: String,
-    /// The minimum value of the signal, if any.
-    pub min: Option<Signal>,
-    /// The maximum value of the signal, if any.
-    pub max: Option<Signal>,
-    /// The default value of the signal.
-    pub default_value: Signal,
+    /// The type of the signal.
+    pub kind: SignalKind,
 }
 
-impl Default for SignalSpec {
-    /// Creates a new unnamed and unbounded [`SignalSpec`] (min/max are `None`, default value is `0.0`).
+impl Default for OutputSpec {
+    /// Creates a new unnamed [`Sample`] [`OutputSpec`].
     fn default() -> Self {
         Self {
             name: "".into(),
-            min: None,
-            max: None,
-            default_value: Signal::Sample(0.0),
+            kind: SignalKind::Sample,
         }
     }
 }
 
-impl SignalSpec {
-    /// Creates a new bounded [`SignalSpec`] with the given name, minimum, maximum, and default value.
-    pub fn new(
-        name: impl Into<String>,
-        min: Option<impl Into<Signal>>,
-        max: Option<impl Into<Signal>>,
-        default_value: impl Into<Signal>,
-    ) -> Self {
+impl OutputSpec {
+    /// Creates a new bounded [`OutputSpec`] with the given name, minimum, maximum, and default value.
+    pub fn new(name: impl Into<String>, kind: SignalKind) -> Self {
         Self {
             name: name.into(),
-            min: min.map(Into::into),
-            max: max.map(Into::into),
-            default_value: default_value.into(),
+            kind,
         }
-    }
-
-    /// Creates a new unbounded [`SignalSpec`] with the given name and default value.
-    pub fn unbounded(name: impl Into<String>, default_value: impl Into<Signal>) -> Self {
-        Self {
-            name: name.into(),
-            min: None,
-            max: None,
-            default_value: default_value.into(),
-        }
-    }
-
-    /// Returns the type of signal this [`SignalSpec`] represents.
-    pub fn kind(&self) -> SignalKind {
-        self.default_value.kind()
     }
 }
 
 /// A collection of borrowed input buffers for a [`Processor`] to read from, and related information about them.
 #[derive(Debug, Clone, Copy)]
 pub struct ProcessorInputs<'a, 'b> {
-    /// The input signal specs.
-    pub input_spec: &'a [SignalSpec],
-    /// The default values for the input signals.
-    pub input_spec_defaults: &'a [Signal],
+    /// The input signal names.
+    pub input_names: &'a [String],
     /// The input buffers to read from.
     pub inputs: &'a [Option<&'b SignalBuffer>],
 }
@@ -119,18 +82,52 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         self.inputs.get(index).copied().flatten()
     }
 
+    #[inline]
+    pub fn input_as<S: SignalData>(
+        &self,
+        index: usize,
+    ) -> Result<&'b Buffer<S::BufferElement>, ProcessorError> {
+        self.input(index)
+            .ok_or(ProcessorError::InputSpecMismatch(index))?
+            .as_kind::<S>()
+            .ok_or(ProcessorError::InputSpecMismatch(index))
+    }
+
     /// Returns an iterator over the input buffers.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = Option<&'b SignalBuffer>> + '_ {
         self.inputs.iter().copied()
     }
 
-    /// Returns an iterator over the input signals at the given index.
+    #[inline]
+    pub fn iter_input_as<S: SignalData>(
+        &self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = &S::BufferElement> + '_, ProcessorError> {
+        let input = self
+            .inputs
+            .get(index)
+            .ok_or(ProcessorError::InputSpecMismatch(index))?;
+
+        if let Some(input) = input {
+            let input = input
+                .as_kind::<S>()
+                .ok_or(ProcessorError::InputSpecMismatch(index))?;
+
+            Ok(itertools::Either::Left(input.iter()))
+        } else {
+            Ok(itertools::Either::Right(std::iter::repeat(
+                S::buffer_element_default(),
+            )))
+        }
+    }
+
+    /// Returns an iterator over the input samples at the given index, if the input is a sample buffer.
     #[inline]
     pub fn iter_input_as_samples(
         &self,
         index: usize,
-    ) -> Result<impl Iterator<Item = Sample> + '_, ProcessorError> {
+    ) -> Result<impl Iterator<Item = Option<Sample>> + '_, ProcessorError> {
         let buffer = self.input(index);
 
         if let Some(buffer) = buffer {
@@ -140,32 +137,102 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
 
             Ok(itertools::Either::Left(buffer.iter().copied()))
         } else {
-            let default_value = self.input_spec_defaults[index]
-                .as_sample()
-                .ok_or(ProcessorError::InputSpecMismatch(index))?;
-            Ok(itertools::Either::Right(std::iter::repeat(*default_value)))
+            Ok(itertools::Either::Right(std::iter::repeat(None)))
         }
     }
 
-    /// Returns an iterator over the input messages at the given index.
+    /// Returns an iterator over the input integers at the given index, if the input is an integer buffer.
     #[inline]
-    pub fn iter_input_as_messages(
+    pub fn iter_input_as_ints(
         &self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &Message> + '_, ProcessorError> {
+    ) -> Result<impl Iterator<Item = Option<i64>> + '_, ProcessorError> {
         let buffer = self.input(index);
 
         if let Some(buffer) = buffer {
             let buffer = buffer
-                .as_message()
+                .as_int()
                 .ok_or(ProcessorError::InputSpecMismatch(index))?;
 
-            Ok(itertools::Either::Left(buffer.iter()))
+            Ok(itertools::Either::Left(buffer.iter().copied()))
         } else {
-            let default_value = self.input_spec_defaults[index]
-                .as_message()
+            Ok(itertools::Either::Right(std::iter::repeat(None)))
+        }
+    }
+
+    /// Returns an iterator over the input booleans at the given index, if the input is a boolean buffer.
+    #[inline]
+    pub fn iter_input_as_bools(
+        &self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = Option<bool>> + '_, ProcessorError> {
+        let buffer = self.input(index);
+
+        if let Some(buffer) = buffer {
+            let buffer = buffer
+                .as_bool()
                 .ok_or(ProcessorError::InputSpecMismatch(index))?;
-            Ok(itertools::Either::Right(std::iter::repeat(default_value)))
+
+            Ok(itertools::Either::Left(buffer.iter().copied()))
+        } else {
+            Ok(itertools::Either::Right(std::iter::repeat(None)))
+        }
+    }
+
+    /// Returns an iterator over the input strings at the given index, if the input is a string buffer.
+    #[inline]
+    pub fn iter_input_as_strings(
+        &self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = Option<&String>> + '_, ProcessorError> {
+        let buffer = self.input(index);
+
+        if let Some(buffer) = buffer {
+            let buffer = buffer
+                .as_string()
+                .ok_or(ProcessorError::InputSpecMismatch(index))?;
+
+            Ok(itertools::Either::Left(buffer.iter().map(Option::as_ref)))
+        } else {
+            Ok(itertools::Either::Right(std::iter::repeat(None)))
+        }
+    }
+
+    /// Returns an iterator over the input lists at the given index, if the input is a list buffer.
+    #[inline]
+    pub fn iter_input_as_lists(
+        &self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = Option<&Vec<Signal>>> + '_, ProcessorError> {
+        let buffer = self.input(index);
+
+        if let Some(buffer) = buffer {
+            let buffer = buffer
+                .as_list()
+                .ok_or(ProcessorError::InputSpecMismatch(index))?;
+
+            Ok(itertools::Either::Left(buffer.iter().map(Option::as_ref)))
+        } else {
+            Ok(itertools::Either::Right(std::iter::repeat(None)))
+        }
+    }
+
+    /// Returns an iterator over the input MIDI messages at the given index, if the input is a MIDI message buffer.
+    #[inline]
+    pub fn iter_input_as_midi(
+        &self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = Option<&Vec<u8>>> + '_, ProcessorError> {
+        let buffer = self.input(index);
+
+        if let Some(buffer) = buffer {
+            let buffer = buffer
+                .as_midi()
+                .ok_or(ProcessorError::InputSpecMismatch(index))?;
+
+            Ok(itertools::Either::Left(buffer.iter().map(Option::as_ref)))
+        } else {
+            Ok(itertools::Either::Right(std::iter::repeat(None)))
         }
     }
 }
@@ -173,7 +240,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
 /// A collection of borrowed output buffers for a [`Processor`] to write to, and related information about them.
 pub struct ProcessorOutputs<'a> {
     /// The output signal specs.
-    pub output_spec: &'a [SignalSpec],
+    pub output_spec: &'a [OutputSpec],
     /// The output buffers to write to.
     pub outputs: &'a mut [SignalBuffer],
 }
@@ -185,25 +252,79 @@ impl<'a> ProcessorOutputs<'a> {
         &mut self.outputs[index]
     }
 
+    #[inline]
+    pub fn output_as<S: SignalData>(
+        &mut self,
+        index: usize,
+    ) -> Result<&mut Buffer<S::BufferElement>, ProcessorError> {
+        self.output(index)
+            .as_kind_mut::<S>()
+            .ok_or(ProcessorError::OutputSpecMismatch(index))
+    }
+
     /// Returns the output buffer at the given index, if it is a sample buffer.
     #[inline]
     pub fn output_as_samples(
         &mut self,
         index: usize,
-    ) -> Result<&mut Buffer<Sample>, ProcessorError> {
+    ) -> Result<&mut Buffer<Option<Sample>>, ProcessorError> {
         self.output(index)
             .as_sample_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(index))
     }
 
-    /// Returns the output buffer at the given index, if it is a message buffer.
+    /// Returns the output buffer at the given index, if it is an integer buffer.
     #[inline]
-    pub fn output_as_messages(
+    pub fn output_as_ints(
         &mut self,
         index: usize,
-    ) -> Result<&mut Buffer<Message>, ProcessorError> {
+    ) -> Result<&mut Buffer<Option<i64>>, ProcessorError> {
         self.output(index)
-            .as_message_mut()
+            .as_int_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(index))
+    }
+
+    /// Returns the output buffer at the given index, if it is a boolean buffer.
+    #[inline]
+    pub fn output_as_bools(
+        &mut self,
+        index: usize,
+    ) -> Result<&mut Buffer<Option<bool>>, ProcessorError> {
+        self.output(index)
+            .as_bool_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(index))
+    }
+
+    /// Returns the output buffer at the given index, if it is a string buffer.
+    #[inline]
+    pub fn output_as_strings(
+        &mut self,
+        index: usize,
+    ) -> Result<&mut Buffer<Option<String>>, ProcessorError> {
+        self.output(index)
+            .as_string_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(index))
+    }
+
+    /// Returns the output buffer at the given index, if it is a list buffer.
+    #[inline]
+    pub fn output_as_lists(
+        &mut self,
+        index: usize,
+    ) -> Result<&mut Buffer<Option<Vec<Signal>>>, ProcessorError> {
+        self.output(index)
+            .as_list_mut()
+            .ok_or(ProcessorError::OutputSpecMismatch(index))
+    }
+
+    /// Returns the output buffer at the given index, if it is a MIDI message buffer.
+    #[inline]
+    pub fn output_as_midi(
+        &mut self,
+        index: usize,
+    ) -> Result<&mut Buffer<Option<Vec<u8>>>, ProcessorError> {
+        self.output(index)
+            .as_midi_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(index))
     }
 
@@ -213,32 +334,66 @@ impl<'a> ProcessorOutputs<'a> {
         self.outputs.iter_mut()
     }
 
+    #[inline]
+    pub fn iter_output_as<S: SignalData>(
+        &mut self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = &mut S::BufferElement> + '_, ProcessorError> {
+        Ok(self.output_as::<S>(index)?.iter_mut())
+    }
+
     /// Returns an iterator over the output samples at the given index.
     #[inline]
     pub fn iter_output_mut_as_samples(
         &mut self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &mut Sample> + '_, ProcessorError> {
-        let buffer = self
-            .output(index)
-            .as_sample_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(index))?;
-
-        Ok(buffer.iter_mut())
+    ) -> Result<impl Iterator<Item = &mut Option<Sample>> + '_, ProcessorError> {
+        Ok(self.output_as_samples(index)?.iter_mut())
     }
 
-    /// Returns an iterator over the output messages at the given index.
+    /// Returns an iterator over the output integers at the given index.
     #[inline]
-    pub fn iter_output_mut_as_messages(
+    pub fn iter_output_mut_as_ints(
         &mut self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &mut Message> + '_, ProcessorError> {
-        let buffer = self
-            .output(index)
-            .as_message_mut()
-            .ok_or(ProcessorError::OutputSpecMismatch(index))?;
+    ) -> Result<impl Iterator<Item = &mut Option<i64>> + '_, ProcessorError> {
+        Ok(self.output_as_ints(index)?.iter_mut())
+    }
 
-        Ok(buffer.iter_mut())
+    /// Returns an iterator over the output booleans at the given index.
+    #[inline]
+    pub fn iter_output_mut_as_bools(
+        &mut self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = &mut Option<bool>> + '_, ProcessorError> {
+        Ok(self.output_as_bools(index)?.iter_mut())
+    }
+
+    /// Returns an iterator over the output strings at the given index.
+    #[inline]
+    pub fn iter_output_mut_as_strings(
+        &mut self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = &mut Option<String>> + '_, ProcessorError> {
+        Ok(self.output_as_strings(index)?.iter_mut())
+    }
+
+    /// Returns an iterator over the output lists at the given index.
+    #[inline]
+    pub fn iter_output_mut_as_lists(
+        &mut self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = &mut Option<Vec<Signal>>> + '_, ProcessorError> {
+        Ok(self.output_as_lists(index)?.iter_mut())
+    }
+
+    /// Returns an iterator over the output MIDI messages at the given index.
+    #[inline]
+    pub fn iter_output_mut_as_midi(
+        &mut self,
+        index: usize,
+    ) -> Result<impl Iterator<Item = &mut Option<Vec<u8>>> + '_, ProcessorError> {
+        Ok(self.output_as_midi(index)?.iter_mut())
     }
 
     /// Splits this [`ProcessorOutputs`] into two at the given index.
@@ -308,15 +463,15 @@ pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
             .unwrap_or_default()
     }
 
-    /// Returns information about the inputs this [`Processor`] expects.
-    fn input_spec(&self) -> Vec<SignalSpec>;
+    /// Returns the names of the inputs this [`Processor`] expects.
+    fn input_names(&self) -> Vec<String>;
 
     /// Returns information about the outputs this [`Processor`] produces.
-    fn output_spec(&self) -> Vec<SignalSpec>;
+    fn output_spec(&self) -> Vec<OutputSpec>;
 
     /// Returns the number of input buffers/channels this [`Processor`] expects.
     fn num_inputs(&self) -> usize {
-        self.input_spec().len()
+        self.input_names().len()
     }
 
     /// Returns the number of output buffers/channels this [`Processor`] produces.

@@ -34,8 +34,8 @@ fn main() {
         )
         .unwrap();
 
-    // // run the graph for 1 second
-    // runtime
-    //     .run_offline_to_file("target/demo.wav", Duration::from_secs(1), 44_100.0, 512)
-    //     .unwrap();
+    // run the graph for 1 second
+    runtime
+        .run_offline_to_file("target/demo.wav", Duration::from_secs(1), 44_100.0, 512)
+        .unwrap();
 }

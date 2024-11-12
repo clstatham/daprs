@@ -1,6 +1,8 @@
 //! Storage-related processors.
 
-use crate::prelude::*;
+use std::marker::PhantomData;
+
+use crate::{prelude::*, signal::SignalData};
 
 /// A processor that reads and writes audio samples in a buffer.
 ///
@@ -26,7 +28,7 @@ use crate::prelude::*;
 /// | `1` | `length` | `Message(i64)` | The length of the buffer in samples. |
 #[derive(Clone, Debug)]
 pub struct AudioBuffer {
-    buffer: SignalBuffer,
+    buffer: Buffer<Sample>,
     sample_rate: Sample,
     index: Sample,
 }
@@ -35,7 +37,7 @@ impl AudioBuffer {
     /// Creates a new audio buffer processor with the given buffer.
     pub fn new(buffer: Buffer<Sample>) -> Self {
         Self {
-            buffer: SignalBuffer::Sample(buffer),
+            buffer,
             sample_rate: 0.0,
             index: 0.0,
         }
@@ -43,17 +45,18 @@ impl AudioBuffer {
 }
 
 impl Processor for AudioBuffer {
-    fn input_spec(&self) -> Vec<SignalSpec> {
+    fn input_names(&self) -> Vec<String> {
         vec![
-            SignalSpec::unbounded("index", Signal::new_message_some(Message::Int(0))),
-            SignalSpec::unbounded("set", Signal::new_message_none()),
+            String::from("index"),
+            String::from("write"),
+            String::from("enable_write"),
         ]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
+    fn output_spec(&self) -> Vec<OutputSpec> {
         vec![
-            SignalSpec::unbounded("out", 0.0),
-            SignalSpec::unbounded("length", Signal::new_message_none()),
+            OutputSpec::new("out", SignalKind::Sample),
+            OutputSpec::new("length", SignalKind::Int),
         ]
     }
 
@@ -66,55 +69,46 @@ impl Processor for AudioBuffer {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let buffer = self.buffer.as_sample_mut().unwrap();
-
         let (mut outputs0, mut outputs1) = outputs.split_at_mut(1);
 
-        for (out, length, index, set) in itertools::izip!(
+        for (out, length, index, write, enable_write) in itertools::izip!(
             outputs0.iter_output_mut_as_samples(0)?,
-            outputs1.iter_output_mut_as_messages(0)?,
-            inputs.iter_input_as_messages(0)?,
-            inputs.iter_input_as_messages(1)?
+            outputs1.iter_output_mut_as_ints(0)?,
+            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_samples(1)?,
+            inputs.iter_input_as_bools(2)?
         ) {
-            if index.is_some() {
-                let Some(index) = index.cast_to_float() else {
-                    return Err(ProcessorError::InputSpecMismatch(0));
-                };
+            self.index = index.unwrap_or(self.index);
 
-                self.index = index;
-
-                if set.is_some() {
-                    let set = set
-                        .cast_to_float()
-                        .ok_or(ProcessorError::InputSpecMismatch(1))?;
-
-                    buffer[self.index as usize] = set;
-                }
-
-                if index.fract() != 0.0 {
-                    let pos_floor = index.floor() as usize;
-                    let pos_ceil = index.ceil() as usize;
-
-                    let value_floor = buffer[pos_floor];
-                    let value_ceil = buffer[pos_ceil];
-
-                    let t = index.fract();
-
-                    *out = value_floor + (value_ceil - value_floor) * t;
-                } else {
-                    let index = index as i64;
-
-                    if index < 0 {
-                        self.index = buffer.len() as Sample + index as Sample;
-                    } else {
-                        self.index = index as Sample;
-                    }
-
-                    *out = buffer[self.index as usize];
+            if let Some(true) = enable_write {
+                if let Some(write) = write {
+                    self.buffer[self.index as usize] = write;
                 }
             }
 
-            *length = Message::Int(buffer.len() as i64);
+            if self.index.fract() != 0.0 {
+                let pos_floor = self.index.floor() as usize;
+                let pos_ceil = self.index.ceil() as usize;
+
+                let value_floor = self.buffer[pos_floor];
+                let value_ceil = self.buffer[pos_ceil];
+
+                let t = self.index.fract();
+
+                *out = Some(value_floor + (value_ceil - value_floor) * t);
+            } else {
+                let index = self.index as i64;
+
+                if index < 0 {
+                    self.index = self.buffer.len() as Sample + index as Sample;
+                } else {
+                    self.index = index as Sample;
+                }
+
+                *out = Some(self.buffer[self.index as usize]);
+            }
+
+            *length = Some(self.buffer.len() as i64);
         }
 
         Ok(())
@@ -135,21 +129,29 @@ impl Processor for AudioBuffer {
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Message` | The value stored in the register. |
-#[derive(Clone, Debug, Default)]
-pub struct Register {
-    value: Message,
+#[derive(Clone, Debug)]
+pub struct Register<S: SignalData> {
+    value: Option<S::Value>,
+    _phantom: PhantomData<S>,
 }
 
-impl Processor for Register {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![
-            SignalSpec::unbounded("set", Signal::new_message_none()),
-            SignalSpec::unbounded("clear", Signal::new_message_none()),
-        ]
+impl<S: SignalData> Register<S> {
+    /// Creates a new register processor.
+    pub fn new() -> Self {
+        Self {
+            value: None,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<S: SignalData> Processor for Register<S> {
+    fn input_names(&self) -> Vec<String> {
+        vec![String::from("set"), String::from("clear")]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", Signal::new_message_none())]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", S::KIND)]
     }
 
     fn process(
@@ -158,19 +160,23 @@ impl Processor for Register {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (set, clear, out) in itertools::izip!(
-            inputs.iter_input_as_messages(0)?,
-            inputs.iter_input_as_messages(1)?,
-            outputs.iter_output_mut_as_messages(0)?
+            inputs.iter_input_as::<S>(0)?,
+            inputs.iter_input_as_bools(1)?,
+            outputs.iter_output_as::<S>(0)?,
         ) {
-            if set.is_some() {
-                self.value = set.clone();
+            if let Some(set) = S::buffer_element_to_value(set) {
+                self.value = Some(set.clone());
             }
 
             if clear.is_some() {
-                self.value = Message::None;
+                self.value = None;
             }
 
-            *out = self.value.clone();
+            if let Some(value) = &self.value {
+                *out = S::value_to_buffer_element(value);
+            } else {
+                *out = S::buffer_element_default().clone();
+            }
         }
 
         Ok(())

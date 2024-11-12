@@ -63,16 +63,16 @@ impl MoogLadder {
 }
 
 impl Processor for MoogLadder {
-    fn input_spec(&self) -> Vec<SignalSpec> {
+    fn input_names(&self) -> Vec<String> {
         vec![
-            SignalSpec::unbounded("in", 0.0),
-            SignalSpec::unbounded("cutoff", self.cutoff),
-            SignalSpec::unbounded("resonance", self.resonance),
+            String::from("in"),
+            String::from("cutoff"),
+            String::from("resonance"),
         ]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -91,12 +91,20 @@ impl Processor for MoogLadder {
             inputs.iter_input_as_samples(1)?,
             inputs.iter_input_as_samples(2)?
         ) {
-            let cutoff = cutoff.clamp(0.0, self.sample_rate * 0.5);
-            let resonance = resonance.clamp(0.0, 1.0);
-            self.cutoff = cutoff;
-            self.resonance = resonance;
+            let Some(in_signal) = in_signal else {
+                *out = None;
+                continue;
+            };
 
-            let fc = cutoff / self.sample_rate;
+            if let Some(cutoff) = cutoff {
+                self.cutoff = cutoff.clamp(0.0, self.sample_rate * 0.5);
+            }
+
+            if let Some(resonance) = resonance {
+                self.resonance = resonance.clamp(0.0, 1.0);
+            }
+
+            let fc = self.cutoff / self.sample_rate;
             let f = fc * 0.5; // oversampling
             let fc2 = fc * fc;
             let fc3 = fc2 * fc;
@@ -129,7 +137,7 @@ impl Processor for MoogLadder {
                 self.delay[4] = self.stage[3];
             }
 
-            *out = self.delay[5];
+            *out = Some(self.delay[5]);
         }
 
         Ok(())
@@ -209,19 +217,19 @@ impl Biquad {
 }
 
 impl Processor for Biquad {
-    fn input_spec(&self) -> Vec<SignalSpec> {
+    fn input_names(&self) -> Vec<String> {
         vec![
-            SignalSpec::unbounded("in", 0.0),
-            SignalSpec::unbounded("a0", self.a0),
-            SignalSpec::unbounded("a1", self.a1),
-            SignalSpec::unbounded("a2", self.a2),
-            SignalSpec::unbounded("b1", self.b1),
-            SignalSpec::unbounded("b2", self.b2),
+            String::from("in"),
+            String::from("a0"),
+            String::from("a1"),
+            String::from("a2"),
+            String::from("b1"),
+            String::from("b2"),
         ]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -242,11 +250,26 @@ impl Processor for Biquad {
             inputs.iter_input_as_samples(4)?,
             inputs.iter_input_as_samples(5)?
         ) {
-            self.a0 = a0;
-            self.a1 = a1;
-            self.a2 = a2;
-            self.b1 = b1;
-            self.b2 = b2;
+            let Some(in_signal) = in_signal else {
+                *out = None;
+                continue;
+            };
+
+            if let Some(a0) = a0 {
+                self.a0 = a0;
+            }
+            if let Some(a1) = a1 {
+                self.a1 = a1;
+            }
+            if let Some(a2) = a2 {
+                self.a2 = a2;
+            }
+            if let Some(b1) = b1 {
+                self.b1 = b1;
+            }
+            if let Some(b2) = b2 {
+                self.b2 = b2;
+            }
 
             let filtered = self.a0 * in_signal + self.a1 * self.x1 + self.a2 * self.x2
                 - self.b1 * self.y1
@@ -257,7 +280,7 @@ impl Processor for Biquad {
             self.y2 = self.y1;
             self.y1 = filtered;
 
-            *out = filtered;
+            *out = Some(filtered);
         }
 
         Ok(())
@@ -554,17 +577,17 @@ impl AutoBiquad {
 }
 
 impl Processor for AutoBiquad {
-    fn input_spec(&self) -> Vec<SignalSpec> {
+    fn input_names(&self) -> Vec<String> {
         vec![
-            SignalSpec::unbounded("in", 0.0),
-            SignalSpec::unbounded("frequency", self.cutoff),
-            SignalSpec::unbounded("q", self.q),
-            SignalSpec::unbounded("gain", self.gain),
+            String::from("in"),
+            String::from("frequency"),
+            String::from("q"),
+            String::from("gain"),
         ]
     }
 
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::unbounded("out", 0.0)]
+    fn output_spec(&self) -> Vec<OutputSpec> {
+        vec![OutputSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -584,6 +607,15 @@ impl Processor for AutoBiquad {
             inputs.iter_input_as_samples(2)?,
             inputs.iter_input_as_samples(3)?
         ) {
+            let Some(in_signal) = in_signal else {
+                *out = None;
+                continue;
+            };
+
+            let frequency = frequency.unwrap_or(self.cutoff);
+            let q = q.unwrap_or(self.q);
+            let gain = gain.unwrap_or(self.gain);
+
             let frequency_changed = (frequency - self.cutoff).abs() > Sample::EPSILON;
             let q_changed = (q - self.q).abs() > Sample::EPSILON;
             let gain_changed = (gain - self.gain).abs() > Sample::EPSILON;
@@ -605,7 +637,7 @@ impl Processor for AutoBiquad {
             self.y2 = self.y1;
             self.y1 = filtered;
 
-            *out = filtered;
+            *out = Some(filtered);
         }
 
         Ok(())

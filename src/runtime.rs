@@ -10,8 +10,8 @@ use petgraph::prelude::*;
 use rustc_hash::FxBuildHasher;
 
 use crate::{
-    graph::{Graph, GraphRunError, NodeIndex},
-    prelude::{Param, ProcessorInputs, SignalSpec},
+    graph::{Graph, GraphRunError, GraphRunErrorKind, NodeIndex},
+    prelude::{OutputSpec, Param, ProcessorInputs},
     processor::{ProcessorError, ProcessorOutputs},
     signal::{Sample, Signal, SignalBuffer},
 };
@@ -117,24 +117,23 @@ pub enum MidiPort {
 /// Stores the input and output buffers for a node.
 #[derive(Clone)]
 pub struct NodeBuffers {
-    input_spec: Vec<SignalSpec>,
-    input_spec_defaults: Vec<Signal>,
-    output_spec: Vec<SignalSpec>,
+    input_names: Vec<String>,
+    output_spec: Vec<OutputSpec>,
     outputs: Vec<SignalBuffer>,
 }
 
 impl NodeBuffers {
     /// Resizes the input and output buffers to the given block size.
     pub fn resize(&mut self, block_size: usize) {
-        for (output, spec) in self.outputs.iter_mut().zip(&self.output_spec) {
-            output.resize(block_size, spec.default_value.clone());
+        for output in &mut self.outputs {
+            output.resize_default(block_size);
         }
     }
 
-    /// Clears the input and output buffers.
-    pub fn clear_buffers(&mut self) {
-        for (output, spec) in self.outputs.iter_mut().zip(&self.output_spec) {
-            output.fill_with_spec_default(spec);
+    /// Fill the output buffers with their default values.
+    pub fn reset(&mut self) {
+        for output in &mut self.outputs {
+            output.fill_default();
         }
     }
 }
@@ -167,19 +166,14 @@ impl Runtime {
                 let mut outputs = Vec::with_capacity(output_spec.len());
 
                 for spec in output_spec {
-                    let buffer = SignalBuffer::from_spec_default(spec, 0);
+                    let buffer = SignalBuffer::new_of_kind(spec.kind, 0);
                     outputs.push(buffer);
                 }
 
                 buffer_cache.insert(
                     node_id,
                     NodeBuffers {
-                        input_spec: node.input_spec().to_vec(),
-                        input_spec_defaults: node
-                            .input_spec()
-                            .iter()
-                            .map(|spec| spec.default_value.clone())
-                            .collect(),
+                        input_names: node.input_names().to_vec(),
                         output_spec: output_spec.to_vec(),
                         outputs,
                     },
@@ -217,19 +211,14 @@ impl Runtime {
                 let mut outputs = Vec::with_capacity(output_spec.len());
 
                 for spec in output_spec {
-                    let buffer = SignalBuffer::from_spec_default(spec, block_size);
+                    let buffer = SignalBuffer::new_of_kind(spec.kind, block_size);
                     outputs.push(buffer);
                 }
 
                 self.buffer_cache.insert(
                     node_id,
                     NodeBuffers {
-                        input_spec: node.input_spec().to_vec(),
-                        input_spec_defaults: node
-                            .input_spec()
-                            .iter()
-                            .map(|spec| spec.default_value.clone())
-                            .collect(),
+                        input_names: node.input_names().to_vec(),
                         output_spec: output_spec.to_vec(),
                         outputs,
                     },
@@ -267,18 +256,6 @@ impl Runtime {
         &mut self.graph
     }
 
-    /// Returns an iterator over the [`Param`]s in the graph.
-    #[inline]
-    pub fn param_iter(&self) -> impl Iterator<Item = (&str, &Param)> + '_ {
-        self.graph.param_iter()
-    }
-
-    /// Returns a copy of the [`Param`] with the given name.
-    #[inline]
-    pub fn param_named(&self, name: impl AsRef<str>) -> Option<&Param> {
-        self.graph.param_named(name)
-    }
-
     /// Returns an iterator over the output channels of the runtime.
     #[inline]
     pub fn outputs(&self) -> impl Iterator<Item = &SignalBuffer> + '_ {
@@ -293,7 +270,7 @@ impl Runtime {
         self.graph.visit(
             #[inline(never)]
             |graph, node_id| -> RuntimeResult<()> {
-                let num_inputs = graph.digraph()[node_id].input_spec().len();
+                let num_inputs = graph.digraph()[node_id].input_names().len();
 
                 let mut inputs = vec![None; num_inputs];
 
@@ -311,17 +288,27 @@ impl Runtime {
 
                 let node = graph.digraph_mut().node_weight_mut(node_id).unwrap();
 
-                node.process(
+                let result = node.process(
                     ProcessorInputs {
-                        input_spec: &buffers.input_spec,
-                        input_spec_defaults: &buffers.input_spec_defaults,
+                        input_names: &buffers.input_names,
                         inputs: &inputs,
                     },
                     ProcessorOutputs {
                         output_spec: &buffers.output_spec,
                         outputs: &mut buffers.outputs,
                     },
-                )?;
+                );
+
+                if let Err(err) = result {
+                    let node = graph.digraph().node_weight(node_id).unwrap();
+                    log::error!("Error processing node {}: {:?}", node.name(), err);
+                    let error = GraphRunError {
+                        node_index: node_id,
+                        node_processor: node.name().to_string(),
+                        kind: GraphRunErrorKind::ProcessorError(err),
+                    };
+                    return Err(RuntimeError::GraphRunError(error));
+                }
 
                 self.buffer_cache.insert(node_id, buffers);
 
@@ -421,8 +408,10 @@ impl Runtime {
                         ProcessorError::OutputSpecMismatch(i),
                     ));
                 };
-                output[sample_count..sample_count + actual_block_size]
-                    .copy_from_slice(&buffer[..actual_block_size]);
+
+                for (j, &sample) in buffer.iter().enumerate() {
+                    output[sample_count + j] = sample.unwrap_or_default();
+                }
             }
 
             if add_delay {
@@ -707,7 +696,7 @@ impl Runtime {
                             let SignalBuffer::Sample(buffer) = buffer else {
                                 panic!("output {channel_idx} signal type mismatch");
                             };
-                            let value = buffer[frame_idx];
+                            let value = buffer[frame_idx].unwrap_or_default();
                             *sample = T::from_sample(value);
                         }
                     }
