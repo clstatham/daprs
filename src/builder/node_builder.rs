@@ -221,7 +221,7 @@ impl Input {
     pub fn param<S: SignalData>(
         &self,
         name: impl Into<String>,
-        initial_value: impl Into<Option<S::Value>>,
+        initial_value: impl Into<Option<S>>,
     ) -> Param<S> {
         let name = name.into();
         let param = Param::<S>::new(&name, initial_value);
@@ -298,6 +298,7 @@ impl Output {
     pub fn make_node(&self) -> Node {
         let kind = self.kind();
         let node = match kind {
+            SignalKind::Dynamic => self.node.graph().add(Passthrough::<Signal>::new()),
             SignalKind::Bool => self.node.graph().add(Passthrough::<bool>::new()),
             SignalKind::Int => self.node.graph().add(Passthrough::<i64>::new()),
             SignalKind::Sample => self.node.graph().add(Passthrough::<Sample>::new()),
@@ -314,6 +315,7 @@ impl Output {
     pub fn make_register(&self) -> Node {
         let kind = self.kind();
         let node = match kind {
+            SignalKind::Dynamic => self.node.graph().add(Register::<Signal>::new()),
             SignalKind::Bool => self.node.graph().add(Register::<bool>::new()),
             SignalKind::Int => self.node.graph().add(Register::<i64>::new()),
             SignalKind::Sample => self.node.graph().add(Register::<Sample>::new()),
@@ -364,6 +366,7 @@ impl Output {
             "output signals must have the same type"
         );
         let cond = match kind {
+            SignalKind::Dynamic => self.node.graph().add(Cond::<Signal>::new()),
             SignalKind::Bool => self.node.graph().add(Cond::<bool>::new()),
             SignalKind::Int => self.node.graph().add(Cond::<i64>::new()),
             SignalKind::Sample => self.node.graph().add(Cond::<Sample>::new()),
@@ -635,7 +638,7 @@ impl_binary_node_ops!(max, math::Max, "Outputs the maximum of two signals.");
 impl_binary_node_ops!(min, math::Min, "Outputs the minimum of two signals.");
 
 macro_rules! impl_comparison_node_ops {
-    ($name:ident, $proc:ty, $doc:expr) => {
+    ($name:ident, $proc:ident, $doc:expr) => {
         impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
@@ -652,12 +655,13 @@ macro_rules! impl_comparison_node_ops {
                 );
 
                 let node = match kind {
-                    SignalKind::Bool => self.graph().add(control::Equal::<bool>::default()),
-                    SignalKind::Int => self.graph().add(control::Equal::<i64>::default()),
-                    SignalKind::Sample => self.graph().add(control::Equal::<Sample>::default()),
-                    SignalKind::String => self.graph().add(control::Equal::<String>::default()),
-                    SignalKind::List => self.graph().add(control::Equal::<Vec<Signal>>::default()),
-                    SignalKind::Midi => self.graph().add(control::Equal::<Vec<u8>>::default()),
+                    SignalKind::Dynamic => self.graph().add(control::$proc::<Signal>::new()),
+                    SignalKind::Bool => self.graph().add(control::$proc::<bool>::default()),
+                    SignalKind::Int => self.graph().add(control::$proc::<i64>::default()),
+                    SignalKind::Sample => self.graph().add(control::$proc::<Sample>::default()),
+                    SignalKind::String => self.graph().add(control::$proc::<String>::default()),
+                    SignalKind::List => self.graph().add(control::$proc::<Vec<Signal>>::default()),
+                    SignalKind::Midi => self.graph().add(control::$proc::<Vec<u8>>::default()),
                 };
 
                 node.input(0).connect(&self.output(0));
@@ -669,34 +673,30 @@ macro_rules! impl_comparison_node_ops {
     };
 }
 
-impl_comparison_node_ops!(
-    eq,
-    control::Equal,
-    "Outputs true if the two signals are equal."
-);
+impl_comparison_node_ops!(eq, Equal, "Outputs true if the two signals are equal.");
 impl_comparison_node_ops!(
     ne,
-    control::NotEqual,
+    NotEqual,
     "Outputs true if the two signals are not equal."
 );
 impl_comparison_node_ops!(
     lt,
-    control::Less,
+    Less,
     "Outputs true if the first signal is less than the second signal."
 );
 impl_comparison_node_ops!(
     le,
-    control::LessOrEqual,
+    LessOrEqual,
     "Outputs true if the first signal is less than or equal to the second signal."
 );
 impl_comparison_node_ops!(
     gt,
-    control::Greater,
+    Greater,
     "Outputs true if the first signal is greater than the second signal."
 );
 impl_comparison_node_ops!(
     ge,
-    control::GreaterOrEqual,
+    GreaterOrEqual,
     "Outputs true if the first signal is greater than or equal to the second signal."
 );
 

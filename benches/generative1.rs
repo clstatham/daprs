@@ -12,14 +12,13 @@ pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Nod
     let index = random(graph, trig);
     let index = index * (options.len() + 1) as Sample;
     let index = index % options.len() as Sample;
-    let cast = graph.add(Cast::<Sample, i64>::new());
-    index.output(0).connect(&cast.input(0));
+    let index = index.cast(SignalKind::Int);
 
     let select = graph.add(Select::<bool>::new(options.len()));
     select
         .input("in")
         .connect(&graph.constant(Signal::new_bool(true)).output(0));
-    select.input("index").connect(&cast.output(0));
+    select.input("index").connect(&index.output(0));
 
     let merge = graph.add(Merge::<Sample>::new(options.len()));
 

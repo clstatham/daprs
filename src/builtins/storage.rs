@@ -82,7 +82,7 @@ impl Processor for AudioBuffer {
 
             if let Some(true) = enable_write {
                 if let Some(write) = write {
-                    self.buffer[self.index as usize] = write;
+                    self.buffer[self.index as usize] = Some(write);
                 }
             }
 
@@ -90,8 +90,8 @@ impl Processor for AudioBuffer {
                 let pos_floor = self.index.floor() as usize;
                 let pos_ceil = self.index.ceil() as usize;
 
-                let value_floor = self.buffer[pos_floor];
-                let value_ceil = self.buffer[pos_ceil];
+                let value_floor = self.buffer[pos_floor].unwrap_or_default();
+                let value_ceil = self.buffer[pos_ceil].unwrap_or_default();
 
                 let t = self.index.fract();
 
@@ -105,7 +105,7 @@ impl Processor for AudioBuffer {
                     self.index = index as Sample;
                 }
 
-                *out = Some(self.buffer[self.index as usize]);
+                *out = Some(self.buffer[self.index as usize].unwrap_or_default());
             }
 
             *length = Some(self.buffer.len() as i64);
@@ -131,7 +131,7 @@ impl Processor for AudioBuffer {
 /// | `0` | `out` | `Message` | The value stored in the register. |
 #[derive(Clone, Debug)]
 pub struct Register<S: SignalData> {
-    value: Option<S::Value>,
+    value: Option<S>,
     _phantom: PhantomData<S>,
 }
 
@@ -170,7 +170,7 @@ impl<S: SignalData> Processor for Register<S> {
             inputs.iter_input_as_bools(1)?,
             outputs.iter_output_as::<S>(0)?,
         ) {
-            if let Some(set) = S::buffer_element_to_value(set) {
+            if let Some(set) = set {
                 self.value = Some(set.clone());
             }
 
@@ -178,11 +178,7 @@ impl<S: SignalData> Processor for Register<S> {
                 self.value = None;
             }
 
-            if let Some(value) = &self.value {
-                *out = S::value_to_buffer_element(value);
-            } else {
-                *out = S::buffer_element_default().clone();
-            }
+            *out = self.value.clone();
         }
 
         Ok(())

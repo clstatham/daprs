@@ -36,7 +36,7 @@ impl<S: SignalData> Processor for Cond<S> {
             inputs.iter_input_as::<S>(2)?
         ) {
             let Some(cond) = cond else {
-                *out = S::buffer_element_default().clone();
+                *out = None;
                 continue;
             };
 
@@ -57,6 +57,12 @@ macro_rules! comparison_op {
         #[doc = $doc]
         pub struct $name<S: SignalData>(PhantomData<S>);
 
+        impl<S: SignalData> $name<S> {
+            pub fn new() -> Self {
+                Self(PhantomData)
+            }
+        }
+
         impl<S: SignalData> Processor for $name<S> {
             fn input_names(&self) -> Vec<String> {
                 vec![String::from("a"), String::from("b")]
@@ -76,9 +82,7 @@ macro_rules! comparison_op {
                     inputs.iter_input_as::<S>(0)?,
                     inputs.iter_input_as::<S>(1)?
                 ) {
-                    if let (Some(a), Some(b)) =
-                        (S::buffer_element_to_value(a), S::buffer_element_to_value(b))
-                    {
+                    if let (Some(a), Some(b)) = (a, b) {
                         *out = match a.partial_cmp(&b) {
                             Some(std::cmp::Ordering::$op) => Some(!$invert),
                             _ => Some($invert),

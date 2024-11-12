@@ -83,10 +83,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     }
 
     #[inline]
-    pub fn input_as<S: SignalData>(
-        &self,
-        index: usize,
-    ) -> Result<&'b Buffer<S::BufferElement>, ProcessorError> {
+    pub fn input_as<S: SignalData>(&self, index: usize) -> Result<&'b Buffer<S>, ProcessorError> {
         self.input(index)
             .ok_or(ProcessorError::InputSpecMismatch(index))?
             .as_kind::<S>()
@@ -103,7 +100,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     pub fn iter_input_as<S: SignalData>(
         &self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &S::BufferElement> + '_, ProcessorError> {
+    ) -> Result<impl Iterator<Item = &Option<S>> + '_, ProcessorError> {
         let input = self
             .inputs
             .get(index)
@@ -116,9 +113,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
 
             Ok(itertools::Either::Left(input.iter()))
         } else {
-            Ok(itertools::Either::Right(std::iter::repeat(
-                S::buffer_element_default(),
-            )))
+            Ok(itertools::Either::Right(std::iter::repeat(&None)))
         }
     }
 
@@ -256,7 +251,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn output_as<S: SignalData>(
         &mut self,
         index: usize,
-    ) -> Result<&mut Buffer<S::BufferElement>, ProcessorError> {
+    ) -> Result<&mut Buffer<S>, ProcessorError> {
         self.output(index)
             .as_kind_mut::<S>()
             .ok_or(ProcessorError::OutputSpecMismatch(index))
@@ -267,7 +262,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn output_as_samples(
         &mut self,
         index: usize,
-    ) -> Result<&mut Buffer<Option<Sample>>, ProcessorError> {
+    ) -> Result<&mut Buffer<Sample>, ProcessorError> {
         self.output(index)
             .as_sample_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(index))
@@ -275,10 +270,7 @@ impl<'a> ProcessorOutputs<'a> {
 
     /// Returns the output buffer at the given index, if it is an integer buffer.
     #[inline]
-    pub fn output_as_ints(
-        &mut self,
-        index: usize,
-    ) -> Result<&mut Buffer<Option<i64>>, ProcessorError> {
+    pub fn output_as_ints(&mut self, index: usize) -> Result<&mut Buffer<i64>, ProcessorError> {
         self.output(index)
             .as_int_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(index))
@@ -286,10 +278,7 @@ impl<'a> ProcessorOutputs<'a> {
 
     /// Returns the output buffer at the given index, if it is a boolean buffer.
     #[inline]
-    pub fn output_as_bools(
-        &mut self,
-        index: usize,
-    ) -> Result<&mut Buffer<Option<bool>>, ProcessorError> {
+    pub fn output_as_bools(&mut self, index: usize) -> Result<&mut Buffer<bool>, ProcessorError> {
         self.output(index)
             .as_bool_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(index))
@@ -300,7 +289,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn output_as_strings(
         &mut self,
         index: usize,
-    ) -> Result<&mut Buffer<Option<String>>, ProcessorError> {
+    ) -> Result<&mut Buffer<String>, ProcessorError> {
         self.output(index)
             .as_string_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(index))
@@ -311,7 +300,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn output_as_lists(
         &mut self,
         index: usize,
-    ) -> Result<&mut Buffer<Option<Vec<Signal>>>, ProcessorError> {
+    ) -> Result<&mut Buffer<Vec<Signal>>, ProcessorError> {
         self.output(index)
             .as_list_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(index))
@@ -319,10 +308,7 @@ impl<'a> ProcessorOutputs<'a> {
 
     /// Returns the output buffer at the given index, if it is a MIDI message buffer.
     #[inline]
-    pub fn output_as_midi(
-        &mut self,
-        index: usize,
-    ) -> Result<&mut Buffer<Option<Vec<u8>>>, ProcessorError> {
+    pub fn output_as_midi(&mut self, index: usize) -> Result<&mut Buffer<Vec<u8>>, ProcessorError> {
         self.output(index)
             .as_midi_mut()
             .ok_or(ProcessorError::OutputSpecMismatch(index))
@@ -338,7 +324,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn iter_output_as<S: SignalData>(
         &mut self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &mut S::BufferElement> + '_, ProcessorError> {
+    ) -> Result<impl Iterator<Item = &mut Option<S>> + '_, ProcessorError> {
         Ok(self.output_as::<S>(index)?.iter_mut())
     }
 

@@ -100,11 +100,9 @@ impl<S: SignalData, T: SignalData> Processor for Cast<S, T> {
         let out_signal = outputs.output(0).as_kind_mut::<T>().unwrap();
 
         for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
-            let maybe_in_signal = S::buffer_element_to_value(in_signal);
-            if let Some(in_signal) = maybe_in_signal {
+            if let Some(in_signal) = in_signal {
                 let in_signal = S::into_signal(in_signal.to_owned());
-                let casted = T::cast_buffer_element_from_signal(&in_signal);
-                *out_signal = casted;
+                *out_signal = in_signal.cast();
             }
         }
 
@@ -128,12 +126,12 @@ impl<S: SignalData, T: SignalData> Processor for Cast<S, T> {
 /// | `0` | `out` | `Message` | The message to send. |
 #[derive(Clone, Debug)]
 pub struct MessageSender<S: SignalData> {
-    message: S::Value,
+    message: S,
 }
 
 impl<S: SignalData> MessageSender<S> {
     /// Creates a new `MessageProc` with the given initial message.
-    pub fn new(message: S::Value) -> Self {
+    pub fn new(message: S) -> Self {
         Self { message }
     }
 }
@@ -157,15 +155,14 @@ impl<S: SignalData> Processor for MessageSender<S> {
             inputs.iter_input_as::<S>(1)?,
             outputs.iter_output_as::<S>(0)?
         ) {
-            let message = S::buffer_element_to_value(message);
             if let Some(message) = message {
                 self.message = message.clone();
             }
 
             if let Some(true) = bang {
-                *out = S::value_to_buffer_element(&self.message);
+                *out = Some(self.message.clone());
             } else {
-                *out = S::buffer_element_default().clone();
+                *out = None;
             }
         }
 
@@ -497,24 +494,24 @@ impl Processor for ZeroCrossing {
     }
 }
 
-/// A message sender, used for `Param` communication and breaking cycles in the graph.
+/// A signal sender, used for `Param` communication and breaking cycles in the graph.
 #[derive(Clone, Debug)]
-pub struct MessageTx<S: SignalData> {
-    tx: Sender<S::Value>,
+pub struct SignalTx<S: SignalData> {
+    tx: Sender<S>,
 }
 
-impl<S: SignalData> MessageTx<S> {
-    pub(crate) fn new(tx: Sender<S::Value>) -> Self {
+impl<S: SignalData> SignalTx<S> {
+    pub(crate) fn new(tx: Sender<S>) -> Self {
         Self { tx }
     }
 
     /// Sends a message to the `Param`.
-    pub fn send(&self, message: S::Value) {
+    pub fn send(&self, message: S) {
         self.tx.try_send(message).unwrap();
     }
 }
 
-impl<S: SignalData> Processor for MessageTx<S> {
+impl<S: SignalData> Processor for SignalTx<S> {
     fn input_names(&self) -> Vec<String> {
         vec![String::from("in")]
     }
@@ -530,8 +527,8 @@ impl<S: SignalData> Processor for MessageTx<S> {
     ) -> Result<(), ProcessorError> {
         let in_signal = inputs.iter_input_as::<S>(0)?;
 
-        for message in in_signal {
-            self.send(S::buffer_element_to_value(message).unwrap().clone());
+        for message in in_signal.flatten() {
+            self.send(message.clone());
         }
 
         Ok(())
@@ -540,22 +537,22 @@ impl<S: SignalData> Processor for MessageTx<S> {
 
 /// A message receiver, used for `Param` communication and breaking cycles in the graph.
 #[derive(Clone, Debug)]
-pub struct MessageRx<S: SignalData> {
-    rx: Receiver<S::Value>,
+pub struct SignalRx<S: SignalData> {
+    rx: Receiver<S>,
 }
 
-impl<S: SignalData> MessageRx<S> {
-    pub(crate) fn new(rx: Receiver<S::Value>) -> Self {
+impl<S: SignalData> SignalRx<S> {
+    pub(crate) fn new(rx: Receiver<S>) -> Self {
         Self { rx }
     }
 
     /// Receives a message from the `Param`.
-    pub fn recv(&mut self) -> Option<S::Value> {
+    pub fn recv(&mut self) -> Option<S> {
         self.rx.try_recv().ok()
     }
 }
 
-impl<S: SignalData> Processor for MessageRx<S> {
+impl<S: SignalData> Processor for SignalRx<S> {
     fn input_names(&self) -> Vec<String> {
         vec![]
     }
@@ -572,11 +569,7 @@ impl<S: SignalData> Processor for MessageRx<S> {
         let out = outputs.iter_output_as::<S>(0)?;
 
         for out in out {
-            if let Some(msg) = self.recv() {
-                *out = S::value_to_buffer_element(&msg);
-            } else {
-                *out = S::buffer_element_default().clone();
-            }
+            *out = self.recv();
         }
 
         Ok(())
@@ -586,12 +579,12 @@ impl<S: SignalData> Processor for MessageRx<S> {
 /// A receiver for a `Param`.
 #[derive(Clone, Debug)]
 pub struct ParamRx<S: SignalData> {
-    rx: MessageRx<S>,
-    last: Arc<Mutex<Option<S::Value>>>,
+    rx: SignalRx<S>,
+    last: Arc<Mutex<Option<S>>>,
 }
 
 impl<S: SignalData> ParamRx<S> {
-    pub(crate) fn new(rx: MessageRx<S>) -> Self {
+    pub(crate) fn new(rx: SignalRx<S>) -> Self {
         Self {
             rx,
             last: Arc::new(Mutex::new(None)),
@@ -599,7 +592,7 @@ impl<S: SignalData> ParamRx<S> {
     }
 
     /// Receives a message from the `Param`.
-    pub fn recv(&mut self) -> Option<S::Value> {
+    pub fn recv(&mut self) -> Option<S> {
         let mut last = self.last.try_lock().ok()?;
         if let Some(msg) = self.rx.recv() {
             *last = Some(msg.clone());
@@ -610,9 +603,9 @@ impl<S: SignalData> ParamRx<S> {
     }
 }
 
-pub(crate) fn param_channel<S: SignalData>() -> (MessageTx<S>, ParamRx<S>) {
+pub(crate) fn param_channel<S: SignalData>() -> (SignalTx<S>, ParamRx<S>) {
     let (tx, rx) = crossbeam_channel::unbounded();
-    (MessageTx::new(tx), ParamRx::new(MessageRx::new(rx)))
+    (SignalTx::new(tx), ParamRx::new(SignalRx::new(rx)))
 }
 
 /// A processor that can be used to send/receive messages from outside the graph.
@@ -631,12 +624,12 @@ pub(crate) fn param_channel<S: SignalData>() -> (MessageTx<S>, ParamRx<S>) {
 #[derive(Clone, Debug)]
 pub struct Param<S: SignalData> {
     name: String,
-    channels: (MessageTx<S>, ParamRx<S>),
+    channels: (SignalTx<S>, ParamRx<S>),
 }
 
 impl<S: SignalData> Param<S> {
     /// Creates a new `Param`.
-    pub fn new(name: impl Into<String>, initial_value: impl Into<Option<S::Value>>) -> Self {
+    pub fn new(name: impl Into<String>, initial_value: impl Into<Option<S>>) -> Self {
         let this = Self {
             name: name.into(),
             channels: param_channel(),
@@ -654,7 +647,7 @@ impl<S: SignalData> Param<S> {
     }
 
     /// Returns the sender for this `Param`.
-    pub fn tx(&self) -> &MessageTx<S> {
+    pub fn tx(&self) -> &SignalTx<S> {
         &self.channels.0
     }
 
@@ -664,13 +657,13 @@ impl<S: SignalData> Param<S> {
     }
 
     /// Sets the `Param`'s value.
-    pub fn set(&self, message: impl Into<S::Value>) {
+    pub fn set(&self, message: impl Into<S>) {
         let message = message.into();
         self.tx().send(message);
     }
 
     /// Gets the `Param`'s value.
-    pub fn get(&mut self) -> Option<S::Value> {
+    pub fn get(&mut self) -> Option<S> {
         self.rx_mut().recv()
     }
 }
@@ -693,16 +686,11 @@ impl<S: SignalData> Processor for Param<S> {
             inputs.iter_input_as::<S>(0)?,
             outputs.iter_output_as::<S>(0)?
         ) {
-            let set = S::buffer_element_to_value(set);
             if let Some(set) = set {
                 self.set(set.clone());
             }
 
-            if let Some(msg) = self.get() {
-                *get = S::value_to_buffer_element(&msg);
-            } else {
-                *get = S::buffer_element_default().clone();
-            }
+            *get = self.get();
         }
 
         Ok(())
@@ -783,7 +771,7 @@ impl<S: SignalData> Processor for Select<S> {
                 for (i, out_signal) in outputs.iter_mut().enumerate() {
                     if i != index as usize {
                         let out_signal = out_signal.as_kind_mut::<S>().unwrap();
-                        out_signal[sample_index] = S::buffer_element_default().clone();
+                        out_signal[sample_index] = None;
                     }
                 }
             }
@@ -859,8 +847,7 @@ impl<S: SignalData> Processor for Merge<S> {
             let out_signal = outputs.iter_output_as::<S>(0)?;
 
             for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
-                let maybe_in_signal = S::buffer_element_to_value(in_signal);
-                if maybe_in_signal.is_some() {
+                if in_signal.is_some() {
                     *out_signal = in_signal.clone();
                 }
             }

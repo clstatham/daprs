@@ -27,75 +27,36 @@ pub const TAU: Sample = std::f32::consts::TAU;
 /// The value of τ (2π).
 pub const TAU: Sample = std::f64::consts::TAU;
 
-/// An owning, fixed-length array of [`Sample`]s.
+/// An owning, fixed-length array of signal data.
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
 /// It can also be [`collected`](std::iter::Iterator::collect) from an iterator of [`Sample`]s.
 #[derive(PartialEq, Clone)]
-pub struct Buffer<T> {
-    buf: Vec<T>,
+pub struct Buffer<T: SignalData> {
+    buf: Vec<Option<T>>,
 }
 
-impl<T: Debug> Debug for Buffer<T> {
+impl<T: SignalData> Debug for Buffer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.buf.iter()).finish()
     }
 }
 
-impl<T> Buffer<T> {
+impl<T: SignalData> Buffer<T> {
     /// Creates a new buffer filled with zeros.
     #[inline]
-    pub fn zeros(length: usize) -> Self
-    where
-        T: Default,
-    {
+    pub fn zeros(length: usize) -> Self {
         let mut buf = Vec::with_capacity(length);
         for _ in 0..length {
-            buf.push(T::default());
+            buf.push(None);
         }
         Buffer { buf }
     }
 
-    /// Resizes the buffer to the given length, filling any new elements with the given value.
-    #[inline]
-    pub fn resize(&mut self, length: usize, value: T)
-    where
-        T: Clone,
-    {
-        if self.len() != length {
-            self.buf.resize(length, value);
-        }
-    }
-
-    /// Maps each sample in `other` with `f`, storing the result in the correspeonding sample in `self`.
-    #[inline]
-    pub fn copy_map<F>(&mut self, other: &[T], mut f: F)
-    where
-        F: FnMut(&T) -> T,
-    {
-        for (a, b) in self.buf.iter_mut().zip(other.iter()) {
-            *a = f(b);
-        }
-    }
-
-    /// Iterates over each sample in the buffer, calling `f` with a mutable reference to each sample.
-    #[inline]
-    pub fn map_mut<F>(&mut self, mut f: F)
-    where
-        F: FnMut(&mut T),
-    {
-        for sample in self.buf.iter_mut() {
-            f(sample);
-        }
-    }
-
     /// Clones the given slice into a new buffer.
     #[inline]
-    pub fn from_slice(value: &[T]) -> Self
-    where
-        T: Clone,
-    {
+    pub fn from_slice(value: &[T]) -> Self {
         Buffer {
-            buf: value.to_vec(),
+            buf: value.iter().map(|v| Some(v.clone())).collect(),
         }
     }
 }
@@ -140,7 +101,7 @@ impl Buffer<Sample> {
         };
         let mut writer = hound::WavWriter::create(path, spec)?;
         for sample in self.buf.iter() {
-            writer.write_sample(*sample as f32)?;
+            writer.write_sample(sample.unwrap_or_default() as f32)?;
         }
         writer.finalize()?;
         Ok(())
@@ -149,19 +110,27 @@ impl Buffer<Sample> {
     /// Returns the maximum value in the buffer.
     #[inline]
     pub fn max(&self) -> Sample {
-        self.buf.iter().copied().fold(Sample::MIN, |a, b| a.max(b))
+        self.buf
+            .iter()
+            .flatten()
+            .copied()
+            .fold(Sample::MIN, |a, b| a.max(b))
     }
 
     /// Returns the minimum value in the buffer.
     #[inline]
     pub fn min(&self) -> Sample {
-        self.buf.iter().copied().fold(Sample::MAX, |a, b| a.min(b))
+        self.buf
+            .iter()
+            .flatten()
+            .copied()
+            .fold(Sample::MAX, |a, b| a.min(b))
     }
 
     /// Returns the sum of all values in the buffer.
     #[inline]
     pub fn sum(&self) -> Sample {
-        self.buf.iter().copied().fold(0.0, |a, b| a + b)
+        self.buf.iter().flatten().copied().fold(0.0, |a, b| a + b)
     }
 
     /// Returns the mean of all values in the buffer.
@@ -173,7 +142,11 @@ impl Buffer<Sample> {
     /// Returns the root mean square of all values in the buffer.
     #[inline]
     pub fn rms(&self) -> Sample {
-        self.buf.iter().copied().fold(0.0, |a, b| a + b * b)
+        self.buf
+            .iter()
+            .flatten()
+            .copied()
+            .fold(0.0, |a, b| a + b * b)
     }
 
     /// Returns the variance of all values in the buffer.
@@ -183,6 +156,7 @@ impl Buffer<Sample> {
         let sum = self
             .buf
             .iter()
+            .flatten()
             .copied()
             .fold(0.0, |a, b| a + (b - mean) * (b - mean));
         sum / (self.len() - 1) as Sample
@@ -195,59 +169,31 @@ impl Buffer<Sample> {
     }
 }
 
-impl<T> Deref for Buffer<T> {
-    type Target = [T];
+impl<T: SignalData> Deref for Buffer<T> {
+    type Target = [Option<T>];
     #[inline]
     fn deref(&self) -> &Self::Target {
         self.buf.as_ref()
     }
 }
 
-impl<T> DerefMut for Buffer<T> {
+impl<T: SignalData> DerefMut for Buffer<T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.buf.as_mut()
     }
 }
 
-impl<T> AsRef<[T]> for Buffer<T> {
+impl<T: SignalData> AsRef<[Option<T>]> for Buffer<T> {
     #[inline]
-    fn as_ref(&self) -> &[T] {
+    fn as_ref(&self) -> &[Option<T>] {
         self.buf.as_ref()
     }
 }
 
-impl<T> From<Vec<T>> for Buffer<T> {
-    #[inline]
-    fn from(vec: Vec<T>) -> Self {
-        Buffer { buf: vec }
-    }
-}
-
-impl<T> From<Box<[T]>> for Buffer<T> {
-    #[inline]
-    fn from(buf: Box<[T]>) -> Self {
-        Buffer {
-            buf: buf.into_vec(),
-        }
-    }
-}
-
-impl<T> From<&[T]> for Buffer<T>
-where
-    T: Clone,
-{
-    #[inline]
-    fn from(slice: &[T]) -> Self {
-        Buffer {
-            buf: slice.to_vec(),
-        }
-    }
-}
-
-impl<'a, T> IntoIterator for &'a Buffer<T> {
-    type Item = &'a T;
-    type IntoIter = std::slice::Iter<'a, T>;
+impl<'a, T: SignalData> IntoIterator for &'a Buffer<T> {
+    type Item = &'a Option<T>;
+    type IntoIter = std::slice::Iter<'a, Option<T>>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -255,9 +201,9 @@ impl<'a, T> IntoIterator for &'a Buffer<T> {
     }
 }
 
-impl<'a, T> IntoIterator for &'a mut Buffer<T> {
-    type Item = &'a mut T;
-    type IntoIter = std::slice::IterMut<'a, T>;
+impl<'a, T: SignalData> IntoIterator for &'a mut Buffer<T> {
+    type Item = &'a mut Option<T>;
+    type IntoIter = std::slice::IterMut<'a, Option<T>>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -265,50 +211,44 @@ impl<'a, T> IntoIterator for &'a mut Buffer<T> {
     }
 }
 
-pub trait SignalData: Clone + Debug + Send + Sync + 'static {
+/// A trait for types that can be used as signal data.
+pub trait SignalData: Clone + Debug + Send + Sync + PartialOrd + PartialEq + 'static {
+    /// The kind of signal this type represents.
     const KIND: SignalKind;
-    type BufferElement: Default + Clone + Debug + Send + Sync;
-    type Value: Default + Clone + Debug + Send + Sync + PartialOrd + PartialEq;
+
+    fn into_signal(this: Self) -> Signal;
+    fn try_from_signal(signal: Signal) -> Option<Self>;
+
+    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>>;
+    fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>>;
+}
+
+impl SignalData for Signal {
+    const KIND: SignalKind = SignalKind::Dynamic;
 
     #[inline]
-    fn new_signal_buffer(length: usize) -> SignalBuffer {
-        SignalBuffer::new_of_kind(Self::KIND, length)
+    fn into_signal(this: Self) -> Signal {
+        this
     }
 
-    fn buffer_element_default() -> &'static Self::BufferElement;
-    fn buffer_element_to_value(element: &Self::BufferElement) -> Option<&Self::Value>;
-    fn value_to_buffer_element(value: &Self::Value) -> Self::BufferElement;
+    #[inline]
+    fn try_from_signal(signal: Signal) -> Option<Self> {
+        Some(signal)
+    }
 
-    fn into_signal(this: Self::Value) -> Signal;
-    fn try_from_signal(signal: Signal) -> Option<Self::Value>;
+    #[inline]
+    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>> {
+        buffer.as_dynamic()
+    }
 
-    fn cast_buffer_element_from_signal(signal: &Signal) -> Self::BufferElement;
-
-    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self::BufferElement>>;
-    fn try_convert_buffer_mut(
-        buffer: &mut SignalBuffer,
-    ) -> Option<&mut Buffer<Self::BufferElement>>;
+    #[inline]
+    fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>> {
+        buffer.as_dynamic_mut()
+    }
 }
 
 impl SignalData for Sample {
     const KIND: SignalKind = SignalKind::Sample;
-    type BufferElement = Option<Sample>;
-    type Value = Sample;
-
-    #[inline]
-    fn buffer_element_default() -> &'static Self::BufferElement {
-        &None
-    }
-
-    #[inline]
-    fn buffer_element_to_value(element: &Self::BufferElement) -> Option<&Self::Value> {
-        element.as_ref()
-    }
-
-    #[inline]
-    fn value_to_buffer_element(value: &Self::Value) -> Self::BufferElement {
-        Some(*value)
-    }
 
     #[inline]
     fn into_signal(this: Self) -> Signal {
@@ -316,7 +256,7 @@ impl SignalData for Sample {
     }
 
     #[inline]
-    fn try_from_signal(signal: Signal) -> Option<Self::Value> {
+    fn try_from_signal(signal: Signal) -> Option<Self> {
         match signal {
             Signal::Sample(sample) => Some(sample),
             _ => None,
@@ -324,54 +264,18 @@ impl SignalData for Sample {
     }
 
     #[inline]
-    fn cast_buffer_element_from_signal(signal: &Signal) -> Self::BufferElement {
-        match signal {
-            Signal::Sample(sample) => Some(*sample),
-            Signal::Int(int) => Some(*int as Sample),
-            Signal::Bool(bool) => {
-                if *bool {
-                    Some(1.0)
-                } else {
-                    Some(0.0)
-                }
-            }
-            Signal::String(string) => string.parse().ok(),
-            _ => None,
-        }
-    }
-
-    #[inline]
-    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self::BufferElement>> {
+    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>> {
         buffer.as_sample()
     }
 
     #[inline]
-    fn try_convert_buffer_mut(
-        buffer: &mut SignalBuffer,
-    ) -> Option<&mut Buffer<Self::BufferElement>> {
+    fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>> {
         buffer.as_sample_mut()
     }
 }
 
 impl SignalData for bool {
     const KIND: SignalKind = SignalKind::Bool;
-    type BufferElement = Option<bool>;
-    type Value = bool;
-
-    #[inline]
-    fn buffer_element_default() -> &'static Self::BufferElement {
-        &None
-    }
-
-    #[inline]
-    fn buffer_element_to_value(element: &Self::BufferElement) -> Option<&Self::Value> {
-        element.as_ref()
-    }
-
-    #[inline]
-    fn value_to_buffer_element(value: &Self::Value) -> Self::BufferElement {
-        Some(*value)
-    }
 
     #[inline]
     fn into_signal(this: Self) -> Signal {
@@ -387,47 +291,18 @@ impl SignalData for bool {
     }
 
     #[inline]
-    fn cast_buffer_element_from_signal(signal: &Signal) -> Self::BufferElement {
-        match signal {
-            Signal::Bool(bool) => Some(*bool),
-            Signal::Int(int) => Some(*int != 0),
-            Signal::Sample(sample) => Some(*sample != 0.0),
-            _ => None,
-        }
-    }
-
-    #[inline]
-    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self::BufferElement>> {
+    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>> {
         buffer.as_bool()
     }
 
     #[inline]
-    fn try_convert_buffer_mut(
-        buffer: &mut SignalBuffer,
-    ) -> Option<&mut Buffer<Self::BufferElement>> {
+    fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>> {
         buffer.as_bool_mut()
     }
 }
 
 impl SignalData for i64 {
     const KIND: SignalKind = SignalKind::Int;
-    type BufferElement = Option<i64>;
-    type Value = i64;
-
-    #[inline]
-    fn buffer_element_default() -> &'static Self::BufferElement {
-        &None
-    }
-
-    #[inline]
-    fn buffer_element_to_value(element: &Self::BufferElement) -> Option<&Self::Value> {
-        element.as_ref()
-    }
-
-    #[inline]
-    fn value_to_buffer_element(value: &Self::Value) -> Self::BufferElement {
-        Some(*value)
-    }
 
     #[inline]
     fn into_signal(this: Self) -> Signal {
@@ -443,48 +318,18 @@ impl SignalData for i64 {
     }
 
     #[inline]
-    fn cast_buffer_element_from_signal(signal: &Signal) -> Option<Self> {
-        match signal {
-            Signal::Int(int) => Some(*int),
-            Signal::Bool(bool) => Some(if *bool { 1 } else { 0 }),
-            Signal::Sample(sample) => Some(*sample as i64),
-            Signal::String(string) => string.parse().ok(),
-            _ => None,
-        }
-    }
-
-    #[inline]
-    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self::BufferElement>> {
+    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>> {
         buffer.as_int()
     }
 
     #[inline]
-    fn try_convert_buffer_mut(
-        buffer: &mut SignalBuffer,
-    ) -> Option<&mut Buffer<Self::BufferElement>> {
+    fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>> {
         buffer.as_int_mut()
     }
 }
 
 impl SignalData for String {
     const KIND: SignalKind = SignalKind::String;
-    type BufferElement = Option<String>;
-    type Value = String;
-
-    #[inline]
-    fn buffer_element_default() -> &'static Self::BufferElement {
-        &None
-    }
-
-    #[inline]
-    fn buffer_element_to_value(element: &Self::BufferElement) -> Option<&Self::Value> {
-        element.as_ref()
-    }
-
-    #[inline]
-    fn value_to_buffer_element(value: &Self::Value) -> Self::BufferElement {
-        Some(value.clone())
-    }
 
     #[inline]
     fn into_signal(this: Self) -> Signal {
@@ -500,48 +345,18 @@ impl SignalData for String {
     }
 
     #[inline]
-    fn cast_buffer_element_from_signal(signal: &Signal) -> Option<Self> {
-        match signal {
-            Signal::String(string) => Some(string.clone()),
-            Signal::Int(int) => Some(int.to_string()),
-            Signal::Bool(bool) => Some(bool.to_string()),
-            Signal::Sample(sample) => Some(sample.to_string()),
-            _ => None,
-        }
-    }
-
-    #[inline]
-    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self::BufferElement>> {
+    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>> {
         buffer.as_string()
     }
 
     #[inline]
-    fn try_convert_buffer_mut(
-        buffer: &mut SignalBuffer,
-    ) -> Option<&mut Buffer<Self::BufferElement>> {
+    fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>> {
         buffer.as_string_mut()
     }
 }
 
 impl SignalData for Vec<Signal> {
     const KIND: SignalKind = SignalKind::List;
-    type BufferElement = Option<Vec<Signal>>;
-    type Value = Vec<Signal>;
-
-    #[inline]
-    fn buffer_element_default() -> &'static Self::BufferElement {
-        &None
-    }
-
-    #[inline]
-    fn buffer_element_to_value(element: &Self::BufferElement) -> Option<&Self::Value> {
-        element.as_ref()
-    }
-
-    #[inline]
-    fn value_to_buffer_element(value: &Self::Value) -> Self::BufferElement {
-        Some(value.clone())
-    }
 
     #[inline]
     fn into_signal(this: Self) -> Signal {
@@ -557,45 +372,18 @@ impl SignalData for Vec<Signal> {
     }
 
     #[inline]
-    fn cast_buffer_element_from_signal(signal: &Signal) -> Option<Self> {
-        match signal {
-            Signal::List(list) => Some(list.clone()),
-            _ => None,
-        }
-    }
-
-    #[inline]
-    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self::BufferElement>> {
+    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>> {
         buffer.as_list()
     }
 
     #[inline]
-    fn try_convert_buffer_mut(
-        buffer: &mut SignalBuffer,
-    ) -> Option<&mut Buffer<Self::BufferElement>> {
+    fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>> {
         buffer.as_list_mut()
     }
 }
 
 impl SignalData for Vec<u8> {
     const KIND: SignalKind = SignalKind::Midi;
-    type BufferElement = Option<Vec<u8>>;
-    type Value = Vec<u8>;
-
-    #[inline]
-    fn buffer_element_default() -> &'static Self::BufferElement {
-        &None
-    }
-
-    #[inline]
-    fn buffer_element_to_value(element: &Self::BufferElement) -> Option<&Self::Value> {
-        element.as_ref()
-    }
-
-    #[inline]
-    fn value_to_buffer_element(value: &Self::Value) -> Self::BufferElement {
-        Some(value.clone())
-    }
 
     #[inline]
     fn into_signal(this: Self) -> Signal {
@@ -611,22 +399,12 @@ impl SignalData for Vec<u8> {
     }
 
     #[inline]
-    fn cast_buffer_element_from_signal(signal: &Signal) -> Option<Self> {
-        match signal {
-            Signal::Midi(midi) => Some(midi.clone()),
-            _ => None,
-        }
-    }
-
-    #[inline]
-    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self::BufferElement>> {
+    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>> {
         buffer.as_midi()
     }
 
     #[inline]
-    fn try_convert_buffer_mut(
-        buffer: &mut SignalBuffer,
-    ) -> Option<&mut Buffer<Self::BufferElement>> {
+    fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>> {
         buffer.as_midi_mut()
     }
 }
@@ -806,6 +584,40 @@ impl Signal {
             Self::Midi(_) => SignalKind::Midi,
         }
     }
+
+    pub fn cast<T: SignalData>(&self) -> Option<T> {
+        if self.kind() == T::KIND {
+            T::try_from_signal(self.clone())
+        } else {
+            match (self, T::KIND) {
+                (Self::None(_), _) => None,
+
+                // sample <-> int
+                (Self::Sample(sample), SignalKind::Int) => {
+                    T::try_from_signal(Signal::Int(*sample as i64))
+                }
+                (Self::Int(int), SignalKind::Sample) => {
+                    T::try_from_signal(Signal::Sample(*int as Sample))
+                }
+
+                // sample <-> bool
+                (Self::Sample(sample), SignalKind::Bool) => {
+                    T::try_from_signal(Signal::Bool(*sample != 0.0))
+                }
+                (Self::Bool(bool), SignalKind::Sample) => {
+                    T::try_from_signal(Signal::Sample(if *bool { 1.0 } else { 0.0 }))
+                }
+
+                // int <-> bool
+                (Self::Int(int), SignalKind::Bool) => T::try_from_signal(Signal::Bool(*int != 0)),
+                (Self::Bool(bool), SignalKind::Int) => {
+                    T::try_from_signal(Signal::Int(if *bool { 1 } else { 0 }))
+                }
+
+                _ => None,
+            }
+        }
+    }
 }
 
 #[allow(clippy::from_over_into)]
@@ -818,6 +630,8 @@ impl Into<Signal> for Sample {
 /// A signal kind, which can be either a sample or a message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SignalKind {
+    /// A signal with any kind of value.
+    Dynamic,
     /// A sample or float value.
     Sample,
     /// An integer message.
@@ -835,24 +649,26 @@ pub enum SignalKind {
 /// A buffer that can contain either samples or messages.
 #[derive(Debug, Clone)]
 pub enum SignalBuffer {
+    Dynamic(Buffer<Signal>),
     /// A buffer of samples. The buffer is guaranteed to be full of contiguous samples.
-    Sample(Buffer<Option<Sample>>),
+    Sample(Buffer<Sample>),
     /// A buffer of integers.
-    Int(Buffer<Option<i64>>),
+    Int(Buffer<i64>),
     /// A buffer of booleans.
-    Bool(Buffer<Option<bool>>),
+    Bool(Buffer<bool>),
     /// A buffer of strings.
-    String(Buffer<Option<String>>),
+    String(Buffer<String>),
     /// A buffer of lists.
-    List(Buffer<Option<Vec<Signal>>>),
+    List(Buffer<Vec<Signal>>),
     /// A buffer of MIDI messages.
-    Midi(Buffer<Option<Vec<u8>>>),
+    Midi(Buffer<Vec<u8>>),
 }
 
 impl SignalBuffer {
     /// Creates a new signal buffer of the given kind and length, filled with zeros.
     pub fn new_of_kind(kind: SignalKind, length: usize) -> Self {
         match kind {
+            SignalKind::Dynamic => Self::Dynamic(Buffer::zeros(length)),
             SignalKind::Sample => Self::Sample(Buffer::zeros(length)),
             SignalKind::Int => Self::Int(Buffer::zeros(length)),
             SignalKind::Bool => Self::Bool(Buffer::zeros(length)),
@@ -865,6 +681,11 @@ impl SignalBuffer {
     /// Creates a new signal buffer of the given data kind and length, filled with zeros.
     pub fn new_of_data_kind<T: SignalData>(length: usize) -> Self {
         Self::new_of_kind(T::KIND, length)
+    }
+
+    /// Creates a new dynamic buffer of size `length`, filled with zeros.
+    pub fn new_dynamic(length: usize) -> Self {
+        Self::Dynamic(Buffer::zeros(length))
     }
 
     /// Creates a new sample buffer of size `length`, filled with zeros.
@@ -900,6 +721,7 @@ impl SignalBuffer {
     /// Returns the kind of signal in the buffer.
     pub fn kind(&self) -> SignalKind {
         match self {
+            Self::Dynamic(_) => SignalKind::Dynamic,
             Self::Sample(_) => SignalKind::Sample,
             Self::Int(_) => SignalKind::Int,
             Self::Bool(_) => SignalKind::Bool,
@@ -944,9 +766,18 @@ impl SignalBuffer {
         self.kind() == kind
     }
 
+    /// Returns a reference to the dynamic buffer, if this is a dynamic buffer.
+    #[inline]
+    pub fn as_dynamic(&self) -> Option<&Buffer<Signal>> {
+        match self {
+            Self::Dynamic(buffer) => Some(buffer),
+            _ => None,
+        }
+    }
+
     /// Returns a reference to the sample buffer, if this is a sample buffer.
     #[inline]
-    pub fn as_sample(&self) -> Option<&Buffer<Option<Sample>>> {
+    pub fn as_sample(&self) -> Option<&Buffer<Sample>> {
         match self {
             Self::Sample(buffer) => Some(buffer),
             _ => None,
@@ -955,7 +786,7 @@ impl SignalBuffer {
 
     /// Returns a reference to the integer buffer, if this is an integer buffer.
     #[inline]
-    pub fn as_int(&self) -> Option<&Buffer<Option<i64>>> {
+    pub fn as_int(&self) -> Option<&Buffer<i64>> {
         match self {
             Self::Int(buffer) => Some(buffer),
             _ => None,
@@ -964,7 +795,7 @@ impl SignalBuffer {
 
     /// Returns a reference to the boolean buffer, if this is a boolean buffer.
     #[inline]
-    pub fn as_bool(&self) -> Option<&Buffer<Option<bool>>> {
+    pub fn as_bool(&self) -> Option<&Buffer<bool>> {
         match self {
             Self::Bool(buffer) => Some(buffer),
             _ => None,
@@ -973,7 +804,7 @@ impl SignalBuffer {
 
     /// Returns a reference to the string buffer, if this is a string buffer.
     #[inline]
-    pub fn as_string(&self) -> Option<&Buffer<Option<String>>> {
+    pub fn as_string(&self) -> Option<&Buffer<String>> {
         match self {
             Self::String(buffer) => Some(buffer),
             _ => None,
@@ -982,7 +813,7 @@ impl SignalBuffer {
 
     /// Returns a reference to the list buffer, if this is a list buffer.
     #[inline]
-    pub fn as_list(&self) -> Option<&Buffer<Option<Vec<Signal>>>> {
+    pub fn as_list(&self) -> Option<&Buffer<Vec<Signal>>> {
         match self {
             Self::List(buffer) => Some(buffer),
             _ => None,
@@ -991,7 +822,7 @@ impl SignalBuffer {
 
     /// Returns a reference to the MIDI buffer, if this is a MIDI buffer.
     #[inline]
-    pub fn as_midi(&self) -> Option<&Buffer<Option<Vec<u8>>>> {
+    pub fn as_midi(&self) -> Option<&Buffer<Vec<u8>>> {
         match self {
             Self::Midi(buffer) => Some(buffer),
             _ => None,
@@ -999,13 +830,22 @@ impl SignalBuffer {
     }
 
     #[inline]
-    pub fn as_kind<S: SignalData>(&self) -> Option<&Buffer<S::BufferElement>> {
+    pub fn as_kind<S: SignalData>(&self) -> Option<&Buffer<S>> {
         S::try_convert_buffer(self)
+    }
+
+    /// Returns a mutable reference to the dynamic buffer, if this is a dynamic buffer.
+    #[inline]
+    pub fn as_dynamic_mut(&mut self) -> Option<&mut Buffer<Signal>> {
+        match self {
+            Self::Dynamic(buffer) => Some(buffer),
+            _ => None,
+        }
     }
 
     /// Returns a mutable reference to the sample buffer, if this is a sample buffer.
     #[inline]
-    pub fn as_sample_mut(&mut self) -> Option<&mut Buffer<Option<Sample>>> {
+    pub fn as_sample_mut(&mut self) -> Option<&mut Buffer<Sample>> {
         match self {
             Self::Sample(buffer) => Some(buffer),
             _ => None,
@@ -1014,7 +854,7 @@ impl SignalBuffer {
 
     /// Returns a mutable reference to the integer buffer, if this is an integer buffer.
     #[inline]
-    pub fn as_int_mut(&mut self) -> Option<&mut Buffer<Option<i64>>> {
+    pub fn as_int_mut(&mut self) -> Option<&mut Buffer<i64>> {
         match self {
             Self::Int(buffer) => Some(buffer),
             _ => None,
@@ -1023,7 +863,7 @@ impl SignalBuffer {
 
     /// Returns a mutable reference to the boolean buffer, if this is a boolean buffer.
     #[inline]
-    pub fn as_bool_mut(&mut self) -> Option<&mut Buffer<Option<bool>>> {
+    pub fn as_bool_mut(&mut self) -> Option<&mut Buffer<bool>> {
         match self {
             Self::Bool(buffer) => Some(buffer),
             _ => None,
@@ -1032,7 +872,7 @@ impl SignalBuffer {
 
     /// Returns a mutable reference to the string buffer, if this is a string buffer.
     #[inline]
-    pub fn as_string_mut(&mut self) -> Option<&mut Buffer<Option<String>>> {
+    pub fn as_string_mut(&mut self) -> Option<&mut Buffer<String>> {
         match self {
             Self::String(buffer) => Some(buffer),
             _ => None,
@@ -1041,7 +881,7 @@ impl SignalBuffer {
 
     /// Returns a mutable reference to the list buffer, if this is a list buffer.
     #[inline]
-    pub fn as_list_mut(&mut self) -> Option<&mut Buffer<Option<Vec<Signal>>>> {
+    pub fn as_list_mut(&mut self) -> Option<&mut Buffer<Vec<Signal>>> {
         match self {
             Self::List(buffer) => Some(buffer),
             _ => None,
@@ -1050,7 +890,7 @@ impl SignalBuffer {
 
     /// Returns a mutable reference to the MIDI buffer, if this is a MIDI buffer.
     #[inline]
-    pub fn as_midi_mut(&mut self) -> Option<&mut Buffer<Option<Vec<u8>>>> {
+    pub fn as_midi_mut(&mut self) -> Option<&mut Buffer<Vec<u8>>> {
         match self {
             Self::Midi(buffer) => Some(buffer),
             _ => None,
@@ -1058,7 +898,7 @@ impl SignalBuffer {
     }
 
     #[inline]
-    pub fn as_kind_mut<S: SignalData>(&mut self) -> Option<&mut Buffer<S::BufferElement>> {
+    pub fn as_kind_mut<S: SignalData>(&mut self) -> Option<&mut Buffer<S>> {
         S::try_convert_buffer_mut(self)
     }
 
@@ -1066,6 +906,7 @@ impl SignalBuffer {
     #[inline]
     pub fn len(&self) -> usize {
         match self {
+            Self::Dynamic(buffer) => buffer.len(),
             Self::Sample(buffer) => buffer.len(),
             Self::Int(buffer) => buffer.len(),
             Self::Bool(buffer) => buffer.len(),
@@ -1085,12 +926,15 @@ impl SignalBuffer {
     pub fn resize(&mut self, length: usize, value: impl Into<Signal>) {
         let value = value.into();
         match (self, value) {
-            (Self::Sample(buffer), Signal::Sample(value)) => buffer.resize(length, Some(value)),
-            (Self::Int(buffer), Signal::Int(value)) => buffer.resize(length, Some(value)),
-            (Self::Bool(buffer), Signal::Bool(value)) => buffer.resize(length, Some(value)),
-            (Self::String(buffer), Signal::String(value)) => buffer.resize(length, Some(value)),
-            (Self::List(buffer), Signal::List(value)) => buffer.resize(length, Some(value)),
-            (Self::Midi(buffer), Signal::Midi(value)) => buffer.resize(length, Some(value)),
+            (Self::Dynamic(buffer), value) => {
+                buffer.buf.resize(length, Some(value));
+            }
+            (Self::Sample(buffer), Signal::Sample(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::Int(buffer), Signal::Int(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::Bool(buffer), Signal::Bool(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::String(buffer), Signal::String(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::List(buffer), Signal::List(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::Midi(buffer), Signal::Midi(value)) => buffer.buf.resize(length, Some(value)),
             _ => panic!("Cannot resize buffer with value of different type"),
         }
     }
@@ -1099,6 +943,7 @@ impl SignalBuffer {
     pub fn fill(&mut self, value: impl Into<Signal>) {
         let value = value.into();
         match (self, value) {
+            (Self::Dynamic(buffer), value) => buffer.fill(Some(value)),
             (Self::Sample(buffer), Signal::Sample(value)) => buffer.fill(Some(value)),
             (Self::Int(buffer), Signal::Int(value)) => buffer.fill(Some(value)),
             (Self::Bool(buffer), Signal::Bool(value)) => buffer.fill(Some(value)),
@@ -1112,18 +957,20 @@ impl SignalBuffer {
     /// Resizes the buffer to the given length, filling any new elements with an appropriate default value.
     pub fn resize_default(&mut self, length: usize) {
         match self {
-            Self::Sample(buffer) => buffer.resize(length, Some(0.0)),
-            Self::Int(buffer) => buffer.resize(length, Some(0)),
-            Self::Bool(buffer) => buffer.resize(length, Some(false)),
-            Self::String(buffer) => buffer.resize(length, Some(String::new())),
-            Self::List(buffer) => buffer.resize(length, Some(Vec::new())),
-            Self::Midi(buffer) => buffer.resize(length, Some(Vec::new())),
+            Self::Dynamic(buffer) => buffer.buf.resize(length, None),
+            Self::Sample(buffer) => buffer.buf.resize(length, Some(0.0)),
+            Self::Int(buffer) => buffer.buf.resize(length, Some(0)),
+            Self::Bool(buffer) => buffer.buf.resize(length, Some(false)),
+            Self::String(buffer) => buffer.buf.resize(length, Some(String::new())),
+            Self::List(buffer) => buffer.buf.resize(length, Some(Vec::new())),
+            Self::Midi(buffer) => buffer.buf.resize(length, Some(Vec::new())),
         }
     }
 
     /// Fills the buffer with an appropriate default value.
     pub fn fill_default(&mut self) {
         match self {
+            Self::Dynamic(buffer) => buffer.fill(None),
             Self::Sample(buffer) => buffer.fill(Some(0.0)),
             Self::Int(buffer) => buffer.fill(Some(0)),
             Self::Bool(buffer) => buffer.fill(Some(false)),
@@ -1137,6 +984,7 @@ impl SignalBuffer {
     #[inline]
     pub fn clone_signal_at(&self, index: usize) -> Signal {
         match self {
+            Self::Dynamic(buffer) => buffer[index].clone().unwrap(),
             Self::Sample(buffer) => Signal::Sample(buffer[index].unwrap()),
             Self::Int(buffer) => Signal::Int(buffer[index].unwrap()),
             Self::Bool(buffer) => Signal::Bool(buffer[index].unwrap()),
@@ -1149,6 +997,9 @@ impl SignalBuffer {
     /// Copies the contents of `other` into `self`.
     pub fn copy_from(&mut self, other: &Self) {
         match (self, other) {
+            (Self::Dynamic(this), Self::Dynamic(other)) => {
+                this.clone_from_slice(other);
+            }
             (Self::Sample(this), Self::Sample(other)) => {
                 this.copy_from_slice(other);
             }
