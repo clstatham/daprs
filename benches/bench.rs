@@ -100,7 +100,7 @@ pub fn bench_generative1(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    // bench_demo,
+    bench_demo,
     // bench_demo_reset,
     bench_generative1
 );

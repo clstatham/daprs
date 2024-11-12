@@ -267,54 +267,52 @@ impl Runtime {
 
     /// Renders the next block of audio.
     pub fn process(&mut self) -> RuntimeResult<()> {
-        self.graph.visit(
-            #[inline(never)]
-            |graph, node_id| -> RuntimeResult<()> {
-                let num_inputs = graph.digraph()[node_id].input_names().len();
+        self.graph.reset_visitor();
+        let path_len = self.graph.visit_path().len();
+        for i in 0..path_len {
+            let node_id = self.graph.visit_path()[i];
 
-                let mut inputs = vec![None; num_inputs];
+            let mut inputs = [None; 64]; // FIXME: magic number
 
-                let mut buffers = self.buffer_cache.remove(&node_id).unwrap();
+            let mut buffers = self.buffer_cache.remove(&node_id).unwrap();
 
-                for (source_id, edge) in graph
-                    .digraph()
-                    .edges_directed(node_id, Direction::Incoming)
-                    .map(|edge| (edge.source(), *edge.weight()))
-                {
-                    let source_buffers = self.buffer_cache.get(&source_id).unwrap();
-                    inputs[edge.target_input as usize] =
-                        Some(&source_buffers.outputs[edge.source_output as usize]);
-                }
+            for (source_id, edge) in self
+                .graph
+                .digraph()
+                .edges_directed(node_id, Direction::Incoming)
+                .map(|edge| (edge.source(), *edge.weight()))
+            {
+                let source_buffers = self.buffer_cache.get(&source_id).unwrap();
+                inputs[edge.target_input as usize] =
+                    Some(&source_buffers.outputs[edge.source_output as usize]);
+            }
 
-                let node = graph.digraph_mut().node_weight_mut(node_id).unwrap();
+            let node = self.graph.digraph_mut().node_weight_mut(node_id).unwrap();
 
-                let result = node.process(
-                    ProcessorInputs {
-                        input_names: &buffers.input_names,
-                        inputs: &inputs,
-                    },
-                    ProcessorOutputs {
-                        output_spec: &buffers.output_spec,
-                        outputs: &mut buffers.outputs,
-                    },
-                );
+            let result = node.process(
+                ProcessorInputs {
+                    input_names: &buffers.input_names,
+                    inputs: &inputs[..],
+                },
+                ProcessorOutputs {
+                    output_spec: &buffers.output_spec,
+                    outputs: &mut buffers.outputs,
+                },
+            );
 
-                if let Err(err) = result {
-                    let node = graph.digraph().node_weight(node_id).unwrap();
-                    log::error!("Error processing node {}: {:?}", node.name(), err);
-                    let error = GraphRunError {
-                        node_index: node_id,
-                        node_processor: node.name().to_string(),
-                        kind: GraphRunErrorKind::ProcessorError(err),
-                    };
-                    return Err(RuntimeError::GraphRunError(error));
-                }
+            if let Err(err) = result {
+                let node = self.graph.digraph().node_weight(node_id).unwrap();
+                log::error!("Error processing node {}: {:?}", node.name(), err);
+                let error = GraphRunError {
+                    node_index: node_id,
+                    node_processor: node.name().to_string(),
+                    kind: GraphRunErrorKind::ProcessorError(err),
+                };
+                return Err(RuntimeError::GraphRunError(error));
+            }
 
-                self.buffer_cache.insert(node_id, buffers);
-
-                Ok(())
-            },
-        )?;
+            self.buffer_cache.insert(node_id, buffers);
+        }
 
         Ok(())
     }
@@ -409,7 +407,7 @@ impl Runtime {
                     ));
                 };
 
-                for (j, &sample) in buffer.iter().enumerate() {
+                for (j, &sample) in buffer[..actual_block_size].iter().enumerate() {
                     output[sample_count + j] = sample.unwrap_or_default();
                 }
             }

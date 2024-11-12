@@ -73,7 +73,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     /// Returns the number of input buffers.
     #[inline]
     pub fn num_inputs(&self) -> usize {
-        self.inputs.len()
+        self.input_names.len()
     }
 
     /// Returns the input buffer at the given index, if any.

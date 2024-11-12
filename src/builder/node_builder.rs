@@ -178,6 +178,12 @@ impl Node {
         self.assert_single_output();
         self.output(0).len()
     }
+
+    #[inline]
+    pub fn cast(&self, kind: SignalKind) -> Node {
+        self.assert_single_output();
+        self.output(0).cast(kind)
+    }
 }
 
 /// An input of a node in the graph.
@@ -251,6 +257,40 @@ impl Output {
     #[inline]
     pub fn kind(&self) -> SignalKind {
         self.node.output_kind(self.output_index)
+    }
+
+    #[inline]
+    pub fn cast(&self, kind: SignalKind) -> Node {
+        let current_kind = self.kind();
+        if current_kind == kind {
+            return self.node.clone();
+        }
+        let cast = match (current_kind, kind) {
+            // bool <-> int
+            (SignalKind::Bool, SignalKind::Int) => self.node.graph().add(Cast::<bool, i64>::new()),
+            (SignalKind::Int, SignalKind::Bool) => self.node.graph().add(Cast::<i64, bool>::new()),
+
+            // bool <-> sample
+            (SignalKind::Bool, SignalKind::Sample) => {
+                self.node.graph().add(Cast::<bool, Sample>::new())
+            }
+            (SignalKind::Sample, SignalKind::Bool) => {
+                self.node.graph().add(Cast::<Sample, bool>::new())
+            }
+
+            // int <-> sample
+            (SignalKind::Int, SignalKind::Sample) => {
+                self.node.graph().add(Cast::<i64, Sample>::new())
+            }
+            (SignalKind::Sample, SignalKind::Int) => {
+                self.node.graph().add(Cast::<Sample, i64>::new())
+            }
+
+            _ => panic!("cannot cast from {:?} to {:?}", current_kind, kind),
+        };
+
+        cast.input(0).connect(self);
+        cast
     }
 
     /// Creates a new, single-output node that passes the value of this output through.

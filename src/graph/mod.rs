@@ -6,7 +6,7 @@ use petgraph::{
     prelude::{Direction, EdgeRef, StableDiGraph},
     visit::DfsPostOrder,
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     prelude::{Param, Passthrough},
@@ -108,6 +108,7 @@ pub struct Graph {
     needs_visitor_alloc: bool,
 
     // cached visitor state for graph traversal
+    visitor: DfsPostOrder<NodeIndex, FxHashSet<NodeIndex>>,
     visit_path: Vec<NodeIndex>,
 }
 
@@ -305,6 +306,11 @@ impl Graph {
     }
 
     #[inline]
+    pub(crate) fn visit_path(&self) -> &[NodeIndex] {
+        &self.visit_path
+    }
+
+    #[inline]
     pub(crate) fn allocate_visitor(&mut self) {
         if self.visit_path.capacity() < self.digraph.node_count() {
             self.visit_path = Vec::with_capacity(self.digraph.node_count());
@@ -317,11 +323,14 @@ impl Graph {
     #[inline]
     pub(crate) fn reset_visitor(&mut self) {
         self.visit_path.clear();
-        let mut visitor = DfsPostOrder::empty(&self.digraph);
+        self.visitor.discovered.clear();
+        self.visitor.stack.clear();
+        self.visitor.finished.clear();
+
         for node in self.digraph.externals(Direction::Incoming) {
-            visitor.stack.push(node);
+            self.visitor.stack.push(node);
         }
-        while let Some(node) = visitor.next(&self.digraph) {
+        while let Some(node) = self.visitor.next(&self.digraph) {
             self.visit_path.push(node);
         }
         self.visit_path.reverse();
