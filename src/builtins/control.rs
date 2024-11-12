@@ -15,8 +15,8 @@ impl<S: SignalData> Processor for Cond<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("cond", SignalKind::Bool),
-            SignalSpec::new("if_true", S::KIND),
-            SignalSpec::new("if_false", S::KIND),
+            SignalSpec::new("then", S::KIND),
+            SignalSpec::new("else", S::KIND),
         ]
     }
 

@@ -5,9 +5,7 @@ use std::fmt::Debug;
 use downcast_rs::{impl_downcast, DowncastSync};
 use thiserror::Error;
 
-use crate::signal::{
-    Buffer, List, MidiMessage, Sample, Signal, SignalBuffer, SignalData, SignalKind,
-};
+use crate::signal::{Buffer, List, MidiMessage, Sample, SignalBuffer, SignalData, SignalKind};
 
 /// An error that can occur when processing signals.
 #[derive(Debug, Clone, Error)]
@@ -79,7 +77,7 @@ impl SignalSpec {
 /// A collection of borrowed input buffers for a [`Processor`] to read from, and related information about them.
 #[derive(Debug, Clone, Copy)]
 pub struct ProcessorInputs<'a, 'b> {
-    /// The input signal names.
+    /// The input signal specs.
     pub input_specs: &'a [SignalSpec],
     /// The input buffers to read from.
     pub inputs: &'a [Option<&'b SignalBuffer>],

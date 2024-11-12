@@ -261,6 +261,81 @@ impl List {
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
+
+    pub fn get(&self, index: usize) -> Option<&Signal> {
+        self.items.get(index)
+    }
+
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut Signal> {
+        self.items.get_mut(index)
+    }
+}
+
+impl From<Vec<Signal>> for List {
+    fn from(items: Vec<Signal>) -> Self {
+        let kind = items.first().map_or(SignalKind::Dynamic, Signal::kind);
+        Self { kind, items }
+    }
+}
+
+impl From<Vec<Sample>> for List {
+    fn from(items: Vec<Sample>) -> Self {
+        let items = items.into_iter().map(Signal::new_sample).collect();
+        Self {
+            kind: SignalKind::Sample,
+            items,
+        }
+    }
+}
+
+impl From<Vec<i64>> for List {
+    fn from(items: Vec<i64>) -> Self {
+        let items = items.into_iter().map(Signal::new_int).collect();
+        Self {
+            kind: SignalKind::Int,
+            items,
+        }
+    }
+}
+
+impl From<Vec<bool>> for List {
+    fn from(items: Vec<bool>) -> Self {
+        let items = items.into_iter().map(Signal::new_bool).collect();
+        Self {
+            kind: SignalKind::Bool,
+            items,
+        }
+    }
+}
+
+impl From<Vec<String>> for List {
+    fn from(items: Vec<String>) -> Self {
+        let items = items.into_iter().map(Signal::new_string).collect();
+        Self {
+            kind: SignalKind::String,
+            items,
+        }
+    }
+}
+
+impl From<Vec<List>> for List {
+    fn from(items: Vec<List>) -> Self {
+        let items = items.into_iter().map(Signal::new_list).collect();
+        Self {
+            kind: SignalKind::List,
+            items,
+        }
+    }
+}
+
+impl From<Vec<MidiMessage>> for List {
+    fn from(items: Vec<MidiMessage>) -> Self {
+        let items = items.into_iter().map(Signal::new_midi).collect();
+        Self {
+            kind: SignalKind::Midi,
+            items,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
@@ -711,16 +786,61 @@ impl Signal {
                     T::try_from_signal(Signal::Int(if *bool { 1 } else { 0 }))
                 }
 
+                // string <-> sample
+                (Self::String(string), SignalKind::Sample) => {
+                    T::try_from_signal(Signal::Sample(string.parse().ok()?))
+                }
+                (Self::Sample(sample), SignalKind::String) => {
+                    T::try_from_signal(Signal::String(sample.to_string()))
+                }
+
+                // string <-> int
+                (Self::String(string), SignalKind::Int) => {
+                    T::try_from_signal(Signal::Int(string.parse().ok()?))
+                }
+                (Self::Int(int), SignalKind::String) => {
+                    T::try_from_signal(Signal::String(int.to_string()))
+                }
+
                 _ => None,
             }
         }
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<Signal> for Sample {
-    fn into(self) -> Signal {
-        Signal::Sample(self)
+impl From<Sample> for Signal {
+    fn from(sample: Sample) -> Self {
+        Self::Sample(sample)
+    }
+}
+
+impl From<i64> for Signal {
+    fn from(int: i64) -> Self {
+        Self::Int(int)
+    }
+}
+
+impl From<bool> for Signal {
+    fn from(bool: bool) -> Self {
+        Self::Bool(bool)
+    }
+}
+
+impl From<String> for Signal {
+    fn from(string: String) -> Self {
+        Self::String(string)
+    }
+}
+
+impl From<List> for Signal {
+    fn from(list: List) -> Self {
+        Self::List(list)
+    }
+}
+
+impl From<MidiMessage> for Signal {
+    fn from(midi: MidiMessage) -> Self {
+        Self::Midi(midi)
     }
 }
 
@@ -1087,7 +1207,7 @@ impl SignalBuffer {
             Self::Bool(buffer) => Signal::Bool(buffer[index].unwrap()),
             Self::String(buffer) => Signal::String(buffer[index].clone().unwrap()),
             Self::List(buffer) => Signal::List(buffer[index].clone().unwrap()),
-            Self::Midi(buffer) => Signal::Midi(buffer[index].clone().unwrap()),
+            Self::Midi(buffer) => Signal::Midi(buffer[index].unwrap()),
         }
     }
 

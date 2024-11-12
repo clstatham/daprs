@@ -38,10 +38,8 @@ impl Processor for MidiNote {
         ) {
             *out = None;
             if let Some(msg) = midi {
-                if msg.len() == 3 {
-                    let note = msg[1] as f64;
-                    *out = Some(note);
-                }
+                let note = msg.data1() as Sample;
+                *out = Some(note);
             }
         }
         Ok(())
@@ -84,10 +82,8 @@ impl Processor for MidiVelocity {
         ) {
             *out = None;
             if let Some(msg) = midi {
-                if msg.len() == 3 {
-                    let velocity = msg[2] as f64;
-                    *out = Some(velocity);
-                }
+                let velocity = msg.data2() as Sample;
+                *out = Some(velocity);
             }
         }
         Ok(())
@@ -130,10 +126,8 @@ impl Processor for MidiChannel {
         ) {
             *out = None;
             if let Some(msg) = midi {
-                if msg.len() == 3 {
-                    let channel = (msg[0] & 0x0F) as f64;
-                    *out = Some(channel);
-                }
+                let channel = msg.channel() as Sample;
+                *out = Some(channel);
             }
         }
         Ok(())

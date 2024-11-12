@@ -309,6 +309,22 @@ impl Output {
                 self.node.graph().add(Cast::<Sample, i64>::new())
             }
 
+            // string <-> sample
+            (SignalKind::String, SignalKind::Sample) => {
+                self.node.graph().add(Cast::<String, Sample>::new())
+            }
+            (SignalKind::Sample, SignalKind::String) => {
+                self.node.graph().add(Cast::<Sample, String>::new())
+            }
+
+            // string <-> int
+            (SignalKind::String, SignalKind::Int) => {
+                self.node.graph().add(Cast::<String, i64>::new())
+            }
+            (SignalKind::Int, SignalKind::String) => {
+                self.node.graph().add(Cast::<i64, String>::new())
+            }
+
             _ => panic!("cannot cast from {:?} to {:?}", current_kind, kind),
         };
 
