@@ -13,7 +13,7 @@ use crate::{
     graph::{Graph, GraphRunError, GraphRunErrorKind, NodeIndex},
     prelude::{ProcessorInputs, SignalSpec},
     processor::{ProcessorError, ProcessorOutputs},
-    signal::{Sample, SignalBuffer, SignalKind},
+    signal::{MidiMessage, Sample, SignalBuffer, SignalKind},
 };
 
 /// An error that occurred during runtime operations.
@@ -596,7 +596,7 @@ impl Runtime {
                 "raug midir input",
                 move |_stamp, message, _data| {
                     for (_name, param) in midi_runtime.graph().midi_input_iter() {
-                        param.set(message.to_vec());
+                        param.set(MidiMessage::new([message[0], message[1], message[2]]));
                     }
                 },
                 (),

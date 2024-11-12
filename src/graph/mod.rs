@@ -11,7 +11,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     prelude::{Param, Passthrough},
     processor::{Processor, ProcessorError},
-    signal::{Sample, SignalData},
+    signal::{MidiMessage, Sample, SignalData},
 };
 
 pub mod edge;
@@ -170,7 +170,7 @@ impl Graph {
 
     /// Adds a new [`Processor`] representing a MIDI input to the graph.
     pub fn add_midi_input(&mut self, name: impl Into<String>) -> NodeIndex {
-        let param = Param::<Vec<u8>>::new(name, None);
+        let param = Param::<MidiMessage>::new(name, None);
         let index = self.add_param(param);
         self.midi_params.push(index);
         index
@@ -266,7 +266,7 @@ impl Graph {
 
     /// Returns an iterator over the MIDI input [`Param`]s in the graph.
     #[inline]
-    pub fn midi_input_iter(&self) -> impl Iterator<Item = (&str, Param<Vec<u8>>)> + '_ {
+    pub fn midi_input_iter(&self) -> impl Iterator<Item = (&str, Param<MidiMessage>)> + '_ {
         self.params
             .iter()
             .filter(|(name, _)| self.midi_params.contains(self.params.get(*name).unwrap()))
@@ -274,7 +274,7 @@ impl Graph {
                 (
                     name.as_str(),
                     (*self.digraph[*idx].processor)
-                        .downcast_ref::<Param<Vec<u8>>>()
+                        .downcast_ref::<Param<MidiMessage>>()
                         .unwrap()
                         .clone(),
                 )

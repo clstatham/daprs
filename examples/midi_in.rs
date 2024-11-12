@@ -28,11 +28,13 @@ fn main() {
 
     let mut runtime = graph.build_runtime();
 
+    raug::list_midi_ports();
+
     let handle = runtime
         .run(
             AudioBackend::Default,
             AudioDevice::Default,
-            Some(MidiPort::Name("MIDIIN2 (LPX MIDI)".to_string())), // change this to the name of your MIDI device
+            Some(MidiPort::Name("MPK mini Plus".to_string())), // change this to the name of your MIDI device
         )
         .unwrap();
 

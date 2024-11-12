@@ -326,8 +326,8 @@ impl Output {
             SignalKind::Int => self.node.graph().add(Passthrough::<i64>::new()),
             SignalKind::Sample => self.node.graph().add(Passthrough::<Sample>::new()),
             SignalKind::String => self.node.graph().add(Passthrough::<String>::new()),
-            SignalKind::List => self.node.graph().add(Passthrough::<Vec<Signal>>::new()),
-            SignalKind::Midi => self.node.graph().add(Passthrough::<Vec<u8>>::new()),
+            SignalKind::List => self.node.graph().add(Passthrough::<List>::new()),
+            SignalKind::Midi => self.node.graph().add(Passthrough::<MidiMessage>::new()),
         };
         node.input(0).connect(self);
         node
@@ -343,8 +343,8 @@ impl Output {
             SignalKind::Int => self.node.graph().add(Register::<i64>::new()),
             SignalKind::Sample => self.node.graph().add(Register::<Sample>::new()),
             SignalKind::String => self.node.graph().add(Register::<String>::new()),
-            SignalKind::List => self.node.graph().add(Register::<Vec<Signal>>::new()),
-            SignalKind::Midi => self.node.graph().add(Register::<Vec<u8>>::new()),
+            SignalKind::List => self.node.graph().add(Register::<List>::new()),
+            SignalKind::Midi => self.node.graph().add(Register::<MidiMessage>::new()),
         };
         node.input(0).connect(self);
         node
@@ -394,8 +394,8 @@ impl Output {
             SignalKind::Int => self.node.graph().add(Cond::<i64>::new()),
             SignalKind::Sample => self.node.graph().add(Cond::<Sample>::new()),
             SignalKind::String => self.node.graph().add(Cond::<String>::new()),
-            SignalKind::List => self.node.graph().add(Cond::<Vec<Signal>>::new()),
-            SignalKind::Midi => self.node.graph().add(Cond::<Vec<u8>>::new()),
+            SignalKind::List => self.node.graph().add(Cond::<List>::new()),
+            SignalKind::Midi => self.node.graph().add(Cond::<MidiMessage>::new()),
         };
         cond.input("cond").connect(self);
         cond.input("then").connect(&then.output(0));
@@ -683,8 +683,7 @@ macro_rules! impl_comparison_node_ops {
                     SignalKind::Int => self.graph().add(control::$proc::<i64>::default()),
                     SignalKind::Sample => self.graph().add(control::$proc::<Sample>::default()),
                     SignalKind::String => self.graph().add(control::$proc::<String>::default()),
-                    SignalKind::List => self.graph().add(control::$proc::<Vec<Signal>>::default()),
-                    SignalKind::Midi => self.graph().add(control::$proc::<Vec<u8>>::default()),
+                    _ => panic!("unsupported signal type"),
                 };
 
                 node.input(0).connect(&self.output(0));

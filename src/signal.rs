@@ -27,9 +27,8 @@ pub const TAU: Sample = std::f32::consts::TAU;
 /// The value of τ (2π).
 pub const TAU: Sample = std::f64::consts::TAU;
 
-/// An owning, fixed-length array of signal data.
+/// An owning array of signal data.
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
-/// It can also be [`collected`](std::iter::Iterator::collect) from an iterator of [`Sample`]s.
 #[derive(PartialEq, Clone)]
 pub struct Buffer<T: SignalData> {
     buf: Vec<Option<T>>,
@@ -42,7 +41,7 @@ impl<T: SignalData> Debug for Buffer<T> {
 }
 
 impl<T: SignalData> Buffer<T> {
-    /// Creates a new buffer filled with zeros.
+    /// Creates a new buffer filled with `None`.
     #[inline]
     pub fn zeros(length: usize) -> Self {
         let mut buf = Vec::with_capacity(length);
@@ -211,15 +210,113 @@ impl<'a, T: SignalData> IntoIterator for &'a mut Buffer<T> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct List {
+    kind: SignalKind,
+    items: Vec<Signal>,
+}
+
+impl List {
+    pub fn new(kind: SignalKind) -> Self {
+        Self {
+            kind,
+            items: Vec::new(),
+        }
+    }
+
+    pub fn kind(&self) -> SignalKind {
+        self.kind
+    }
+
+    pub fn items(&self) -> &[Signal] {
+        &self.items
+    }
+
+    pub fn items_mut(&mut self) -> &mut [Signal] {
+        &mut self.items
+    }
+
+    pub fn push(&mut self, item: Signal) {
+        assert_eq!(item.kind(), self.kind, "Item kind does not match list kind");
+        self.items.push(item);
+    }
+
+    pub fn pop(&mut self) -> Option<Signal> {
+        self.items.pop()
+    }
+
+    pub fn insert(&mut self, index: usize, item: Signal) {
+        assert_eq!(item.kind(), self.kind, "Item kind does not match list kind");
+        self.items.insert(index, item);
+    }
+
+    pub fn remove(&mut self, index: usize) -> Signal {
+        self.items.remove(index)
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
+pub struct MidiMessage {
+    pub data: [u8; 3],
+}
+
+impl MidiMessage {
+    pub fn new(data: [u8; 3]) -> Self {
+        Self { data }
+    }
+
+    pub fn status(&self) -> u8 {
+        self.data[0] >> 4
+    }
+
+    pub fn channel(&self) -> u8 {
+        self.data[0] & 0x0F
+    }
+
+    pub fn data1(&self) -> u8 {
+        self.data[1]
+    }
+
+    pub fn data2(&self) -> u8 {
+        self.data[2]
+    }
+}
+
+impl Deref for MidiMessage {
+    type Target = [u8; 3];
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl DerefMut for MidiMessage {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
 /// A trait for types that can be used as signal data.
 pub trait SignalData: Clone + Debug + Send + Sync + PartialOrd + PartialEq + 'static {
     /// The kind of signal this type represents.
     const KIND: SignalKind;
 
+    /// Converts this value into a signal.
     fn into_signal(this: Self) -> Signal;
+    /// Tries to convert a signal into this type.
+    /// This is not done by casting (see [`Signal::cast`] for that), but by checking if the signal is of the correct kind and returning `None` if it is not.
     fn try_from_signal(signal: Signal) -> Option<Self>;
 
+    /// Tries to convert a buffer into a buffer of this type.
     fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>>;
+    /// Tries to convert a mutable buffer into a mutable buffer of this type.
     fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>>;
 }
 
@@ -355,7 +452,7 @@ impl SignalData for String {
     }
 }
 
-impl SignalData for Vec<Signal> {
+impl SignalData for List {
     const KIND: SignalKind = SignalKind::List;
 
     #[inline]
@@ -382,7 +479,7 @@ impl SignalData for Vec<Signal> {
     }
 }
 
-impl SignalData for Vec<u8> {
+impl SignalData for MidiMessage {
     const KIND: SignalKind = SignalKind::Midi;
 
     #[inline]
@@ -423,9 +520,9 @@ pub enum Signal {
     /// A string.
     String(String),
     /// A list.
-    List(Vec<Signal>),
+    List(List),
     /// A MIDI message.
-    Midi(Vec<u8>),
+    Midi(MidiMessage),
 }
 
 impl Signal {
@@ -455,12 +552,12 @@ impl Signal {
     }
 
     /// Creates a new list signal with the given value. The value will be cloned.
-    pub fn new_list(value: impl Into<Vec<Signal>>) -> Self {
+    pub fn new_list(value: impl Into<List>) -> Self {
         Self::List(value.into())
     }
 
     /// Creates a new MIDI signal with the given value. The value will be cloned.
-    pub fn new_midi(value: impl Into<Vec<u8>>) -> Self {
+    pub fn new_midi(value: impl Into<MidiMessage>) -> Self {
         Self::Midi(value.into())
     }
 
@@ -542,18 +639,18 @@ impl Signal {
         }
     }
 
-    /// Returns the inner [`Vec<Signal>`], if this is a list signal.
+    /// Returns the inner [`List`], if this is a list signal.
     #[inline]
-    pub fn as_list(&self) -> Option<&Vec<Signal>> {
+    pub fn as_list(&self) -> Option<&List> {
         match self {
             Self::List(list) => Some(list),
             _ => None,
         }
     }
 
-    /// Returns the inner [`Vec<u8>`], if this is a MIDI signal.
+    /// Returns the inner [`MidiMessage`], if this is a MIDI signal.
     #[inline]
-    pub fn as_midi(&self) -> Option<&Vec<u8>> {
+    pub fn as_midi(&self) -> Option<&MidiMessage> {
         match self {
             Self::Midi(midi) => Some(midi),
             _ => None,
@@ -659,9 +756,9 @@ pub enum SignalBuffer {
     /// A buffer of strings.
     String(Buffer<String>),
     /// A buffer of lists.
-    List(Buffer<Vec<Signal>>),
+    List(Buffer<List>),
     /// A buffer of MIDI messages.
-    Midi(Buffer<Vec<u8>>),
+    Midi(Buffer<MidiMessage>),
 }
 
 impl SignalBuffer {
@@ -813,7 +910,7 @@ impl SignalBuffer {
 
     /// Returns a reference to the list buffer, if this is a list buffer.
     #[inline]
-    pub fn as_list(&self) -> Option<&Buffer<Vec<Signal>>> {
+    pub fn as_list(&self) -> Option<&Buffer<List>> {
         match self {
             Self::List(buffer) => Some(buffer),
             _ => None,
@@ -822,7 +919,7 @@ impl SignalBuffer {
 
     /// Returns a reference to the MIDI buffer, if this is a MIDI buffer.
     #[inline]
-    pub fn as_midi(&self) -> Option<&Buffer<Vec<u8>>> {
+    pub fn as_midi(&self) -> Option<&Buffer<MidiMessage>> {
         match self {
             Self::Midi(buffer) => Some(buffer),
             _ => None,
@@ -881,7 +978,7 @@ impl SignalBuffer {
 
     /// Returns a mutable reference to the list buffer, if this is a list buffer.
     #[inline]
-    pub fn as_list_mut(&mut self) -> Option<&mut Buffer<Vec<Signal>>> {
+    pub fn as_list_mut(&mut self) -> Option<&mut Buffer<List>> {
         match self {
             Self::List(buffer) => Some(buffer),
             _ => None,
@@ -890,7 +987,7 @@ impl SignalBuffer {
 
     /// Returns a mutable reference to the MIDI buffer, if this is a MIDI buffer.
     #[inline]
-    pub fn as_midi_mut(&mut self) -> Option<&mut Buffer<Vec<u8>>> {
+    pub fn as_midi_mut(&mut self) -> Option<&mut Buffer<MidiMessage>> {
         match self {
             Self::Midi(buffer) => Some(buffer),
             _ => None,
@@ -958,12 +1055,12 @@ impl SignalBuffer {
     pub fn resize_default(&mut self, length: usize) {
         match self {
             Self::Dynamic(buffer) => buffer.buf.resize(length, None),
-            Self::Sample(buffer) => buffer.buf.resize(length, Some(0.0)),
-            Self::Int(buffer) => buffer.buf.resize(length, Some(0)),
-            Self::Bool(buffer) => buffer.buf.resize(length, Some(false)),
-            Self::String(buffer) => buffer.buf.resize(length, Some(String::new())),
-            Self::List(buffer) => buffer.buf.resize(length, Some(Vec::new())),
-            Self::Midi(buffer) => buffer.buf.resize(length, Some(Vec::new())),
+            Self::Sample(buffer) => buffer.buf.resize(length, None),
+            Self::Int(buffer) => buffer.buf.resize(length, None),
+            Self::Bool(buffer) => buffer.buf.resize(length, None),
+            Self::String(buffer) => buffer.buf.resize(length, None),
+            Self::List(buffer) => buffer.buf.resize(length, None),
+            Self::Midi(buffer) => buffer.buf.resize(length, None),
         }
     }
 
@@ -971,12 +1068,12 @@ impl SignalBuffer {
     pub fn fill_default(&mut self) {
         match self {
             Self::Dynamic(buffer) => buffer.fill(None),
-            Self::Sample(buffer) => buffer.fill(Some(0.0)),
-            Self::Int(buffer) => buffer.fill(Some(0)),
-            Self::Bool(buffer) => buffer.fill(Some(false)),
-            Self::String(buffer) => buffer.fill(Some(String::new())),
-            Self::List(buffer) => buffer.fill(Some(Vec::new())),
-            Self::Midi(buffer) => buffer.fill(Some(Vec::new())),
+            Self::Sample(buffer) => buffer.fill(None),
+            Self::Int(buffer) => buffer.fill(None),
+            Self::Bool(buffer) => buffer.fill(None),
+            Self::String(buffer) => buffer.fill(None),
+            Self::List(buffer) => buffer.fill(None),
+            Self::Midi(buffer) => buffer.fill(None),
         }
     }
 

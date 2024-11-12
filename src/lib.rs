@@ -27,7 +27,7 @@ pub mod prelude {
         Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, SignalSpec,
     };
     pub use crate::runtime::{AudioBackend, AudioDevice, MidiPort, Runtime, RuntimeHandle};
-    pub use crate::signal::{Buffer, Sample, Signal, SignalBuffer, SignalKind};
+    pub use crate::signal::{Buffer, List, MidiMessage, Sample, Signal, SignalBuffer, SignalKind};
     pub use std::time::Duration;
 }
 

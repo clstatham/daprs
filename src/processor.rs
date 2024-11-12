@@ -5,7 +5,9 @@ use std::fmt::Debug;
 use downcast_rs::{impl_downcast, DowncastSync};
 use thiserror::Error;
 
-use crate::signal::{Buffer, Sample, Signal, SignalBuffer, SignalData, SignalKind};
+use crate::signal::{
+    Buffer, List, MidiMessage, Sample, Signal, SignalBuffer, SignalData, SignalKind,
+};
 
 /// An error that can occur when processing signals.
 #[derive(Debug, Clone, Error)]
@@ -159,8 +161,8 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     pub fn iter_input_as_lists(
         &self,
         index: usize,
-    ) -> Result<impl Iterator<Item = Option<&Vec<Signal>>> + '_, ProcessorError> {
-        Self::iter_input_as::<Vec<Signal>>(self, index).map(|iter| iter.map(Option::as_ref))
+    ) -> Result<impl Iterator<Item = Option<&List>> + '_, ProcessorError> {
+        Self::iter_input_as::<List>(self, index).map(|iter| iter.map(Option::as_ref))
     }
 
     /// Returns an iterator over the input MIDI messages at the given index, if the input is a MIDI message buffer.
@@ -168,8 +170,8 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     pub fn iter_input_as_midi(
         &self,
         index: usize,
-    ) -> Result<impl Iterator<Item = Option<&Vec<u8>>> + '_, ProcessorError> {
-        Self::iter_input_as::<Vec<u8>>(self, index).map(|iter| iter.map(Option::as_ref))
+    ) -> Result<impl Iterator<Item = Option<&MidiMessage>> + '_, ProcessorError> {
+        Self::iter_input_as::<MidiMessage>(self, index).map(|iter| iter.map(Option::as_ref))
     }
 }
 
@@ -235,17 +237,17 @@ impl<'a> ProcessorOutputs<'a> {
 
     /// Returns the output buffer at the given index, if it is a list buffer.
     #[inline]
-    pub fn output_as_lists(
-        &mut self,
-        index: usize,
-    ) -> Result<&mut Buffer<Vec<Signal>>, ProcessorError> {
-        self.output_as::<Vec<Signal>>(index)
+    pub fn output_as_lists(&mut self, index: usize) -> Result<&mut Buffer<List>, ProcessorError> {
+        self.output_as::<List>(index)
     }
 
     /// Returns the output buffer at the given index, if it is a MIDI message buffer.
     #[inline]
-    pub fn output_as_midi(&mut self, index: usize) -> Result<&mut Buffer<Vec<u8>>, ProcessorError> {
-        self.output_as::<Vec<u8>>(index)
+    pub fn output_as_midi(
+        &mut self,
+        index: usize,
+    ) -> Result<&mut Buffer<MidiMessage>, ProcessorError> {
+        self.output_as::<MidiMessage>(index)
     }
 
     /// Returns an iterator over the output buffers.
@@ -303,7 +305,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn iter_output_mut_as_lists(
         &mut self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &mut Option<Vec<Signal>>> + '_, ProcessorError> {
+    ) -> Result<impl Iterator<Item = &mut Option<List>> + '_, ProcessorError> {
         Ok(self.output_as_lists(index)?.iter_mut())
     }
 
@@ -312,7 +314,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn iter_output_mut_as_midi(
         &mut self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &mut Option<Vec<u8>>> + '_, ProcessorError> {
+    ) -> Result<impl Iterator<Item = &mut Option<MidiMessage>> + '_, ProcessorError> {
         Ok(self.output_as_midi(index)?.iter_mut())
     }
 
