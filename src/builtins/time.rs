@@ -1,7 +1,7 @@
 //! Time-related processors.
 
 use crate::{
-    prelude::{OutputSpec, Processor, ProcessorInputs, ProcessorOutputs},
+    prelude::{Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
     signal::{Buffer, Sample, SignalBuffer, SignalKind},
 };
@@ -63,12 +63,12 @@ impl Default for Metro {
 }
 
 impl Processor for Metro {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("period")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("period", SignalKind::Sample)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Bool)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Bool)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -125,12 +125,12 @@ impl UnitDelay {
 }
 
 impl Processor for UnitDelay {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", SignalKind::Sample)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(
@@ -184,12 +184,15 @@ impl SampleDelay {
 }
 
 impl Processor for SampleDelay {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in"), String::from("delay")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("in", SignalKind::Sample),
+            SignalSpec::new("delay", SignalKind::Int),
+        ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(

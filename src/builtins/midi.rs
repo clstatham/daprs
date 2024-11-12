@@ -19,12 +19,12 @@ use crate::prelude::*;
 pub struct MidiNote;
 
 impl Processor for MidiNote {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("midi")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("midi", SignalKind::Midi)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("note", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("note", SignalKind::Sample)]
     }
 
     fn process(
@@ -65,12 +65,12 @@ impl Processor for MidiNote {
 pub struct MidiVelocity;
 
 impl Processor for MidiVelocity {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("midi")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("midi", SignalKind::Midi)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("velocity", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("velocity", SignalKind::Sample)]
     }
 
     fn process(
@@ -111,12 +111,12 @@ impl Processor for MidiVelocity {
 pub struct MidiChannel;
 
 impl Processor for MidiChannel {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("midi")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("midi", SignalKind::Midi)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("channel", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("channel", SignalKind::Sample)]
     }
 
     fn process(

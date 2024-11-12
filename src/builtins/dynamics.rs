@@ -59,17 +59,17 @@ impl Default for PeakLimiter {
 }
 
 impl Processor for PeakLimiter {
-    fn input_names(&self) -> Vec<String> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            String::from("in"),
-            String::from("threshold"),
-            String::from("attack"),
-            String::from("release"),
+            SignalSpec::new("in", SignalKind::Sample),
+            SignalSpec::new("threshold", SignalKind::Sample),
+            SignalSpec::new("attack", SignalKind::Sample),
+            SignalSpec::new("release", SignalKind::Sample),
         ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {

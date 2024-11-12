@@ -8,7 +8,7 @@ use std::{
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::{
-    prelude::{GraphBuilder, Node, OutputSpec, Processor, ProcessorInputs, ProcessorOutputs},
+    prelude::{GraphBuilder, Node, Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
     signal::{Sample, SignalData, SignalKind},
 };
@@ -37,12 +37,12 @@ impl<S: SignalData> Passthrough<S> {
 }
 
 impl<S: SignalData> Processor for Passthrough<S> {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", S::KIND)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", S::KIND)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", S::KIND)]
     }
 
     fn process(
@@ -50,7 +50,7 @@ impl<S: SignalData> Processor for Passthrough<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let Some(in_signal) = inputs.input(0) else {
+        let Some(in_signal) = inputs.inputs[0] else {
             return Ok(());
         };
 
@@ -76,12 +76,12 @@ impl<S: SignalData, T: SignalData> Cast<S, T> {
 }
 
 impl<S: SignalData, T: SignalData> Processor for Cast<S, T> {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", S::KIND)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", T::KIND)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", T::KIND)]
     }
 
     fn process(
@@ -89,13 +89,17 @@ impl<S: SignalData, T: SignalData> Processor for Cast<S, T> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let Some(in_signal) = inputs.input(0) else {
+        let Some(in_signal) = inputs.inputs[0] else {
             return Ok(());
         };
 
         let in_signal = in_signal
             .as_kind::<S>()
-            .ok_or(ProcessorError::InputSpecMismatch(0))?;
+            .ok_or(ProcessorError::InputSpecMismatch {
+                index: 0,
+                expected: S::KIND,
+                actual: in_signal.kind(),
+            })?;
 
         let out_signal = outputs.output(0).as_kind_mut::<T>().unwrap();
 
@@ -137,12 +141,15 @@ impl<S: SignalData> MessageSender<S> {
 }
 
 impl<S: SignalData> Processor for MessageSender<S> {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("trig"), String::from("message")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("trig", SignalKind::Bool),
+            SignalSpec::new("message", S::KIND),
+        ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", S::KIND)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", S::KIND)]
     }
 
     fn process(
@@ -219,11 +226,14 @@ impl Print {
 }
 
 impl Processor for Print {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("trig"), String::from("message")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("trig", SignalKind::Bool),
+            SignalSpec::new("message", SignalKind::String),
+        ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
+    fn output_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
 
@@ -288,12 +298,12 @@ pub struct SampleRate {
 }
 
 impl Processor for SampleRate {
-    fn input_names(&self) -> Vec<String> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("sample_rate", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("sample_rate", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -347,12 +357,15 @@ pub struct Smooth {
 }
 
 impl Processor for Smooth {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("target"), String::from("factor")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("target", SignalKind::Sample),
+            SignalSpec::new("factor", SignalKind::Sample),
+        ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(
@@ -402,12 +415,15 @@ pub struct Changed {
 }
 
 impl Processor for Changed {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in"), String::from("threshold")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("in", SignalKind::Sample),
+            SignalSpec::new("threshold", SignalKind::Sample),
+        ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Bool)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Bool)]
     }
 
     fn process(
@@ -459,12 +475,12 @@ pub struct ZeroCrossing {
 }
 
 impl Processor for ZeroCrossing {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", SignalKind::Sample)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Bool)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Bool)]
     }
 
     fn process(
@@ -512,11 +528,11 @@ impl<S: SignalData> SignalTx<S> {
 }
 
 impl<S: SignalData> Processor for SignalTx<S> {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", S::KIND)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
+    fn output_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
 
@@ -553,12 +569,12 @@ impl<S: SignalData> SignalRx<S> {
 }
 
 impl<S: SignalData> Processor for SignalRx<S> {
-    fn input_names(&self) -> Vec<String> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", S::KIND)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", S::KIND)]
     }
 
     fn process(
@@ -669,12 +685,12 @@ impl<S: SignalData> Param<S> {
 }
 
 impl<S: SignalData> Processor for Param<S> {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("set")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("set", S::KIND)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("get", S::KIND)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("get", S::KIND)]
     }
 
     fn process(
@@ -740,13 +756,16 @@ impl<S: SignalData> Default for Select<S> {
 }
 
 impl<S: SignalData> Processor for Select<S> {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in"), String::from("index")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("in", S::KIND),
+            SignalSpec::new("index", SignalKind::Int),
+        ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
+    fn output_spec(&self) -> Vec<SignalSpec> {
         (0..self.num_outputs)
-            .map(|i| OutputSpec::new(format!("{}", i), S::KIND))
+            .map(|i| SignalSpec::new(format!("{}", i), S::KIND))
             .collect()
     }
 
@@ -823,12 +842,14 @@ impl<S: SignalData> Default for Merge<S> {
 }
 
 impl<S: SignalData> Processor for Merge<S> {
-    fn input_names(&self) -> Vec<String> {
-        (0..self.num_inputs).map(|i| i.to_string()).collect()
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        (0..self.num_inputs)
+            .map(|i| SignalSpec::new(i.to_string(), S::KIND))
+            .collect()
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", S::KIND)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", S::KIND)]
     }
 
     fn process(
@@ -842,7 +863,11 @@ impl<S: SignalData> Processor for Merge<S> {
             };
             let in_signal = input
                 .as_kind::<S>()
-                .ok_or(ProcessorError::InputSpecMismatch(i))?;
+                .ok_or(ProcessorError::InputSpecMismatch {
+                    index: i,
+                    expected: S::KIND,
+                    actual: input.kind(),
+                })?;
 
             let out_signal = outputs.iter_output_as::<S>(0)?;
 
@@ -877,12 +902,15 @@ pub struct Counter {
 }
 
 impl Processor for Counter {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("trig"), String::from("reset")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("trig", SignalKind::Bool),
+            SignalSpec::new("reset", SignalKind::Bool),
+        ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("count", SignalKind::Int)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("count", SignalKind::Int)]
     }
 
     fn process(
@@ -932,12 +960,15 @@ pub struct SampleAndHold {
 }
 
 impl Processor for SampleAndHold {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in"), String::from("trig")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("in", SignalKind::Sample),
+            SignalSpec::new("trig", SignalKind::Bool),
+        ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(
@@ -984,11 +1015,11 @@ impl CheckFinite {
 }
 
 impl Processor for CheckFinite {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", SignalKind::Sample)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
+    fn output_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
 

@@ -12,16 +12,16 @@ impl<S: SignalData> Cond<S> {
 }
 
 impl<S: SignalData> Processor for Cond<S> {
-    fn input_names(&self) -> Vec<String> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            String::from("cond"),
-            String::from("then"),
-            String::from("else"),
+            SignalSpec::new("cond", SignalKind::Bool),
+            SignalSpec::new("if_true", S::KIND),
+            SignalSpec::new("if_false", S::KIND),
         ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", S::KIND)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", S::KIND)]
     }
 
     fn process(
@@ -64,12 +64,12 @@ macro_rules! comparison_op {
         }
 
         impl<S: SignalData> Processor for $name<S> {
-            fn input_names(&self) -> Vec<String> {
-                vec![String::from("a"), String::from("b")]
+            fn input_spec(&self) -> Vec<SignalSpec> {
+                vec![SignalSpec::new("a", S::KIND), SignalSpec::new("b", S::KIND)]
             }
 
-            fn output_spec(&self) -> Vec<OutputSpec> {
-                vec![OutputSpec::new("out", SignalKind::Bool)]
+            fn output_spec(&self) -> Vec<SignalSpec> {
+                vec![SignalSpec::new("out", SignalKind::Bool)]
             }
 
             fn process(

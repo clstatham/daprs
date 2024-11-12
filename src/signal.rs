@@ -627,7 +627,7 @@ impl Into<Signal> for Sample {
     }
 }
 
-/// A signal kind, which can be either a sample or a message.
+/// Describes the type of data in a signal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SignalKind {
     /// A signal with any kind of value.
@@ -646,11 +646,11 @@ pub enum SignalKind {
     Midi,
 }
 
-/// A buffer that can contain either samples or messages.
+/// A buffer that can contain signals of any kind.
 #[derive(Debug, Clone)]
 pub enum SignalBuffer {
     Dynamic(Buffer<Signal>),
-    /// A buffer of samples. The buffer is guaranteed to be full of contiguous samples.
+    /// A buffer of samples.
     Sample(Buffer<Sample>),
     /// A buffer of integers.
     Int(Buffer<i64>),

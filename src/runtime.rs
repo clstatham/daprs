@@ -11,9 +11,9 @@ use rustc_hash::FxBuildHasher;
 
 use crate::{
     graph::{Graph, GraphRunError, GraphRunErrorKind, NodeIndex},
-    prelude::{OutputSpec, ProcessorInputs},
+    prelude::{ProcessorInputs, SignalSpec},
     processor::{ProcessorError, ProcessorOutputs},
-    signal::{Sample, SignalBuffer},
+    signal::{Sample, SignalBuffer, SignalKind},
 };
 
 /// An error that occurred during runtime operations.
@@ -117,8 +117,8 @@ pub enum MidiPort {
 /// Stores the input and output buffers for a node.
 #[derive(Clone)]
 pub struct NodeBuffers {
-    input_names: Vec<String>,
-    output_spec: Vec<OutputSpec>,
+    input_spec: Vec<SignalSpec>,
+    output_spec: Vec<SignalSpec>,
     outputs: Vec<SignalBuffer>,
 }
 
@@ -173,7 +173,7 @@ impl Runtime {
                 buffer_cache.insert(
                     node_id,
                     NodeBuffers {
-                        input_names: node.input_names().to_vec(),
+                        input_spec: node.input_spec().to_vec(),
                         output_spec: output_spec.to_vec(),
                         outputs,
                     },
@@ -218,7 +218,7 @@ impl Runtime {
                 self.buffer_cache.insert(
                     node_id,
                     NodeBuffers {
-                        input_names: node.input_names().to_vec(),
+                        input_spec: node.input_spec().to_vec(),
                         output_spec: output_spec.to_vec(),
                         outputs,
                     },
@@ -291,7 +291,7 @@ impl Runtime {
 
             let result = node.process(
                 ProcessorInputs {
-                    input_names: &buffers.input_names,
+                    input_specs: &buffers.input_spec,
                     inputs: &inputs[..],
                 },
                 ProcessorOutputs {
@@ -403,7 +403,11 @@ impl Runtime {
                 let buffer = self.get_output(i);
                 let SignalBuffer::Sample(buffer) = buffer else {
                     return Err(RuntimeError::ProcessorError(
-                        ProcessorError::OutputSpecMismatch(i),
+                        ProcessorError::OutputSpecMismatch {
+                            index: i,
+                            expected: SignalKind::Sample,
+                            actual: buffer.kind(),
+                        },
                     ));
                 };
 

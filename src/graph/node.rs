@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    prelude::{OutputSpec, Processor, ProcessorError, ProcessorInputs, ProcessorOutputs},
+    prelude::{Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, SignalSpec},
     signal::Sample,
 };
 
@@ -11,8 +11,8 @@ use crate::{
 #[derive(Clone)]
 pub struct ProcessorNode {
     pub(crate) processor: Box<dyn Processor>,
-    input_names: Vec<String>,
-    output_spec: Vec<OutputSpec>,
+    input_spec: Vec<SignalSpec>,
+    output_spec: Vec<SignalSpec>,
 }
 
 impl Debug for ProcessorNode {
@@ -29,11 +29,11 @@ impl ProcessorNode {
 
     /// Creates a new [`ProcessorNode`] from the given boxed [`Processor`] object.
     pub fn new_from_boxed(processor: Box<dyn Processor>) -> Self {
-        let input_names = processor.input_names();
+        let input_spec = processor.input_spec();
         let output_spec = processor.output_spec();
         Self {
             processor,
-            input_names,
+            input_spec,
             output_spec,
         }
     }
@@ -46,20 +46,20 @@ impl ProcessorNode {
 
     /// Returns information about the inputs this [`ProcessorNode`] expects.
     #[inline]
-    pub fn input_names(&self) -> &[String] {
-        &self.input_names
+    pub fn input_spec(&self) -> &[SignalSpec] {
+        &self.input_spec
     }
 
     /// Returns information about the outputs this [`ProcessorNode`] produces.
     #[inline]
-    pub fn output_spec(&self) -> &[OutputSpec] {
+    pub fn output_spec(&self) -> &[SignalSpec] {
         &self.output_spec
     }
 
     /// Returns the number of input buffers/channels this [`ProcessorNode`] expects.
     #[inline]
     pub fn num_inputs(&self) -> usize {
-        self.input_names.len()
+        self.input_spec.len()
     }
 
     /// Returns the number of output buffers/channels this [`ProcessorNode`] produces.

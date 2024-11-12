@@ -194,11 +194,24 @@ pub struct Input {
 }
 
 impl Input {
+    /// Returns the signal type of the input.
+    #[inline]
+    pub fn kind(&self) -> SignalKind {
+        self.node.graph.with_graph(|graph| {
+            graph.digraph()[self.node.id()].input_spec()[self.input_index as usize].kind
+        })
+    }
+
     /// Sets the value of the input.
     #[inline]
     pub fn set(&self, value: impl IntoNode) {
         let value = value.into_node(self.node.graph());
         value.assert_single_output();
+        assert_eq!(
+            self.kind(),
+            value.output_kind(0),
+            "output and input signals must have the same type"
+        );
         self.node.connect_input(&value, 0, self.input_index);
     }
 
@@ -212,6 +225,11 @@ impl Input {
     #[inline]
     #[track_caller]
     pub fn connect(&self, output: &Output) {
+        assert_eq!(
+            self.kind(),
+            output.kind(),
+            "output and input signals must have the same type"
+        );
         self.node
             .connect_input(&output.node, output.output_index, self.input_index);
     }
@@ -243,6 +261,11 @@ impl Output {
     #[inline]
     #[track_caller]
     pub fn connect(&self, input: &Input) {
+        assert_eq!(
+            self.kind(),
+            input.kind(),
+            "output and input signals must have the same type"
+        );
         self.node
             .connect_output(self.output_index, &input.node, input.input_index);
     }
@@ -506,9 +529,9 @@ impl IntoInputIdx for &str {
     fn into_input_idx(self, node: &Node) -> u32 {
         let Some(idx) = node.graph().with_graph(|graph| {
             graph.digraph()[node.id()]
-                .input_names()
+                .input_spec()
                 .iter()
-                .position(|s| s == self)
+                .position(|s| s.name == self)
         }) else {
             panic!("no input with name {self}")
         };

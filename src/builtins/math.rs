@@ -28,12 +28,12 @@ impl Constant {
 }
 
 impl Processor for Constant {
-    fn input_names(&self) -> Vec<String> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", self.value.kind())]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", self.value.kind())]
     }
 
     fn process(
@@ -57,7 +57,13 @@ impl Processor for Constant {
             (SignalBuffer::Midi(out), Signal::Midi(value)) => {
                 out.fill(Some(value.clone()));
             }
-            (_, _) => return Err(ProcessorError::OutputSpecMismatch(0)),
+            (out, _) => {
+                return Err(ProcessorError::OutputSpecMismatch {
+                    index: 0,
+                    expected: self.value.kind(),
+                    actual: out.kind(),
+                })
+            }
         }
 
         Ok(())
@@ -90,12 +96,12 @@ impl GraphBuilder {
 pub struct MidiToFreq;
 
 impl Processor for MidiToFreq {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("note")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("note", SignalKind::Sample)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("freq", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("freq", SignalKind::Sample)]
     }
 
     fn process(
@@ -135,12 +141,12 @@ impl Processor for MidiToFreq {
 pub struct FreqToMidi;
 
 impl Processor for FreqToMidi {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("freq")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("freq", SignalKind::Sample)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("note", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("note", SignalKind::Sample)]
     }
 
     fn process(
@@ -223,12 +229,15 @@ impl Expr {
 
 #[cfg(feature = "expr")]
 impl Processor for Expr {
-    fn input_names(&self) -> Vec<String> {
-        self.inputs.to_vec()
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        self.inputs
+            .iter()
+            .map(|name| SignalSpec::new(name, SignalKind::Sample))
+            .collect()
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(
@@ -242,12 +251,14 @@ impl Processor for Expr {
             self.input_values.clear();
 
             for (inp_idx, name) in self.inputs.iter().enumerate() {
-                let buffer = inputs
-                    .input(inp_idx)
-                    .ok_or(ProcessorError::InputSpecMismatch(inp_idx))?;
+                let buffer = &inputs.inputs[inp_idx].unwrap();
                 let buffer = buffer
                     .as_sample()
-                    .ok_or(ProcessorError::InputSpecMismatch(inp_idx))?;
+                    .ok_or(ProcessorError::InputSpecMismatch {
+                        index: inp_idx,
+                        expected: SignalKind::Sample,
+                        actual: buffer.kind(),
+                    })?;
 
                 self.input_values
                     .push((name.to_string(), buffer[samp_idx].unwrap()));
@@ -267,12 +278,15 @@ macro_rules! impl_binary_proc {
         pub struct $name;
 
         impl Processor for $name {
-            fn input_names(&self) -> Vec<String> {
-                vec![String::from("a"), String::from("b")]
+            fn input_spec(&self) -> Vec<SignalSpec> {
+                vec![
+                    SignalSpec::new("a", SignalKind::Sample),
+                    SignalSpec::new("b", SignalKind::Sample),
+                ]
             }
 
-            fn output_spec(&self) -> Vec<OutputSpec> {
-                vec![OutputSpec::new("out", SignalKind::Sample)]
+            fn output_spec(&self) -> Vec<SignalSpec> {
+                vec![SignalSpec::new("out", SignalKind::Sample)]
             }
 
             fn process(
@@ -565,12 +579,12 @@ macro_rules! impl_unary_proc {
         pub struct $name;
 
         impl Processor for $name {
-            fn input_names(&self) -> Vec<String> {
-                vec![String::from("in")]
+            fn input_spec(&self) -> Vec<SignalSpec> {
+                vec![SignalSpec::new("in", SignalKind::Sample)]
             }
 
-            fn output_spec(&self) -> Vec<OutputSpec> {
-                vec![OutputSpec::new("out", SignalKind::Sample)]
+            fn output_spec(&self) -> Vec<SignalSpec> {
+                vec![SignalSpec::new("out", SignalKind::Sample)]
             }
 
             fn process(

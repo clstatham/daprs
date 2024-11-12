@@ -63,16 +63,16 @@ impl MoogLadder {
 }
 
 impl Processor for MoogLadder {
-    fn input_names(&self) -> Vec<String> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            String::from("in"),
-            String::from("cutoff"),
-            String::from("resonance"),
+            SignalSpec::new("in", SignalKind::Sample),
+            SignalSpec::new("cutoff", SignalKind::Sample),
+            SignalSpec::new("resonance", SignalKind::Sample),
         ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -217,19 +217,19 @@ impl Biquad {
 }
 
 impl Processor for Biquad {
-    fn input_names(&self) -> Vec<String> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            String::from("in"),
-            String::from("a0"),
-            String::from("a1"),
-            String::from("a2"),
-            String::from("b1"),
-            String::from("b2"),
+            SignalSpec::new("in", SignalKind::Sample),
+            SignalSpec::new("a0", SignalKind::Sample),
+            SignalSpec::new("a1", SignalKind::Sample),
+            SignalSpec::new("a2", SignalKind::Sample),
+            SignalSpec::new("b1", SignalKind::Sample),
+            SignalSpec::new("b2", SignalKind::Sample),
         ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
@@ -577,17 +577,17 @@ impl AutoBiquad {
 }
 
 impl Processor for AutoBiquad {
-    fn input_names(&self) -> Vec<String> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            String::from("in"),
-            String::from("frequency"),
-            String::from("q"),
-            String::from("gain"),
+            SignalSpec::new("in", SignalKind::Sample),
+            SignalSpec::new("frequency", SignalKind::Sample),
+            SignalSpec::new("q", SignalKind::Sample),
+            SignalSpec::new("gain", SignalKind::Sample),
         ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {

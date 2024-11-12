@@ -45,18 +45,17 @@ impl AudioBuffer {
 }
 
 impl Processor for AudioBuffer {
-    fn input_names(&self) -> Vec<String> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            String::from("index"),
-            String::from("write"),
-            String::from("enable_write"),
+            SignalSpec::new("index", SignalKind::Sample),
+            SignalSpec::new("set", SignalKind::Sample),
         ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
+    fn output_spec(&self) -> Vec<SignalSpec> {
         vec![
-            OutputSpec::new("out", SignalKind::Sample),
-            OutputSpec::new("length", SignalKind::Int),
+            SignalSpec::new("out", SignalKind::Sample),
+            SignalSpec::new("length", SignalKind::Int),
         ]
     }
 
@@ -71,19 +70,16 @@ impl Processor for AudioBuffer {
     ) -> Result<(), ProcessorError> {
         let (mut outputs0, mut outputs1) = outputs.split_at_mut(1);
 
-        for (out, length, index, write, enable_write) in itertools::izip!(
+        for (out, length, index, write) in itertools::izip!(
             outputs0.iter_output_mut_as_samples(0)?,
             outputs1.iter_output_mut_as_ints(0)?,
             inputs.iter_input_as_samples(0)?,
             inputs.iter_input_as_samples(1)?,
-            inputs.iter_input_as_bools(2)?
         ) {
             self.index = index.unwrap_or(self.index);
 
-            if let Some(true) = enable_write {
-                if let Some(write) = write {
-                    self.buffer[self.index as usize] = Some(write);
-                }
+            if let Some(write) = write {
+                self.buffer[self.index as usize] = Some(write);
             }
 
             if self.index.fract() != 0.0 {
@@ -152,12 +148,15 @@ impl<S: SignalData> Default for Register<S> {
 }
 
 impl<S: SignalData> Processor for Register<S> {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("set"), String::from("clear")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("set", S::KIND),
+            SignalSpec::new("clear", SignalKind::Bool),
+        ]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", S::KIND)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", S::KIND)]
     }
 
     fn process(

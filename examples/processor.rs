@@ -6,12 +6,12 @@ struct GainProc {
 }
 
 impl Processor for GainProc {
-    fn input_names(&self) -> Vec<String> {
-        vec![String::from("in")]
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", SignalKind::Sample)]
     }
 
-    fn output_spec(&self) -> Vec<OutputSpec> {
-        vec![OutputSpec::new("out", SignalKind::Sample)]
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
     }
 
     fn process(
