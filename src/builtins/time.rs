@@ -3,7 +3,7 @@
 use crate::{
     prelude::{OutputSpec, Processor, ProcessorInputs, ProcessorOutputs},
     processor::ProcessorError,
-    signal::{Buffer, Sample, Signal, SignalBuffer, SignalKind},
+    signal::{Buffer, Sample, SignalBuffer, SignalKind},
 };
 
 /// A metronome that emits a bang at the given period.

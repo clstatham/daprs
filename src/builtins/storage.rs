@@ -145,6 +145,12 @@ impl<S: SignalData> Register<S> {
     }
 }
 
+impl<S: SignalData> Default for Register<S> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<S: SignalData> Processor for Register<S> {
     fn input_names(&self) -> Vec<String> {
         vec![String::from("set"), String::from("clear")]

@@ -224,7 +224,7 @@ impl Expr {
 #[cfg(feature = "expr")]
 impl Processor for Expr {
     fn input_names(&self) -> Vec<String> {
-        self.inputs.iter().cloned().collect()
+        self.inputs.to_vec()
     }
 
     fn output_spec(&self) -> Vec<OutputSpec> {

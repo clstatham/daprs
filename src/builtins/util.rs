@@ -10,7 +10,7 @@ use crossbeam_channel::{Receiver, Sender};
 use crate::{
     prelude::{GraphBuilder, Node, OutputSpec, Processor, ProcessorInputs, ProcessorOutputs},
     processor::ProcessorError,
-    signal::{Sample, Signal, SignalData, SignalKind},
+    signal::{Sample, SignalData, SignalKind},
 };
 
 /// A processor that forwards its input to its output.
@@ -240,7 +240,7 @@ impl Processor for Print {
             inputs.iter_input_as_strings(1)?
         ) {
             if let Some(message) = message {
-                self.msg = Some(format!("{}", message));
+                self.msg = Some(message.to_string());
             }
 
             if bang.is_some() {
@@ -368,7 +368,7 @@ impl Processor for Smooth {
             inputs.iter_input_as_samples(1)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
-            self.factor = factor.unwrap_or(self.factor).max(0.0).min(1.0);
+            self.factor = factor.unwrap_or(self.factor).clamp(0.0, 1.0);
 
             let Some(target) = target else {
                 *out = Some(self.current);
@@ -608,11 +608,6 @@ impl<S: SignalData> ParamRx<S> {
             last.clone()
         }
     }
-}
-
-pub(crate) fn message_channel<S: SignalData>() -> (MessageTx<S>, MessageRx<S>) {
-    let (tx, rx) = crossbeam_channel::unbounded();
-    (MessageTx::new(tx), MessageRx::new(rx))
 }
 
 pub(crate) fn param_channel<S: SignalData>() -> (MessageTx<S>, ParamRx<S>) {
@@ -1016,14 +1011,12 @@ impl Processor for CheckFinite {
         _outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let in_signal = inputs.iter_input_as_samples(0)?;
-        for in_signal in in_signal {
-            if let Some(in_signal) = in_signal {
-                if in_signal.is_nan() {
-                    panic!("{}: signal is NaN: {:?}", self.context, in_signal);
-                }
-                if in_signal.is_infinite() {
-                    panic!("{}: signal is infinite: {:?}", self.context, in_signal);
-                }
+        for in_signal in in_signal.flatten() {
+            if in_signal.is_nan() {
+                panic!("{}: signal is NaN: {:?}", self.context, in_signal);
+            }
+            if in_signal.is_infinite() {
+                panic!("{}: signal is infinite: {:?}", self.context, in_signal);
             }
         }
 

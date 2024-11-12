@@ -11,9 +11,9 @@ use rustc_hash::FxBuildHasher;
 
 use crate::{
     graph::{Graph, GraphRunError, GraphRunErrorKind, NodeIndex},
-    prelude::{OutputSpec, Param, ProcessorInputs},
+    prelude::{OutputSpec, ProcessorInputs},
     processor::{ProcessorError, ProcessorOutputs},
-    signal::{Sample, Signal, SignalBuffer},
+    signal::{Sample, SignalBuffer},
 };
 
 /// An error that occurred during runtime operations.

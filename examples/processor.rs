@@ -23,7 +23,11 @@ impl Processor for GainProc {
             inputs.iter_input_as_samples(0)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
-            *output = input * self.gain;
+            let Some(input) = input else {
+                *output = None;
+                continue;
+            };
+            *output = Some(input * self.gain);
         }
         Ok(())
     }

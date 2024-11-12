@@ -1,7 +1,5 @@
 //! A directed graph of [`Processor`]s connected by [`Edge`]s.
 
-use std::collections::VecDeque;
-
 use edge::Edge;
 use node::ProcessorNode;
 use petgraph::{
