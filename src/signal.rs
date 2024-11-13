@@ -349,7 +349,7 @@ impl MidiMessage {
     }
 
     pub fn status(&self) -> u8 {
-        self.data[0] >> 4
+        self.data[0] & 0xF0
     }
 
     pub fn channel(&self) -> u8 {

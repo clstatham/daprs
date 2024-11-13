@@ -224,3 +224,94 @@ impl Processor for SampleDelay {
         Ok(())
     }
 }
+
+/// An exponential decay envelope generator.
+///
+/// The envelope is generated using the formula `y = y * tau`.
+/// The envelope is clamped to the range `[0, 1]`.
+/// The envelope is triggered by a boolean signal.
+/// The envelope is reset to zero when the trigger signal is true.
+///
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `trig` | `Bool` | | The trigger signal. |
+/// | `1` | `tau` | `Sample` | `1.0` | The time constant of the envelope. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Sample` | The envelope signal. |
+#[derive(Debug, Clone)]
+pub struct DecayEnv {
+    tau: Sample,
+    value: Sample,
+    time: Sample,
+    sample_rate: Sample,
+}
+
+impl DecayEnv {
+    /// Creates a new decay envelope generator processor with the given time constant.
+    pub fn new(tau: Sample) -> Self {
+        Self {
+            tau,
+            value: 0.0,
+            time: 100.0,
+            sample_rate: 0.0,
+        }
+    }
+}
+
+impl Default for DecayEnv {
+    fn default() -> Self {
+        Self::new(1.0)
+    }
+}
+
+impl Processor for DecayEnv {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("trig", SignalKind::Bool),
+            SignalSpec::new("tau", SignalKind::Sample),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalKind::Sample)]
+    }
+
+    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+        self.sample_rate = sample_rate;
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        for (trig, tau, out) in itertools::izip!(
+            inputs.iter_input_as_bools(0)?,
+            inputs.iter_input_as_samples(1)?,
+            outputs.iter_output_mut_as_samples(0)?
+        ) {
+            self.tau = tau.unwrap_or(self.tau);
+
+            if trig.unwrap_or(false) {
+                self.value = 1.0;
+                self.time = 0.0;
+            } else {
+                self.time += self.sample_rate.recip();
+                self.value = (-self.tau.recip() * self.time).exp();
+            }
+
+            self.value = self.value.clamp(0.0, 1.0);
+
+            *out = Some(self.value);
+        }
+
+        Ok(())
+    }
+}

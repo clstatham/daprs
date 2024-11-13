@@ -799,6 +799,11 @@ impl_unary_node_ops!(
 impl_unary_node_ops!(sin, math::Sin, "Outputs the sine of the input signal.");
 impl_unary_node_ops!(cos, math::Cos, "Outputs the cosine of the input signal.");
 impl_unary_node_ops!(tan, math::Tan, "Outputs the tangent of the input signal.");
+impl_unary_node_ops!(
+    tanh,
+    math::Tanh,
+    "Outputs the hyperbolic tangent of the input signal."
+);
 
 impl_unary_node_ops!(
     recip,

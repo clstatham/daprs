@@ -111,7 +111,9 @@ impl<S: SignalData> Processor for Get<S> {
                 continue;
             };
 
-            *out = list.get(index as usize).as_ref().and_then(|s| s.cast());
+            *out = list
+                .get(index as usize)
+                .and_then(|s| S::try_from_signal(s.clone()));
         }
 
         Ok(())

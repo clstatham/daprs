@@ -54,8 +54,11 @@ impl Processor for Constant {
             (SignalBuffer::List(out), Signal::List(value)) => {
                 out.fill(Some(value.clone()));
             }
-            (SignalBuffer::Midi(out), Signal::Midi(value)) => {
+            (SignalBuffer::String(out), Signal::String(value)) => {
                 out.fill(Some(value.clone()));
+            }
+            (SignalBuffer::Midi(out), Signal::Midi(value)) => {
+                out.fill(Some(*value));
             }
             (out, _) => {
                 return Err(ProcessorError::OutputSpecMismatch {

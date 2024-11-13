@@ -414,6 +414,16 @@ pub struct Changed {
     threshold: Sample,
 }
 
+impl Changed {
+    /// Creates a new `Changed` with the given threshold.
+    pub fn new(threshold: Sample) -> Self {
+        Self {
+            last: 0.0,
+            threshold,
+        }
+    }
+}
+
 impl Processor for Changed {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -614,8 +624,14 @@ impl<S: SignalData> ParamRx<S> {
             *last = Some(msg.clone());
             Some(msg)
         } else {
-            last.clone()
+            None
+            // last.clone()
         }
+    }
+
+    /// Returns the last message received from the `Param`.
+    pub fn last(&self) -> Option<S> {
+        self.last.try_lock().ok()?.clone()
     }
 }
 
@@ -667,6 +683,10 @@ impl<S: SignalData> Param<S> {
         &self.channels.0
     }
 
+    pub fn rx(&self) -> &ParamRx<S> {
+        &self.channels.1
+    }
+
     /// Returns the receiver for this `Param`.
     pub fn rx_mut(&mut self) -> &mut ParamRx<S> {
         &mut self.channels.1
@@ -681,6 +701,11 @@ impl<S: SignalData> Param<S> {
     /// Gets the `Param`'s value.
     pub fn get(&mut self) -> Option<S> {
         self.rx_mut().recv()
+    }
+
+    /// Gets the last value received by the `Param`.
+    pub fn last(&self) -> Option<S> {
+        self.rx().last()
     }
 }
 

@@ -38,8 +38,10 @@ impl Processor for MidiNote {
         ) {
             *out = None;
             if let Some(msg) = midi {
-                let note = msg.data1() as Sample;
-                *out = Some(note);
+                if msg.status() == 0x90 {
+                    let note = msg.data1() as Sample;
+                    *out = Some(note);
+                }
             }
         }
         Ok(())
@@ -84,6 +86,104 @@ impl Processor for MidiVelocity {
             if let Some(msg) = midi {
                 let velocity = msg.data2() as Sample;
                 *out = Some(velocity);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A processor that outputs a gate signal based on a MIDI note on/off message.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `midi` | `Midi` | | The MIDI message. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `gate` | `Bool` | The gate signal. |
+#[derive(Debug, Clone, Default)]
+pub struct MidiGate {
+    gate: bool,
+}
+
+impl Processor for MidiGate {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("midi", SignalKind::Midi)]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("gate", SignalKind::Bool)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        for (midi, out) in itertools::izip!(
+            inputs.iter_input_as_midi(0)?,
+            outputs.iter_output_mut_as_bools(0)?
+        ) {
+            if let Some(msg) = midi {
+                let gate = match msg.status() {
+                    0x90 => msg.data2() > 0,
+                    0x80 => false,
+                    _ => false,
+                };
+                self.gate = gate;
+            }
+
+            *out = Some(self.gate);
+        }
+        Ok(())
+    }
+}
+
+/// A processor that triggers a signal based on a MIDI note on message.
+///
+/// The trigger signal is `true` for a single sample when a note on message is received.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Default | Description |
+/// | --- | --- | --- | --- | --- |
+/// | `0` | `midi` | `Midi` | | The MIDI message. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `trigger` | `Bool` | The trigger signal. |
+#[derive(Debug, Clone, Default)]
+pub struct MidiTrigger;
+
+impl Processor for MidiTrigger {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("midi", SignalKind::Midi)]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("trigger", SignalKind::Bool)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        for (midi, out) in itertools::izip!(
+            inputs.iter_input_as_midi(0)?,
+            outputs.iter_output_mut_as_bools(0)?
+        ) {
+            *out = None;
+            if let Some(msg) = midi {
+                if msg.status() == 0x90 && msg.data2() > 0 {
+                    *out = Some(true);
+                }
             }
         }
         Ok(())
