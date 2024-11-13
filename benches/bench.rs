@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use raug::prelude::*;
 
-const SAMPLE_RATE: Sample = 48_000.0;
+const SAMPLE_RATE: Float = 48_000.0;
 const BLOCK_SIZES: &[usize] = &[128, 512, 2048];
 
 mod generative1;

@@ -114,7 +114,7 @@ impl Node {
     /// Panics if the node has more than one output.
     #[inline]
     #[track_caller]
-    pub fn smooth(&self, factor: Sample) -> Node {
+    pub fn smooth(&self, factor: Float) -> Node {
         self.assert_single_output();
         self.output(0).smooth(factor)
     }
@@ -294,27 +294,27 @@ impl Output {
             (SignalKind::Int, SignalKind::Bool) => self.node.graph().add(Cast::<i64, bool>::new()),
 
             // bool <-> sample
-            (SignalKind::Bool, SignalKind::Sample) => {
-                self.node.graph().add(Cast::<bool, Sample>::new())
+            (SignalKind::Bool, SignalKind::Float) => {
+                self.node.graph().add(Cast::<bool, Float>::new())
             }
-            (SignalKind::Sample, SignalKind::Bool) => {
-                self.node.graph().add(Cast::<Sample, bool>::new())
+            (SignalKind::Float, SignalKind::Bool) => {
+                self.node.graph().add(Cast::<Float, bool>::new())
             }
 
             // int <-> sample
-            (SignalKind::Int, SignalKind::Sample) => {
-                self.node.graph().add(Cast::<i64, Sample>::new())
+            (SignalKind::Int, SignalKind::Float) => {
+                self.node.graph().add(Cast::<i64, Float>::new())
             }
-            (SignalKind::Sample, SignalKind::Int) => {
-                self.node.graph().add(Cast::<Sample, i64>::new())
+            (SignalKind::Float, SignalKind::Int) => {
+                self.node.graph().add(Cast::<Float, i64>::new())
             }
 
             // string <-> sample
-            (SignalKind::String, SignalKind::Sample) => {
-                self.node.graph().add(Cast::<String, Sample>::new())
+            (SignalKind::String, SignalKind::Float) => {
+                self.node.graph().add(Cast::<String, Float>::new())
             }
-            (SignalKind::Sample, SignalKind::String) => {
-                self.node.graph().add(Cast::<Sample, String>::new())
+            (SignalKind::Float, SignalKind::String) => {
+                self.node.graph().add(Cast::<Float, String>::new())
             }
 
             // string <-> int
@@ -340,7 +340,7 @@ impl Output {
             SignalKind::Dynamic => self.node.graph().add(Passthrough::<Signal>::new()),
             SignalKind::Bool => self.node.graph().add(Passthrough::<bool>::new()),
             SignalKind::Int => self.node.graph().add(Passthrough::<i64>::new()),
-            SignalKind::Sample => self.node.graph().add(Passthrough::<Sample>::new()),
+            SignalKind::Float => self.node.graph().add(Passthrough::<Float>::new()),
             SignalKind::String => self.node.graph().add(Passthrough::<String>::new()),
             SignalKind::List => self.node.graph().add(Passthrough::<List>::new()),
             SignalKind::Midi => self.node.graph().add(Passthrough::<MidiMessage>::new()),
@@ -357,7 +357,7 @@ impl Output {
             SignalKind::Dynamic => self.node.graph().add(Register::<Signal>::new()),
             SignalKind::Bool => self.node.graph().add(Register::<bool>::new()),
             SignalKind::Int => self.node.graph().add(Register::<i64>::new()),
-            SignalKind::Sample => self.node.graph().add(Register::<Sample>::new()),
+            SignalKind::Float => self.node.graph().add(Register::<Float>::new()),
             SignalKind::String => self.node.graph().add(Register::<String>::new()),
             SignalKind::List => self.node.graph().add(Register::<List>::new()),
             SignalKind::Midi => self.node.graph().add(Register::<MidiMessage>::new()),
@@ -368,7 +368,7 @@ impl Output {
 
     /// Creates a new, single-output node that smooths the output signal.
     #[inline]
-    pub fn smooth(&self, factor: Sample) -> Node {
+    pub fn smooth(&self, factor: Float) -> Node {
         let proc = self.node.graph().add(Smooth::default());
         proc.input("factor").set(factor);
         proc.input(0).connect(self);
@@ -408,7 +408,7 @@ impl Output {
             SignalKind::Dynamic => self.node.graph().add(Cond::<Signal>::new()),
             SignalKind::Bool => self.node.graph().add(Cond::<bool>::new()),
             SignalKind::Int => self.node.graph().add(Cond::<i64>::new()),
-            SignalKind::Sample => self.node.graph().add(Cond::<Sample>::new()),
+            SignalKind::Float => self.node.graph().add(Cond::<Float>::new()),
             SignalKind::String => self.node.graph().add(Cond::<String>::new()),
             SignalKind::List => self.node.graph().add(Cond::<List>::new()),
             SignalKind::Midi => self.node.graph().add(Cond::<MidiMessage>::new()),
@@ -439,7 +439,7 @@ mod sealed {
     impl Sealed for &super::Node {}
     impl Sealed for super::Signal {}
     impl<S: SignalData> Sealed for super::Param<S> {}
-    impl Sealed for crate::signal::Sample {}
+    impl Sealed for crate::signal::Float {}
     impl Sealed for i64 {}
     impl Sealed for u32 {}
     impl Sealed for &str {}
@@ -484,7 +484,7 @@ impl IntoNode for NodeIndex {
     }
 }
 
-impl IntoNode for Sample {
+impl IntoNode for Float {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.constant(self)
     }
@@ -651,7 +651,7 @@ macro_rules! impl_binary_node_ops {
             }
         }
 
-        impl std::ops::$std_op<Node> for Sample {
+        impl std::ops::$std_op<Node> for Float {
             type Output = Node;
 
             fn $name(self, other: Node) -> Node {
@@ -659,7 +659,7 @@ macro_rules! impl_binary_node_ops {
             }
         }
 
-        impl std::ops::$std_op<&Node> for Sample {
+        impl std::ops::$std_op<&Node> for Float {
             type Output = Node;
 
             fn $name(self, other: &Node) -> Node {
@@ -669,27 +669,27 @@ macro_rules! impl_binary_node_ops {
     };
 }
 
-impl_binary_node_ops!(add, Add, Add, (Sample => Sample, Int => i64), "Adds two signals together.");
-impl_binary_node_ops!(sub, Sub, Sub, (Sample => Sample, Int => i64), "Subtracts one signal from another.");
-impl_binary_node_ops!(mul, Mul, Mul, (Sample => Sample, Int => i64), "Multiplies two signals together.");
-impl_binary_node_ops!(div, Div, Div, (Sample => Sample, Int => i64), "Divides one signal by another.");
+impl_binary_node_ops!(add, Add, Add, (Float => Float, Int => i64), "Adds two signals together.");
+impl_binary_node_ops!(sub, Sub, Sub, (Float => Float, Int => i64), "Subtracts one signal from another.");
+impl_binary_node_ops!(mul, Mul, Mul, (Float => Float, Int => i64), "Multiplies two signals together.");
+impl_binary_node_ops!(div, Div, Div, (Float => Float, Int => i64), "Divides one signal by another.");
 impl_binary_node_ops!(
     rem,
     Rem,
     Rem,
-    (Sample => Sample, Int => i64),
+    (Float => Float, Int => i64),
     "Calculates the remainder of one signal divided by another."
 );
-impl_binary_node_ops!(powf, Powf, (Sample => Sample), "Raises one signal to the power of another.");
+impl_binary_node_ops!(powf, Powf, (Float => Float), "Raises one signal to the power of another.");
 impl_binary_node_ops!(
     atan2,
     Atan2,
-    (Sample => Sample),
+    (Float => Float),
     "Calculates the arctangent of the ratio of two signals."
 );
-impl_binary_node_ops!(hypot, Hypot, (Sample => Sample), "Calculates the hypotenuse of two signals.");
-impl_binary_node_ops!(max, Max, (Sample => Sample, Int => i64), "Outputs the maximum of two signals.");
-impl_binary_node_ops!(min, Min, (Sample => Sample, Int => i64), "Outputs the minimum of two signals.");
+impl_binary_node_ops!(hypot, Hypot, (Float => Float), "Calculates the hypotenuse of two signals.");
+impl_binary_node_ops!(max, Max, (Float => Float, Int => i64), "Outputs the maximum of two signals.");
+impl_binary_node_ops!(min, Min, (Float => Float, Int => i64), "Outputs the minimum of two signals.");
 
 macro_rules! impl_comparison_node_ops {
     ($name:ident, $proc:ident, $doc:expr) => {
@@ -712,7 +712,7 @@ macro_rules! impl_comparison_node_ops {
                     SignalKind::Dynamic => self.graph().add(control::$proc::<Signal>::new()),
                     SignalKind::Bool => self.graph().add(control::$proc::<bool>::default()),
                     SignalKind::Int => self.graph().add(control::$proc::<i64>::default()),
-                    SignalKind::Sample => self.graph().add(control::$proc::<Sample>::default()),
+                    SignalKind::Float => self.graph().add(control::$proc::<Float>::default()),
                     SignalKind::String => self.graph().add(control::$proc::<String>::default()),
                     _ => panic!("unsupported signal type"),
                 };
@@ -776,7 +776,7 @@ macro_rules! impl_unary_node_ops {
     };
 }
 
-impl_unary_node_ops!(neg, Neg, (Sample => Sample, Int => i64), "Negates the input signal.");
+impl_unary_node_ops!(neg, Neg, (Float => Float, Int => i64), "Negates the input signal.");
 
 impl std::ops::Neg for &Node {
     type Output = Node;
@@ -789,88 +789,88 @@ impl std::ops::Neg for &Node {
 impl_unary_node_ops!(
     abs,
     Abs,
-    (Sample => Sample, Int => i64),
+    (Float => Float, Int => i64),
     "Outputs the absolute value of the input signal."
 );
 impl_unary_node_ops!(
     sqrt,
     Sqrt,
-    (Sample => Sample),
+    (Float => Float),
     "Outputs the square root of the input signal."
 );
 impl_unary_node_ops!(
     cbrt,
     Cbrt,
-    (Sample => Sample),
+    (Float => Float),
     "Outputs the cube root of the input signal."
 );
 impl_unary_node_ops!(
     ceil,
     Ceil,
-    (Sample => Sample),
+    (Float => Float),
     "Rounds the input signal up to the nearest integer."
 );
 impl_unary_node_ops!(
     floor,
     Floor,
-    (Sample => Sample),
+    (Float => Float),
     "Rounds the input signal down to the nearest integer."
 );
 impl_unary_node_ops!(
     round,
     Round,
-    (Sample => Sample),
+    (Float => Float),
     "Rounds the input signal to the nearest integer."
 );
-impl_unary_node_ops!(sin, Sin, (Sample => Sample), "Outputs the sine of the input signal.");
-impl_unary_node_ops!(cos, Cos, (Sample => Sample), "Outputs the cosine of the input signal.");
-impl_unary_node_ops!(tan, Tan, (Sample => Sample), "Outputs the tangent of the input signal.");
+impl_unary_node_ops!(sin, Sin, (Float => Float), "Outputs the sine of the input signal.");
+impl_unary_node_ops!(cos, Cos, (Float => Float), "Outputs the cosine of the input signal.");
+impl_unary_node_ops!(tan, Tan, (Float => Float), "Outputs the tangent of the input signal.");
 impl_unary_node_ops!(
     tanh,
     Tanh,
-    (Sample => Sample),
+    (Float => Float),
     "Outputs the hyperbolic tangent of the input signal."
 );
 
 impl_unary_node_ops!(
     recip,
     Recip,
-    (Sample => Sample),
+    (Float => Float),
     "Outputs the reciprocal of the input signal."
 );
 impl_unary_node_ops!(
     signum,
     Signum,
-    (Sample => Sample, Int => i64),
+    (Float => Float, Int => i64),
     "Outputs the sign of the input signal."
 );
 impl_unary_node_ops!(
     fract,
     Fract,
-    (Sample => Sample),
+    (Float => Float),
     "Outputs the fractional part of the input signal."
 );
 impl_unary_node_ops!(
     ln,
     Ln,
-    (Sample => Sample),
+    (Float => Float),
     "Outputs the natural logarithm of the input signal."
 );
 impl_unary_node_ops!(
     log2,
     Log2,
-    (Sample => Sample),
+    (Float => Float),
     "Outputs the base-2 logarithm of the input signal."
 );
 impl_unary_node_ops!(
     log10,
     Log10,
-    (Sample => Sample),
+    (Float => Float),
     "Outputs the base-10 logarithm of the input signal."
 );
 impl_unary_node_ops!(
     exp,
     Exp,
-    (Sample => Sample),
+    (Float => Float),
     "Outputs the natural exponential of the input signal."
 );

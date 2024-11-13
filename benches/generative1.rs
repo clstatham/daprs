@@ -10,8 +10,8 @@ pub fn random(graph: &GraphBuilder, trig: &Node) -> Node {
 
 pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Node {
     let index = random(graph, trig);
-    let index = index * (options.len() + 1) as Sample;
-    let index = index % options.len() as Sample;
+    let index = index * (options.len() + 1) as Float;
+    let index = index % options.len() as Float;
     let index = index.cast(SignalKind::Int);
 
     let select = graph.add(Select::<bool>::new(options.len()));
@@ -20,11 +20,11 @@ pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Nod
         .connect(&graph.constant(Signal::new_bool(true)).output(0));
     select.input("index").connect(&index.output(0));
 
-    let merge = graph.add(Merge::<Sample>::new(options.len()));
+    let merge = graph.add(Merge::<Float>::new(options.len()));
 
     let msgs = options
         .iter()
-        .map(|_| graph.add(MessageSender::<Sample>::new(0.0)))
+        .map(|_| graph.add(MessageSender::<Float>::new(0.0)))
         .collect::<Vec<_>>();
 
     for (i, (option, msg)) in options.iter().zip(msgs.iter()).enumerate() {
@@ -57,36 +57,36 @@ pub fn decay_env(graph: &GraphBuilder, trig: &Node, decay: &Node) -> Node {
     env.smooth(0.001)
 }
 
-pub fn midi_to_freq(midi: Sample) -> Sample {
-    440.0 * Sample::powf(2.0, (midi - 69.0) / 12.0)
+pub fn midi_to_freq(midi: Float) -> Float {
+    440.0 * Float::powf(2.0, (midi - 69.0) / 12.0)
 }
 
-pub fn scale_freqs(detune: Sample) -> Vec<Sample> {
+pub fn scale_freqs(detune: Float) -> Vec<Float> {
     // minor scale
     let scale = [0, 2, 3, 5, 7, 8, 10];
     let base = 60; // C4
     let mut freqs = vec![];
     for note in &scale {
-        freqs.push(midi_to_freq(base as Sample + *note as Sample + detune));
+        freqs.push(midi_to_freq(base as Float + *note as Float + detune));
     }
     let base = 72;
     for note in &scale {
-        freqs.push(midi_to_freq(base as Sample + *note as Sample + detune));
+        freqs.push(midi_to_freq(base as Float + *note as Float + detune));
     }
     let base = 48;
     for note in &scale {
-        freqs.push(midi_to_freq(base as Sample + *note as Sample + detune));
+        freqs.push(midi_to_freq(base as Float + *note as Float + detune));
     }
     freqs
 }
 
 pub fn random_tones(
     graph: &GraphBuilder,
-    rates: &[Sample],
-    ratios: &[Sample],
-    freqs: &[Sample],
-    decays: &[Sample],
-    amps: &[Sample],
+    rates: &[Float],
+    ratios: &[Float],
+    freqs: &[Float],
+    decays: &[Float],
+    amps: &[Float],
 ) -> Node {
     let mast = graph.add(Metro::default());
     mast.input(0).set(rates[0]);
@@ -171,11 +171,11 @@ pub fn generative1(num_tones: usize) -> GraphBuilder {
     let out1 = graph.add_audio_output();
     let out2 = graph.add_audio_output();
 
-    let amp = graph.add_param(Param::<Sample>::new("amp", Some(0.5)));
+    let amp = graph.add_param(Param::<Float>::new("amp", Some(0.5)));
 
     let mut tones = vec![];
     for i in 0..num_tones {
-        let freqs = scale_freqs(i as Sample * 0.00);
+        let freqs = scale_freqs(i as Float * 0.00);
         let tone = random_tones(&graph, &rates, &ratios, &freqs, &decays, &amps);
         tones.push(tone);
     }

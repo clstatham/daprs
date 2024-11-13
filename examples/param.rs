@@ -16,7 +16,7 @@ fn main() {
 
     // create a parameter for the frequency
     // this will allow us to change the frequency of the sine oscillator while the graph is running
-    let freq_param: Param<Sample> = sine.input("frequency").param("freq", Some(440.0));
+    let freq_param: Param<Float> = sine.input("frequency").param("freq", Some(440.0));
 
     // set the amplitude of the sine oscillator
     let sine = sine * 0.2;

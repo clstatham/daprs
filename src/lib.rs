@@ -28,7 +28,7 @@ pub mod prelude {
     };
     pub use crate::runtime::{AudioBackend, AudioDevice, MidiPort, Runtime, RuntimeHandle};
     pub use crate::signal::{
-        Buffer, List, MidiMessage, Sample, Signal, SignalBuffer, SignalData, SignalKind,
+        Buffer, Float, List, MidiMessage, Signal, SignalBuffer, SignalData, SignalKind,
     };
     pub use std::time::Duration;
 }

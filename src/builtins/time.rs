@@ -3,7 +3,7 @@
 use crate::{
     prelude::{Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
-    signal::{Buffer, Sample, SignalBuffer, SignalKind},
+    signal::{Buffer, Float, SignalBuffer, SignalKind},
 };
 
 /// A metronome that emits a bang at the given period.
@@ -12,7 +12,7 @@ use crate::{
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `period` | `Sample` | | The period of the metronome in seconds. |
+/// | `0` | `period` | `Float` | | The period of the metronome in seconds. |
 /// | `1` | `reset` | `Bool` | | Resets the metronome. |
 ///
 /// # Outputs
@@ -23,16 +23,16 @@ use crate::{
 #[derive(Debug, Clone)]
 
 pub struct Metro {
-    period: Sample,
-    last_time: Sample,
-    next_time: Sample,
-    time: Sample,
-    sample_rate: Sample,
+    period: Float,
+    last_time: Float,
+    next_time: Float,
+    time: Float,
+    sample_rate: Float,
 }
 
 impl Metro {
     /// Creates a new metronome processor with the given period.
-    pub fn new(period: Sample) -> Self {
+    pub fn new(period: Float) -> Self {
         Self {
             period,
             last_time: 0.0,
@@ -66,7 +66,7 @@ impl Default for Metro {
 impl Processor for Metro {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("period", SignalKind::Sample),
+            SignalSpec::new("period", SignalKind::Float),
             SignalSpec::new("reset", SignalKind::Bool),
         ]
     }
@@ -75,7 +75,7 @@ impl Processor for Metro {
         vec![SignalSpec::new("out", SignalKind::Bool)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -116,16 +116,16 @@ impl Processor for Metro {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Sample` | | The input signal to delay. |
+/// | `0` | `in` | `Float` | | The input signal to delay. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The delayed output signal. |
+/// | `0` | `out` | `Float` | The delayed output signal. |
 #[derive(Debug, Clone, Default)]
 pub struct UnitDelay {
-    value: Option<Sample>,
+    value: Option<Float>,
 }
 
 impl UnitDelay {
@@ -137,11 +137,11 @@ impl UnitDelay {
 
 impl Processor for UnitDelay {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", SignalKind::Sample)]
+        vec![SignalSpec::new("in", SignalKind::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
     fn process(
@@ -169,14 +169,14 @@ impl Processor for UnitDelay {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Sample` | | The input signal to delay. |
+/// | `0` | `in` | `Float` | | The input signal to delay. |
 /// | `1` | `delay` | `Message(int)` | | The number of samples to delay the input signal. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The delayed output signal. |
+/// | `0` | `out` | `Float` | The delayed output signal. |
 #[derive(Debug, Clone)]
 pub struct SampleDelay {
     play_head: usize,
@@ -186,7 +186,7 @@ pub struct SampleDelay {
 impl SampleDelay {
     /// Creates a new sample delay processor.
     pub fn new(max_delay: usize) -> Self {
-        let buffer = SignalBuffer::Sample(Buffer::zeros(max_delay));
+        let buffer = SignalBuffer::Float(Buffer::zeros(max_delay));
         Self {
             buffer,
             play_head: 0,
@@ -197,13 +197,13 @@ impl SampleDelay {
 impl Processor for SampleDelay {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Sample),
+            SignalSpec::new("in", SignalKind::Float),
             SignalSpec::new("delay", SignalKind::Int),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
     fn process(
@@ -249,25 +249,25 @@ impl Processor for SampleDelay {
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
 /// | `0` | `trig` | `Bool` | | The trigger signal. |
-/// | `1` | `tau` | `Sample` | `1.0` | The time constant of the envelope. |
+/// | `1` | `tau` | `Float` | `1.0` | The time constant of the envelope. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The envelope signal. |
+/// | `0` | `out` | `Float` | The envelope signal. |
 #[derive(Debug, Clone)]
 pub struct DecayEnv {
     last_trig: bool,
-    tau: Sample,
-    value: Sample,
-    time: Sample,
-    sample_rate: Sample,
+    tau: Float,
+    value: Float,
+    time: Float,
+    sample_rate: Float,
 }
 
 impl DecayEnv {
     /// Creates a new decay envelope generator processor with the given time constant.
-    pub fn new(tau: Sample) -> Self {
+    pub fn new(tau: Float) -> Self {
         Self {
             last_trig: false,
             tau,
@@ -288,15 +288,15 @@ impl Processor for DecayEnv {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("trig", SignalKind::Bool),
-            SignalSpec::new("tau", SignalKind::Sample),
+            SignalSpec::new("tau", SignalKind::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 

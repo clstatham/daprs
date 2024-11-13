@@ -17,32 +17,32 @@ use crate::{
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `increment` | `Sample` | `0.0` | The phase increment per sample. |
+/// | `0` | `increment` | `Float` | `0.0` | The phase increment per sample. |
 /// | `1` | `reset` | `Message(Bang)` |  | A message to reset the phase accumulator. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The output phase signal. |
+/// | `0` | `out` | `Float` | The output phase signal. |
 #[derive(Clone, Debug, Default)]
 pub struct PhaseAccumulator {
     // phase accumulator
-    t: Sample,
+    t: Float,
     // phase increment per sample
-    t_step: Sample,
+    t_step: Float,
 }
 
 impl Processor for PhaseAccumulator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("increment", SignalKind::Sample),
+            SignalSpec::new("increment", SignalKind::Float),
             SignalSpec::new("reset", SignalKind::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
     fn process(
@@ -79,33 +79,33 @@ impl Processor for PhaseAccumulator {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `frequency` | `Sample` | `440.0` | The frequency of the sine wave in Hz. |
-/// | `1` | `phase` | `Sample` | `0.0` | The phase of the sine wave in radians. |
+/// | `0` | `frequency` | `Float` | `440.0` | The frequency of the sine wave in Hz. |
+/// | `1` | `phase` | `Float` | `0.0` | The phase of the sine wave in radians. |
 /// | `2` | `reset` | `Message(Bang)` |  | A message to reset the oscillator phase. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The output sine wave signal. |
+/// | `0` | `out` | `Float` | The output sine wave signal. |
 #[derive(Clone, Debug)]
 pub struct SineOscillator {
     // phase accumulator
-    t: Sample,
+    t: Float,
     // phase increment per sample
-    t_step: Sample,
+    t_step: Float,
     // sample rate
-    sample_rate: Sample,
+    sample_rate: Float,
 
     /// The frequency of the sine wave in Hz.
-    pub frequency: Sample,
+    pub frequency: Float,
     /// The phase of the sine wave in radians.
-    pub phase: Sample,
+    pub phase: Float,
 }
 
 impl SineOscillator {
     /// Creates a new sine wave oscillator.
-    pub fn new(frequency: Sample) -> Self {
+    pub fn new(frequency: Float) -> Self {
         Self {
             frequency,
             ..Default::default()
@@ -128,17 +128,17 @@ impl Default for SineOscillator {
 impl Processor for SineOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("frequency", SignalKind::Sample),
-            SignalSpec::new("phase", SignalKind::Sample),
+            SignalSpec::new("frequency", SignalKind::Float),
+            SignalSpec::new("phase", SignalKind::Float),
             SignalSpec::new("reset", SignalKind::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -184,28 +184,28 @@ impl Processor for SineOscillator {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `frequency` | `Sample` | `440.0` | The frequency of the sawtooth wave in Hz. |
-/// | `1` | `phase` | `Sample` | `0.0` | The phase of the sawtooth wave in radians. |
+/// | `0` | `frequency` | `Float` | `440.0` | The frequency of the sawtooth wave in Hz. |
+/// | `1` | `phase` | `Float` | `0.0` | The phase of the sawtooth wave in radians. |
 /// | `2` | `reset` | `Message(Bang)` |  | A message to reset the oscillator phase. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The output sawtooth wave signal. |
+/// | `0` | `out` | `Float` | The output sawtooth wave signal. |
 #[derive(Clone, Debug)]
 pub struct SawOscillator {
     // phase accumulator
-    t: Sample,
+    t: Float,
     // phase increment per sample
-    t_step: Sample,
+    t_step: Float,
     // sample rate
-    sample_rate: Sample,
+    sample_rate: Float,
 
     /// The frequency of the sawtooth wave in Hz.
-    pub frequency: Sample,
+    pub frequency: Float,
     /// The phase of the sawtooth wave in radians.
-    pub phase: Sample,
+    pub phase: Float,
 }
 
 impl Default for SawOscillator {
@@ -222,7 +222,7 @@ impl Default for SawOscillator {
 
 impl SawOscillator {
     /// Creates a new sawtooth wave oscillator.
-    pub fn new(frequency: Sample) -> Self {
+    pub fn new(frequency: Float) -> Self {
         Self {
             frequency,
             ..Default::default()
@@ -233,17 +233,17 @@ impl SawOscillator {
 impl Processor for SawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("frequency", SignalKind::Sample),
-            SignalSpec::new("phase", SignalKind::Sample),
+            SignalSpec::new("frequency", SignalKind::Float),
+            SignalSpec::new("phase", SignalKind::Float),
             SignalSpec::new("reset", SignalKind::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -295,7 +295,7 @@ impl Processor for SawOscillator {
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The output noise signal. |
+/// | `0` | `out` | `Float` | The output noise signal. |
 #[derive(Clone, Debug)]
 pub struct NoiseOscillator {
     distribution: rand::distributions::Uniform<f64>,
@@ -322,7 +322,7 @@ impl Processor for NoiseOscillator {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
     fn process(
@@ -333,7 +333,7 @@ impl Processor for NoiseOscillator {
         let mut rng = rand::thread_rng();
         for out in outputs.iter_output_mut_as_samples(0)? {
             // generate a random number
-            *out = Some(self.distribution.sample(&mut rng) as Sample);
+            *out = Some(self.distribution.sample(&mut rng) as Float);
         }
 
         Ok(())
@@ -348,22 +348,22 @@ impl Processor for NoiseOscillator {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `frequency` | `Sample` | `440.0` | The frequency of the sawtooth wave in Hz. |
+/// | `0` | `frequency` | `Float` | `440.0` | The frequency of the sawtooth wave in Hz. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The output sawtooth wave signal. |
+/// | `0` | `out` | `Float` | The output sawtooth wave signal. |
 #[derive(Clone, Debug)]
 pub struct BlSawOscillator {
-    p: Sample,
-    dp: Sample,
-    saw: Sample,
-    sample_rate: Sample,
+    p: Float,
+    dp: Float,
+    saw: Float,
+    sample_rate: Float,
 
     /// The frequency of the sawtooth wave in Hz.
-    pub frequency: Sample,
+    pub frequency: Float,
 }
 
 impl Default for BlSawOscillator {
@@ -380,7 +380,7 @@ impl Default for BlSawOscillator {
 
 impl BlSawOscillator {
     /// Creates a new band-limited sawtooth wave oscillator.
-    pub fn new(frequency: Sample) -> Self {
+    pub fn new(frequency: Float) -> Self {
         Self {
             frequency,
             ..Default::default()
@@ -390,14 +390,14 @@ impl BlSawOscillator {
 
 impl Processor for BlSawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("frequency", SignalKind::Sample)]
+        vec![SignalSpec::new("frequency", SignalKind::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -448,20 +448,20 @@ const BL_SQUARE_MAX_HARMONICS: usize = 512;
 /// A free-running band-limited square wave oscillator.
 #[derive(Clone, Debug)]
 pub struct BlSquareOscillator {
-    sample_rate: Sample,
+    sample_rate: Float,
 
     // phase accumulator
-    t: Sample,
+    t: Float,
     // phase increment per sample
-    t_step: Sample,
+    t_step: Float,
 
     // band-limited square wave coefficients
-    coeff: Box<[Sample; BL_SQUARE_MAX_HARMONICS]>,
+    coeff: Box<[Float; BL_SQUARE_MAX_HARMONICS]>,
 
     /// The frequency of the square wave in Hz.
-    pub frequency: Sample,
+    pub frequency: Float,
     /// The pulse width of the square wave.
-    pub pulse_width: Sample,
+    pub pulse_width: Float,
 }
 
 impl Default for BlSquareOscillator {
@@ -472,7 +472,7 @@ impl Default for BlSquareOscillator {
 
 impl BlSquareOscillator {
     /// Creates a new band-limited square wave oscillator.
-    pub fn new(frequency: Sample, pulse_width: Sample) -> Self {
+    pub fn new(frequency: Float, pulse_width: Float) -> Self {
         Self {
             frequency,
             pulse_width,
@@ -487,16 +487,16 @@ impl BlSquareOscillator {
 impl Processor for BlSquareOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("frequency", SignalKind::Sample),
-            SignalSpec::new("pulse_width", SignalKind::Sample),
+            SignalSpec::new("frequency", SignalKind::Float),
+            SignalSpec::new("pulse_width", SignalKind::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -524,14 +524,14 @@ impl Processor for BlSquareOscillator {
             self.coeff[0] = self.pulse_width - 0.5;
             for i in 1..n_harm + 1 {
                 self.coeff[i] =
-                    Sample::sin(i as Sample * PI * self.pulse_width) * 2.0 / (i as Sample * PI);
+                    Float::sin(i as Float * PI * self.pulse_width) * 2.0 / (i as Float * PI);
             }
 
             let theta = self.t * TAU;
 
             let mut square = 0.0;
             for i in 0..n_harm + 1 {
-                square += self.coeff[i] * (theta * i as Sample).cos();
+                square += self.coeff[i] * (theta * i as Float).cos();
             }
 
             self.t += self.t_step;

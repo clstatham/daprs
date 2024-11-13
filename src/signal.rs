@@ -8,24 +8,24 @@ use std::{
 
 #[cfg(feature = "f32_samples")]
 /// The type of samples used in the signal processing system.
-pub type Sample = f32;
+pub type Float = f32;
 #[cfg(not(feature = "f32_samples"))]
 /// The type of samples used in the signal processing system.
-pub type Sample = f64;
+pub type Float = f64;
 
 #[cfg(feature = "f32_samples")]
 /// The value of π.
-pub const PI: Sample = std::f32::consts::PI;
+pub const PI: Float = std::f32::consts::PI;
 /// The value of π.
 #[cfg(not(feature = "f32_samples"))]
-pub const PI: Sample = std::f64::consts::PI;
+pub const PI: Float = std::f64::consts::PI;
 
 #[cfg(feature = "f32_samples")]
 /// The value of τ (2π).
-pub const TAU: Sample = std::f32::consts::TAU;
+pub const TAU: Float = std::f32::consts::TAU;
 #[cfg(not(feature = "f32_samples"))]
 /// The value of τ (2π).
-pub const TAU: Sample = std::f64::consts::TAU;
+pub const TAU: Float = std::f64::consts::TAU;
 
 /// An owning array of signal data.
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
@@ -60,7 +60,7 @@ impl<T: SignalData> Buffer<T> {
     }
 }
 
-impl Buffer<Sample> {
+impl Buffer<Float> {
     /// Loads a buffer from a WAV file.
     ///
     /// Multi-channel WAV files are supported, but only the first channel will be loaded.
@@ -108,39 +108,39 @@ impl Buffer<Sample> {
 
     /// Returns the maximum value in the buffer.
     #[inline]
-    pub fn max(&self) -> Sample {
+    pub fn max(&self) -> Float {
         self.buf
             .iter()
             .flatten()
             .copied()
-            .fold(Sample::MIN, |a, b| a.max(b))
+            .fold(Float::MIN, |a, b| a.max(b))
     }
 
     /// Returns the minimum value in the buffer.
     #[inline]
-    pub fn min(&self) -> Sample {
+    pub fn min(&self) -> Float {
         self.buf
             .iter()
             .flatten()
             .copied()
-            .fold(Sample::MAX, |a, b| a.min(b))
+            .fold(Float::MAX, |a, b| a.min(b))
     }
 
     /// Returns the sum of all values in the buffer.
     #[inline]
-    pub fn sum(&self) -> Sample {
+    pub fn sum(&self) -> Float {
         self.buf.iter().flatten().copied().fold(0.0, |a, b| a + b)
     }
 
     /// Returns the mean of all values in the buffer.
     #[inline]
-    pub fn mean(&self) -> Sample {
-        self.sum() / self.len() as Sample
+    pub fn mean(&self) -> Float {
+        self.sum() / self.len() as Float
     }
 
     /// Returns the root mean square of all values in the buffer.
     #[inline]
-    pub fn rms(&self) -> Sample {
+    pub fn rms(&self) -> Float {
         self.buf
             .iter()
             .flatten()
@@ -150,7 +150,7 @@ impl Buffer<Sample> {
 
     /// Returns the variance of all values in the buffer.
     #[inline]
-    pub fn variance(&self) -> Sample {
+    pub fn variance(&self) -> Float {
         let mean = self.mean();
         let sum = self
             .buf
@@ -158,12 +158,12 @@ impl Buffer<Sample> {
             .flatten()
             .copied()
             .fold(0.0, |a, b| a + (b - mean) * (b - mean));
-        sum / (self.len() - 1) as Sample
+        sum / (self.len() - 1) as Float
     }
 
     /// Returns the standard deviation of all values in the buffer.
     #[inline]
-    pub fn stddev(&self) -> Sample {
+    pub fn stddev(&self) -> Float {
         self.variance().sqrt()
     }
 }
@@ -278,11 +278,11 @@ impl From<Vec<Signal>> for List {
     }
 }
 
-impl From<Vec<Sample>> for List {
-    fn from(items: Vec<Sample>) -> Self {
+impl From<Vec<Float>> for List {
+    fn from(items: Vec<Float>) -> Self {
         let items = items.into_iter().map(Signal::new_sample).collect();
         Self {
-            kind: SignalKind::Sample,
+            kind: SignalKind::Float,
             items,
         }
     }
@@ -419,18 +419,18 @@ impl SignalData for Signal {
     }
 }
 
-impl SignalData for Sample {
-    const KIND: SignalKind = SignalKind::Sample;
+impl SignalData for Float {
+    const KIND: SignalKind = SignalKind::Float;
 
     #[inline]
     fn into_signal(this: Self) -> Signal {
-        Signal::Sample(this)
+        Signal::Float(this)
     }
 
     #[inline]
     fn try_from_signal(signal: Signal) -> Option<Self> {
         match signal {
-            Signal::Sample(sample) => Some(sample),
+            Signal::Float(sample) => Some(sample),
             _ => None,
         }
     }
@@ -587,7 +587,7 @@ pub enum Signal {
     /// A signal with no value. The inner [`SignalKind`] specifies the kind of signal this would be if it had a value.
     None(SignalKind),
     /// A single sample of audio.
-    Sample(Sample),
+    Float(Float),
     /// An integer.
     Int(i64),
     /// A boolean.
@@ -607,8 +607,8 @@ impl Signal {
     }
 
     /// Creates a new sample signal with the given value.
-    pub const fn new_sample(value: Sample) -> Self {
-        Self::Sample(value)
+    pub const fn new_sample(value: Float) -> Self {
+        Self::Float(value)
     }
 
     /// Creates a new integer signal with the given value.
@@ -645,7 +645,7 @@ impl Signal {
     /// Returns `true` if the signal is a sample.
     #[inline]
     pub fn is_sample(&self) -> bool {
-        matches!(self, Self::Sample(_))
+        matches!(self, Self::Float(_))
     }
 
     /// Returns `true` if the signal is an integer.
@@ -678,11 +678,11 @@ impl Signal {
         matches!(self, Self::Midi(_))
     }
 
-    /// Returns the inner [`Sample`], if this is a sample signal.
+    /// Returns the inner [`Float`], if this is a sample signal.
     #[inline]
-    pub fn as_sample(&self) -> Option<Sample> {
+    pub fn as_sample(&self) -> Option<Float> {
         match self {
-            Self::Sample(sample) => Some(*sample),
+            Self::Float(sample) => Some(*sample),
             _ => None,
         }
     }
@@ -735,7 +735,7 @@ impl Signal {
     pub fn is_same_kind(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::None(kind), Self::None(other_kind)) => kind == other_kind,
-            (Self::Sample(_), Self::Sample(_)) => true,
+            (Self::Float(_), Self::Float(_)) => true,
             (Self::Int(_), Self::Int(_)) => true,
             (Self::Bool(_), Self::Bool(_)) => true,
             (Self::String(_), Self::String(_)) => true,
@@ -748,7 +748,7 @@ impl Signal {
     pub fn kind(&self) -> SignalKind {
         match self {
             Self::None(kind) => *kind,
-            Self::Sample(_) => SignalKind::Sample,
+            Self::Float(_) => SignalKind::Float,
             Self::Int(_) => SignalKind::Int,
             Self::Bool(_) => SignalKind::Bool,
             Self::String(_) => SignalKind::String,
@@ -765,19 +765,19 @@ impl Signal {
                 (Self::None(_), _) => None,
 
                 // sample <-> int
-                (Self::Sample(sample), SignalKind::Int) => {
+                (Self::Float(sample), SignalKind::Int) => {
                     T::try_from_signal(Signal::Int(*sample as i64))
                 }
-                (Self::Int(int), SignalKind::Sample) => {
-                    T::try_from_signal(Signal::Sample(*int as Sample))
+                (Self::Int(int), SignalKind::Float) => {
+                    T::try_from_signal(Signal::Float(*int as Float))
                 }
 
                 // sample <-> bool
-                (Self::Sample(sample), SignalKind::Bool) => {
+                (Self::Float(sample), SignalKind::Bool) => {
                     T::try_from_signal(Signal::Bool(*sample != 0.0))
                 }
-                (Self::Bool(bool), SignalKind::Sample) => {
-                    T::try_from_signal(Signal::Sample(if *bool { 1.0 } else { 0.0 }))
+                (Self::Bool(bool), SignalKind::Float) => {
+                    T::try_from_signal(Signal::Float(if *bool { 1.0 } else { 0.0 }))
                 }
 
                 // int <-> bool
@@ -787,10 +787,10 @@ impl Signal {
                 }
 
                 // string <-> sample
-                (Self::String(string), SignalKind::Sample) => {
-                    T::try_from_signal(Signal::Sample(string.parse().ok()?))
+                (Self::String(string), SignalKind::Float) => {
+                    T::try_from_signal(Signal::Float(string.parse().ok()?))
                 }
-                (Self::Sample(sample), SignalKind::String) => {
+                (Self::Float(sample), SignalKind::String) => {
                     T::try_from_signal(Signal::String(sample.to_string()))
                 }
 
@@ -808,9 +808,9 @@ impl Signal {
     }
 }
 
-impl From<Sample> for Signal {
-    fn from(sample: Sample) -> Self {
-        Self::Sample(sample)
+impl From<Float> for Signal {
+    fn from(sample: Float) -> Self {
+        Self::Float(sample)
     }
 }
 
@@ -849,8 +849,8 @@ impl From<MidiMessage> for Signal {
 pub enum SignalKind {
     /// A signal with any kind of value.
     Dynamic,
-    /// A sample or float value.
-    Sample,
+    /// A floating-point value.
+    Float,
     /// An integer message.
     Int,
     /// A boolean message.
@@ -868,7 +868,7 @@ pub enum SignalKind {
 pub enum SignalBuffer {
     Dynamic(Buffer<Signal>),
     /// A buffer of samples.
-    Sample(Buffer<Sample>),
+    Float(Buffer<Float>),
     /// A buffer of integers.
     Int(Buffer<i64>),
     /// A buffer of booleans.
@@ -886,7 +886,7 @@ impl SignalBuffer {
     pub fn new_of_kind(kind: SignalKind, length: usize) -> Self {
         match kind {
             SignalKind::Dynamic => Self::Dynamic(Buffer::zeros(length)),
-            SignalKind::Sample => Self::Sample(Buffer::zeros(length)),
+            SignalKind::Float => Self::Float(Buffer::zeros(length)),
             SignalKind::Int => Self::Int(Buffer::zeros(length)),
             SignalKind::Bool => Self::Bool(Buffer::zeros(length)),
             SignalKind::String => Self::String(Buffer::zeros(length)),
@@ -907,7 +907,7 @@ impl SignalBuffer {
 
     /// Creates a new sample buffer of size `length`, filled with zeros.
     pub fn new_sample(length: usize) -> Self {
-        Self::Sample(Buffer::zeros(length))
+        Self::Float(Buffer::zeros(length))
     }
 
     /// Creates a new integer buffer of size `length`, filled with `None`.
@@ -939,7 +939,7 @@ impl SignalBuffer {
     pub fn kind(&self) -> SignalKind {
         match self {
             Self::Dynamic(_) => SignalKind::Dynamic,
-            Self::Sample(_) => SignalKind::Sample,
+            Self::Float(_) => SignalKind::Float,
             Self::Int(_) => SignalKind::Int,
             Self::Bool(_) => SignalKind::Bool,
             Self::String(_) => SignalKind::String,
@@ -950,7 +950,7 @@ impl SignalBuffer {
 
     /// Returns `true` if the buffer contains samples.
     pub const fn is_sample(&self) -> bool {
-        matches!(self, Self::Sample(_))
+        matches!(self, Self::Float(_))
     }
 
     /// Returns `true` if the buffer contains integers.
@@ -994,9 +994,9 @@ impl SignalBuffer {
 
     /// Returns a reference to the sample buffer, if this is a sample buffer.
     #[inline]
-    pub fn as_sample(&self) -> Option<&Buffer<Sample>> {
+    pub fn as_sample(&self) -> Option<&Buffer<Float>> {
         match self {
-            Self::Sample(buffer) => Some(buffer),
+            Self::Float(buffer) => Some(buffer),
             _ => None,
         }
     }
@@ -1062,9 +1062,9 @@ impl SignalBuffer {
 
     /// Returns a mutable reference to the sample buffer, if this is a sample buffer.
     #[inline]
-    pub fn as_sample_mut(&mut self) -> Option<&mut Buffer<Sample>> {
+    pub fn as_sample_mut(&mut self) -> Option<&mut Buffer<Float>> {
         match self {
-            Self::Sample(buffer) => Some(buffer),
+            Self::Float(buffer) => Some(buffer),
             _ => None,
         }
     }
@@ -1124,7 +1124,7 @@ impl SignalBuffer {
     pub fn len(&self) -> usize {
         match self {
             Self::Dynamic(buffer) => buffer.len(),
-            Self::Sample(buffer) => buffer.len(),
+            Self::Float(buffer) => buffer.len(),
             Self::Int(buffer) => buffer.len(),
             Self::Bool(buffer) => buffer.len(),
             Self::String(buffer) => buffer.len(),
@@ -1146,7 +1146,7 @@ impl SignalBuffer {
             (Self::Dynamic(buffer), value) => {
                 buffer.buf.resize(length, Some(value));
             }
-            (Self::Sample(buffer), Signal::Sample(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::Float(buffer), Signal::Float(value)) => buffer.buf.resize(length, Some(value)),
             (Self::Int(buffer), Signal::Int(value)) => buffer.buf.resize(length, Some(value)),
             (Self::Bool(buffer), Signal::Bool(value)) => buffer.buf.resize(length, Some(value)),
             (Self::String(buffer), Signal::String(value)) => buffer.buf.resize(length, Some(value)),
@@ -1161,7 +1161,7 @@ impl SignalBuffer {
         let value = value.into();
         match (self, value) {
             (Self::Dynamic(buffer), value) => buffer.fill(Some(value)),
-            (Self::Sample(buffer), Signal::Sample(value)) => buffer.fill(Some(value)),
+            (Self::Float(buffer), Signal::Float(value)) => buffer.fill(Some(value)),
             (Self::Int(buffer), Signal::Int(value)) => buffer.fill(Some(value)),
             (Self::Bool(buffer), Signal::Bool(value)) => buffer.fill(Some(value)),
             (Self::String(buffer), Signal::String(value)) => buffer.fill(Some(value)),
@@ -1175,7 +1175,7 @@ impl SignalBuffer {
     pub fn resize_default(&mut self, length: usize) {
         match self {
             Self::Dynamic(buffer) => buffer.buf.resize(length, None),
-            Self::Sample(buffer) => buffer.buf.resize(length, None),
+            Self::Float(buffer) => buffer.buf.resize(length, None),
             Self::Int(buffer) => buffer.buf.resize(length, None),
             Self::Bool(buffer) => buffer.buf.resize(length, None),
             Self::String(buffer) => buffer.buf.resize(length, None),
@@ -1188,7 +1188,7 @@ impl SignalBuffer {
     pub fn fill_default(&mut self) {
         match self {
             Self::Dynamic(buffer) => buffer.fill(None),
-            Self::Sample(buffer) => buffer.fill(None),
+            Self::Float(buffer) => buffer.fill(None),
             Self::Int(buffer) => buffer.fill(None),
             Self::Bool(buffer) => buffer.fill(None),
             Self::String(buffer) => buffer.fill(None),
@@ -1202,7 +1202,7 @@ impl SignalBuffer {
     pub fn clone_signal_at(&self, index: usize) -> Signal {
         match self {
             Self::Dynamic(buffer) => buffer[index].clone().unwrap(),
-            Self::Sample(buffer) => Signal::Sample(buffer[index].unwrap()),
+            Self::Float(buffer) => Signal::Float(buffer[index].unwrap()),
             Self::Int(buffer) => Signal::Int(buffer[index].unwrap()),
             Self::Bool(buffer) => Signal::Bool(buffer[index].unwrap()),
             Self::String(buffer) => Signal::String(buffer[index].clone().unwrap()),
@@ -1217,7 +1217,7 @@ impl SignalBuffer {
             (Self::Dynamic(this), Self::Dynamic(other)) => {
                 this.clone_from_slice(other);
             }
-            (Self::Sample(this), Self::Sample(other)) => {
+            (Self::Float(this), Self::Float(other)) => {
                 this.copy_from_slice(other);
             }
             (Self::Int(this), Self::Int(other)) => {

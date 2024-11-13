@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use downcast_rs::{impl_downcast, DowncastSync};
 use thiserror::Error;
 
-use crate::signal::{Buffer, List, MidiMessage, Sample, SignalBuffer, SignalData, SignalKind};
+use crate::signal::{Buffer, Float, List, MidiMessage, SignalBuffer, SignalData, SignalKind};
 
 /// An error that can occur when processing signals.
 #[derive(Debug, Clone, Error)]
@@ -55,11 +55,11 @@ pub struct SignalSpec {
 }
 
 impl Default for SignalSpec {
-    /// Creates a new unnamed [`Sample`] [`SignalSpec`].
+    /// Creates a new unnamed [`Float`] [`SignalSpec`].
     fn default() -> Self {
         Self {
             name: "".into(),
-            kind: SignalKind::Sample,
+            kind: SignalKind::Float,
         }
     }
 }
@@ -123,8 +123,8 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     pub fn iter_input_as_samples(
         &self,
         index: usize,
-    ) -> Result<impl Iterator<Item = Option<Sample>> + '_, ProcessorError> {
-        Self::iter_input_as::<Sample>(self, index).map(|iter| iter.copied())
+    ) -> Result<impl Iterator<Item = Option<Float>> + '_, ProcessorError> {
+        Self::iter_input_as::<Float>(self, index).map(|iter| iter.copied())
     }
 
     /// Returns an iterator over the input integers at the given index, if the input is an integer buffer.
@@ -208,8 +208,8 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn output_as_samples(
         &mut self,
         index: usize,
-    ) -> Result<&mut Buffer<Sample>, ProcessorError> {
-        self.output_as::<Sample>(index)
+    ) -> Result<&mut Buffer<Float>, ProcessorError> {
+        self.output_as::<Float>(index)
     }
 
     /// Returns the output buffer at the given index, if it is an integer buffer.
@@ -267,7 +267,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn iter_output_mut_as_samples(
         &mut self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &mut Option<Sample>> + '_, ProcessorError> {
+    ) -> Result<impl Iterator<Item = &mut Option<Float>> + '_, ProcessorError> {
         Ok(self.output_as_samples(index)?.iter_mut())
     }
 
@@ -404,7 +404,7 @@ pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
 
     /// Called whenever the runtime's sample rates or block size change.
     #[allow(unused)]
-    fn resize_buffers(&mut self, sample_rate: Sample, block_size: usize) {}
+    fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) {}
 
     /// Processes the given input buffers and writes the results to the given output buffers.
     ///

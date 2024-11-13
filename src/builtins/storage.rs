@@ -24,18 +24,18 @@ use crate::{prelude::*, signal::SignalData};
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The sample value read from the buffer. |
+/// | `0` | `out` | `Float` | The sample value read from the buffer. |
 /// | `1` | `length` | `Message(i64)` | The length of the buffer in samples. |
 #[derive(Clone, Debug)]
 pub struct AudioBuffer {
-    buffer: Buffer<Sample>,
-    sample_rate: Sample,
-    index: Sample,
+    buffer: Buffer<Float>,
+    sample_rate: Float,
+    index: Float,
 }
 
 impl AudioBuffer {
     /// Creates a new audio buffer processor with the given buffer.
-    pub fn new(buffer: Buffer<Sample>) -> Self {
+    pub fn new(buffer: Buffer<Float>) -> Self {
         Self {
             buffer,
             sample_rate: 0.0,
@@ -47,19 +47,19 @@ impl AudioBuffer {
 impl Processor for AudioBuffer {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("index", SignalKind::Sample),
-            SignalSpec::new("set", SignalKind::Sample),
+            SignalSpec::new("index", SignalKind::Float),
+            SignalSpec::new("set", SignalKind::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("out", SignalKind::Sample),
+            SignalSpec::new("out", SignalKind::Float),
             SignalSpec::new("length", SignalKind::Int),
         ]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -96,9 +96,9 @@ impl Processor for AudioBuffer {
                 let index = self.index as i64;
 
                 if index < 0 {
-                    self.index = self.buffer.len() as Sample + index as Sample;
+                    self.index = self.buffer.len() as Float + index as Float;
                 } else {
-                    self.index = index as Sample;
+                    self.index = index as Float;
                 }
 
                 *out = Some(self.buffer[self.index as usize].unwrap_or_default());

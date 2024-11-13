@@ -24,7 +24,7 @@ impl Processor for MidiNote {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("note", SignalKind::Sample)]
+        vec![SignalSpec::new("note", SignalKind::Float)]
     }
 
     fn process(
@@ -39,7 +39,7 @@ impl Processor for MidiNote {
             *out = None;
             if let Some(msg) = midi {
                 if msg.status() == 0x90 {
-                    let note = msg.data1() as Sample;
+                    let note = msg.data1() as Float;
                     *out = Some(note);
                 }
             }
@@ -70,7 +70,7 @@ impl Processor for MidiVelocity {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("velocity", SignalKind::Sample)]
+        vec![SignalSpec::new("velocity", SignalKind::Float)]
     }
 
     fn process(
@@ -84,7 +84,7 @@ impl Processor for MidiVelocity {
         ) {
             *out = None;
             if let Some(msg) = midi {
-                let velocity = msg.data2() as Sample;
+                let velocity = msg.data2() as Float;
                 *out = Some(velocity);
             }
         }
@@ -212,7 +212,7 @@ impl Processor for MidiChannel {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("channel", SignalKind::Sample)]
+        vec![SignalSpec::new("channel", SignalKind::Float)]
     }
 
     fn process(
@@ -226,7 +226,7 @@ impl Processor for MidiChannel {
         ) {
             *out = None;
             if let Some(msg) = midi {
-                let channel = msg.channel() as Sample;
+                let channel = msg.channel() as Float;
                 *out = Some(channel);
             }
         }

@@ -2,16 +2,16 @@ use raug::prelude::*;
 
 #[derive(Debug, Clone)]
 struct GainProc {
-    gain: Sample,
+    gain: Float,
 }
 
 impl Processor for GainProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", SignalKind::Sample)]
+        vec![SignalSpec::new("in", SignalKind::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
     fn process(

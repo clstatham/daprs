@@ -259,7 +259,7 @@ impl Processor for Unpack {
                             let value = list.get(output_index).and_then(|s| s.as_int());
                             output_buf[sample_index] = value;
                         }
-                        SignalKind::Sample => {
+                        SignalKind::Float => {
                             let output_buf = output_buf.as_sample_mut().unwrap();
                             let value = list.get(output_index).and_then(|s| s.as_sample());
                             output_buf[sample_index] = value;

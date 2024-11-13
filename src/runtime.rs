@@ -13,7 +13,7 @@ use crate::{
     graph::{Graph, GraphRunError, GraphRunErrorKind, NodeIndex},
     prelude::{ProcessorInputs, SignalSpec},
     processor::{ProcessorError, ProcessorOutputs},
-    signal::{MidiMessage, Sample, SignalBuffer, SignalKind},
+    signal::{Float, MidiMessage, SignalBuffer, SignalKind},
 };
 
 /// An error that occurred during runtime operations.
@@ -192,7 +192,7 @@ impl Runtime {
     /// Resets the runtime with the given sample rate and block size.
     /// This will potentially reallocate internal buffers.
     #[inline(never)]
-    pub fn reset(&mut self, sample_rate: Sample, block_size: usize) -> RuntimeResult<()> {
+    pub fn reset(&mut self, sample_rate: Float, block_size: usize) -> RuntimeResult<()> {
         self.graph.allocate_visitor();
 
         let mut max_edges = 0;
@@ -350,9 +350,9 @@ impl Runtime {
     pub fn run_offline(
         &mut self,
         duration: Duration,
-        sample_rate: Sample,
+        sample_rate: Float,
         block_size: usize,
-    ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
+    ) -> RuntimeResult<Box<[Box<[Float]>]>> {
         self.run_offline_inner(duration, sample_rate, block_size, false)
     }
 
@@ -364,20 +364,20 @@ impl Runtime {
     pub fn simulate(
         &mut self,
         duration: Duration,
-        sample_rate: Sample,
+        sample_rate: Float,
         block_size: usize,
-    ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
+    ) -> RuntimeResult<Box<[Box<[Float]>]>> {
         self.run_offline_inner(duration, sample_rate, block_size, true)
     }
 
     fn run_offline_inner(
         &mut self,
         duration: Duration,
-        sample_rate: Sample,
+        sample_rate: Float,
         block_size: usize,
         add_delay: bool,
-    ) -> RuntimeResult<Box<[Box<[Sample]>]>> {
-        let secs = duration.as_secs_f64() as Sample;
+    ) -> RuntimeResult<Box<[Box<[Float]>]>> {
+        let secs = duration.as_secs_f64() as Float;
         let samples = (sample_rate * secs) as usize;
 
         self.reset(sample_rate, block_size)?;
@@ -385,7 +385,7 @@ impl Runtime {
 
         let num_outputs: usize = self.graph.num_outputs();
 
-        let mut outputs: Box<[Box<[Sample]>]> =
+        let mut outputs: Box<[Box<[Float]>]> =
             vec![vec![0.0; samples].into_boxed_slice(); num_outputs].into_boxed_slice();
 
         let mut sample_count = 0;
@@ -401,11 +401,11 @@ impl Runtime {
 
             for (i, output) in outputs.iter_mut().enumerate() {
                 let buffer = self.get_output(i);
-                let SignalBuffer::Sample(buffer) = buffer else {
+                let SignalBuffer::Float(buffer) = buffer else {
                     return Err(RuntimeError::ProcessorError(
                         ProcessorError::OutputSpecMismatch {
                             index: i,
-                            expected: SignalKind::Sample,
+                            expected: SignalKind::Float,
                             actual: buffer.kind(),
                         },
                     ));
@@ -435,7 +435,7 @@ impl Runtime {
         &mut self,
         file_path: impl AsRef<std::path::Path>,
         duration: Duration,
-        sample_rate: Sample,
+        sample_rate: Float,
         block_size: usize,
     ) -> RuntimeResult<()> {
         let outputs = self.run_offline(duration, sample_rate, block_size)?;
@@ -553,7 +553,7 @@ impl Runtime {
 
         log::info!("Configuration: {:#?}", config);
 
-        let audio_rate = config.sample_rate().0 as Sample;
+        let audio_rate = config.sample_rate().0 as Float;
         let initial_block_size = audio_rate as usize / 100;
 
         let midi_connection = midir::MidiInput::new("raug midir input")?;
@@ -675,10 +675,10 @@ impl Runtime {
         graph_rx: mpsc::Receiver<Graph>,
     ) -> RuntimeResult<cpal::Stream>
     where
-        T: cpal::SizedSample + cpal::FromSample<Sample>,
+        T: cpal::SizedSample + cpal::FromSample<Float>,
     {
         let channels = config.channels as usize;
-        let audio_rate = config.sample_rate.0 as Sample;
+        let audio_rate = config.sample_rate.0 as Float;
 
         let stream = device
             .build_output_stream(
@@ -697,7 +697,7 @@ impl Runtime {
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
                             let buffer = self.get_output(channel_idx);
-                            let SignalBuffer::Sample(buffer) = buffer else {
+                            let SignalBuffer::Float(buffer) = buffer else {
                                 panic!("output {channel_idx} signal type mismatch");
                             };
                             let value = buffer[frame_idx].unwrap_or_default();

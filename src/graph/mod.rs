@@ -11,7 +11,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     prelude::{Param, Passthrough},
     processor::{Processor, ProcessorError},
-    signal::{MidiMessage, Sample, SignalData},
+    signal::{Float, MidiMessage, SignalData},
 };
 
 pub mod edge;
@@ -140,7 +140,7 @@ impl Graph {
     pub fn add_audio_input(&mut self) -> NodeIndex {
         let idx = self
             .digraph
-            .add_node(ProcessorNode::new(Passthrough::<Sample>::default()));
+            .add_node(ProcessorNode::new(Passthrough::<Float>::default()));
         self.input_nodes.push(idx);
         idx
     }
@@ -149,7 +149,7 @@ impl Graph {
     pub fn add_audio_output(&mut self) -> NodeIndex {
         let idx = self
             .digraph
-            .add_node(ProcessorNode::new(Passthrough::<Sample>::default()));
+            .add_node(ProcessorNode::new(Passthrough::<Float>::default()));
         self.output_nodes.push(idx);
         idx
     }
@@ -357,7 +357,7 @@ impl Graph {
     }
 
     /// Sets the block size of all [`Processor`]s in the graph. This will implicitly reallocate all internal buffers and resources.
-    pub fn resize_buffers(&mut self, sample_rate: Sample, block_size: usize) -> GraphRunResult<()> {
+    pub fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) -> GraphRunResult<()> {
         self.visit(|graph, node| {
             graph.digraph[node].resize_buffers(sample_rate, block_size);
             Ok(())

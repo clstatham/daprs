@@ -2,7 +2,7 @@
 
 use crate::{prelude::*, signal::PI};
 
-const THERMAL: Sample = 0.000025;
+const THERMAL: Float = 0.000025;
 
 /// A 4-pole low-pass filter based on the Moog ladder filter.
 ///
@@ -10,29 +10,29 @@ const THERMAL: Sample = 0.000025;
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Sample` | | The input signal to filter. |
-/// | `1` | `cutoff` | `Sample` | `1000.0` | The cutoff frequency of the filter. |
-/// | `2` | `resonance` | `Sample` | `0.1` | The resonance of the filter. |
+/// | `0` | `in` | `Float` | | The input signal to filter. |
+/// | `1` | `cutoff` | `Float` | `1000.0` | The cutoff frequency of the filter. |
+/// | `2` | `resonance` | `Float` | `0.1` | The resonance of the filter. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The filtered output signal. |
+/// | `0` | `out` | `Float` | The filtered output signal. |
 #[derive(Clone, Debug)]
 pub struct MoogLadder {
-    sample_rate: Sample,
-    stage: [Sample; 4],
-    stage_tanh: [Sample; 3],
-    delay: [Sample; 6],
-    tune: Sample,
-    acr: Sample,
-    res_quad: Sample,
+    sample_rate: Float,
+    stage: [Float; 4],
+    stage_tanh: [Float; 3],
+    delay: [Float; 6],
+    tune: Float,
+    acr: Float,
+    res_quad: Float,
 
     /// The cutoff frequency of the filter.
-    pub cutoff: Sample,
+    pub cutoff: Float,
     /// The resonance of the filter.
-    pub resonance: Sample,
+    pub resonance: Float,
 }
 
 impl Default for MoogLadder {
@@ -53,7 +53,7 @@ impl Default for MoogLadder {
 
 impl MoogLadder {
     /// Creates a new Moog ladder filter with the given cutoff frequency and resonance.
-    pub fn new(cutoff: Sample, resonance: Sample) -> Self {
+    pub fn new(cutoff: Float, resonance: Float) -> Self {
         Self {
             cutoff,
             resonance,
@@ -65,17 +65,17 @@ impl MoogLadder {
 impl Processor for MoogLadder {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Sample),
-            SignalSpec::new("cutoff", SignalKind::Sample),
-            SignalSpec::new("resonance", SignalKind::Sample),
+            SignalSpec::new("in", SignalKind::Float),
+            SignalSpec::new("cutoff", SignalKind::Float),
+            SignalSpec::new("resonance", SignalKind::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -111,22 +111,22 @@ impl Processor for MoogLadder {
 
             let fcr = 1.8730 * fc3 + 0.4955 * fc2 - 0.6490 * fc + 0.9988;
             self.acr = -3.9364 * fc2 + 1.8409 * fc + 0.9968;
-            self.tune = (1.0 - Sample::exp(-((2.0 * PI) * f * fcr))) / THERMAL;
+            self.tune = (1.0 - Float::exp(-((2.0 * PI) * f * fcr))) / THERMAL;
             self.res_quad = 4.0 * self.resonance * self.acr;
 
             // oversample
             for _ in 0..2 {
                 let mut inp = in_signal - self.res_quad * self.delay[5];
                 self.stage[0] =
-                    self.delay[0] + self.tune * (Sample::tanh(inp * THERMAL) - self.stage_tanh[0]);
+                    self.delay[0] + self.tune * (Float::tanh(inp * THERMAL) - self.stage_tanh[0]);
                 self.delay[0] = self.stage[0];
                 for k in 1..4 {
                     inp = self.stage[k - 1];
-                    self.stage_tanh[k - 1] = Sample::tanh(inp * THERMAL);
+                    self.stage_tanh[k - 1] = Float::tanh(inp * THERMAL);
                     if k == 3 {
                         self.stage[k] = self.delay[k]
                             + self.tune
-                                * (self.stage_tanh[k - 1] - Sample::tanh(self.delay[k] * THERMAL));
+                                * (self.stage_tanh[k - 1] - Float::tanh(self.delay[k] * THERMAL));
                     } else {
                         self.stage[k] = self.delay[k]
                             + self.tune * (self.stage_tanh[k - 1] - self.stage_tanh[k]);
@@ -150,39 +150,39 @@ impl Processor for MoogLadder {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Sample` | | The input signal to filter. |
-/// | `1` | `a0` | `Sample` | `1.0` | The a0 coefficient: amount of input signal that contributes to the output. |
-/// | `2` | `a1` | `Sample` | `0.0` | The a1 coefficient: amount of input signal delayed by 1 sample that contributes to the output. |
-/// | `3` | `a2` | `Sample` | `0.0` | The a2 coefficient: amount of input signal delayed by 2 samples that contributes to the output. |
-/// | `4` | `b1` | `Sample` | `0.0` | The b1 coefficient: amount of output signal delayed by 1 sample that contributes to the output. |
-/// | `5` | `b2` | `Sample` | `0.0` | The b2 coefficient: amount of output signal delayed by 2 samples that contributes to the output. |
+/// | `0` | `in` | `Float` | | The input signal to filter. |
+/// | `1` | `a0` | `Float` | `1.0` | The a0 coefficient: amount of input signal that contributes to the output. |
+/// | `2` | `a1` | `Float` | `0.0` | The a1 coefficient: amount of input signal delayed by 1 sample that contributes to the output. |
+/// | `3` | `a2` | `Float` | `0.0` | The a2 coefficient: amount of input signal delayed by 2 samples that contributes to the output. |
+/// | `4` | `b1` | `Float` | `0.0` | The b1 coefficient: amount of output signal delayed by 1 sample that contributes to the output. |
+/// | `5` | `b2` | `Float` | `0.0` | The b2 coefficient: amount of output signal delayed by 2 samples that contributes to the output. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The filtered output signal. |
+/// | `0` | `out` | `Float` | The filtered output signal. |
 #[derive(Clone, Debug)]
 pub struct Biquad {
-    sample_rate: Sample,
+    sample_rate: Float,
     /// The a0 coefficient: amount of input signal that contributes to the output.
-    pub a0: Sample,
+    pub a0: Float,
     /// The a1 coefficient: amount of input signal delayed by 1 sample that contributes to the output.
-    pub a1: Sample,
+    pub a1: Float,
     /// The a2 coefficient: amount of input signal delayed by 2 samples that contributes to the output.
-    pub a2: Sample,
+    pub a2: Float,
     /// The b1 coefficient: amount of output signal delayed by 1 sample that contributes to the output.
-    pub b1: Sample,
+    pub b1: Float,
     /// The b2 coefficient: amount of output signal delayed by 2 samples that contributes to the output.
-    pub b2: Sample,
+    pub b2: Float,
 
     // input state
-    x1: Sample,
-    x2: Sample,
+    x1: Float,
+    x2: Float,
 
     // output state
-    y1: Sample,
-    y2: Sample,
+    y1: Float,
+    y2: Float,
 }
 
 impl Default for Biquad {
@@ -204,7 +204,7 @@ impl Default for Biquad {
 
 impl Biquad {
     /// Creates a new biquad filter with the given coefficients.
-    pub fn new(a0: Sample, a1: Sample, a2: Sample, b1: Sample, b2: Sample) -> Self {
+    pub fn new(a0: Float, a1: Float, a2: Float, b1: Float, b2: Float) -> Self {
         Self {
             a0,
             a1,
@@ -219,20 +219,20 @@ impl Biquad {
 impl Processor for Biquad {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Sample),
-            SignalSpec::new("a0", SignalKind::Sample),
-            SignalSpec::new("a1", SignalKind::Sample),
-            SignalSpec::new("a2", SignalKind::Sample),
-            SignalSpec::new("b1", SignalKind::Sample),
-            SignalSpec::new("b2", SignalKind::Sample),
+            SignalSpec::new("in", SignalKind::Float),
+            SignalSpec::new("a0", SignalKind::Float),
+            SignalSpec::new("a1", SignalKind::Float),
+            SignalSpec::new("a2", SignalKind::Float),
+            SignalSpec::new("b1", SignalKind::Float),
+            SignalSpec::new("b2", SignalKind::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -343,40 +343,40 @@ impl std::fmt::Display for BiquadType {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Sample` | | The input signal to filter. |
-/// | `1` | `frequency` | `Sample` | `1000.0` | The cutoff frequency of the filter. |
-/// | `2` | `q` | `Sample` | `0.707` | The quality factor of the filter. |
-/// | `3` | `gain` | `Sample` | `0.0` | The gain of the filter. |
+/// | `0` | `in` | `Float` | | The input signal to filter. |
+/// | `1` | `frequency` | `Float` | `1000.0` | The cutoff frequency of the filter. |
+/// | `2` | `q` | `Float` | `0.707` | The quality factor of the filter. |
+/// | `3` | `gain` | `Float` | `0.0` | The gain of the filter. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The filtered output signal. |
+/// | `0` | `out` | `Float` | The filtered output signal. |
 #[derive(Clone, Debug)]
 pub struct AutoBiquad {
-    sample_rate: Sample,
+    sample_rate: Float,
 
     // biquad state
-    a0: Sample,
-    a1: Sample,
-    a2: Sample,
-    b1: Sample,
-    b2: Sample,
-    x1: Sample,
-    x2: Sample,
-    y1: Sample,
-    y2: Sample,
+    a0: Float,
+    a1: Float,
+    a2: Float,
+    b1: Float,
+    b2: Float,
+    x1: Float,
+    x2: Float,
+    y1: Float,
+    y2: Float,
 
     // the type of biquad filter
     biquad_type: BiquadType,
 
     /// The cutoff frequency of the filter.
-    pub cutoff: Sample,
+    pub cutoff: Float,
     /// The Q/resonance factor of the filter.
-    pub q: Sample,
+    pub q: Float,
     /// The gain of the filter.
-    pub gain: Sample,
+    pub gain: Float,
 }
 
 impl Default for AutoBiquad {
@@ -402,7 +402,7 @@ impl Default for AutoBiquad {
 
 impl AutoBiquad {
     /// Creates a new auto biquad filter with the given type, frequency, Q, and gain.
-    pub fn new(biquad_type: BiquadType, cutoff: Sample, q: Sample, gain: Sample) -> Self {
+    pub fn new(biquad_type: BiquadType, cutoff: Float, q: Float, gain: Float) -> Self {
         let mut this = Self {
             biquad_type,
             cutoff,
@@ -420,49 +420,49 @@ impl AutoBiquad {
     }
 
     /// Creates a new low-pass biquad filter with the given frequency and Q.
-    pub fn lowpass(cutoff: Sample, q: Sample) -> Self {
+    pub fn lowpass(cutoff: Float, q: Float) -> Self {
         let mut this = Self::new(BiquadType::LowPass, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
     /// Creates a new high-pass biquad filter with the given frequency and Q.
-    pub fn highpass(cutoff: Sample, q: Sample) -> Self {
+    pub fn highpass(cutoff: Float, q: Float) -> Self {
         let mut this = Self::new(BiquadType::HighPass, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
     /// Creates a new band-pass biquad filter with the given frequency and Q.
-    pub fn bandpass(cutoff: Sample, q: Sample) -> Self {
+    pub fn bandpass(cutoff: Float, q: Float) -> Self {
         let mut this = Self::new(BiquadType::BandPass, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
     /// Creates a new notch biquad filter with the given frequency and Q.
-    pub fn notch(cutoff: Sample, q: Sample) -> Self {
+    pub fn notch(cutoff: Float, q: Float) -> Self {
         let mut this = Self::new(BiquadType::Notch, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
     /// Creates a new peak biquad filter with the given frequency, Q, and gain.
-    pub fn peak(cutoff: Sample, q: Sample, gain: Sample) -> Self {
+    pub fn peak(cutoff: Float, q: Float, gain: Float) -> Self {
         let mut this = Self::new(BiquadType::Peak, cutoff, q, gain);
         this.set_coefficients();
         this
     }
 
     /// Creates a new low-shelf biquad filter with the given frequency, Q, and gain.
-    pub fn lowshelf(cutoff: Sample, q: Sample, gain: Sample) -> Self {
+    pub fn lowshelf(cutoff: Float, q: Float, gain: Float) -> Self {
         let mut this = Self::new(BiquadType::LowShelf, cutoff, q, gain);
         this.set_coefficients();
         this
     }
 
     /// Creates a new high-shelf biquad filter with the given frequency, Q, and gain.
-    pub fn highshelf(cutoff: Sample, q: Sample, gain: Sample) -> Self {
+    pub fn highshelf(cutoff: Float, q: Float, gain: Float) -> Self {
         let mut this = Self::new(BiquadType::HighShelf, cutoff, q, gain);
         this.set_coefficients();
         this
@@ -475,8 +475,8 @@ impl AutoBiquad {
             self.q = 0.01;
         }
 
-        let v = Sample::powf(10.0, self.gain.abs() / 20.0);
-        let k = Sample::tan(PI * self.cutoff / self.sample_rate);
+        let v = Float::powf(10.0, self.gain.abs() / 20.0);
+        let k = Float::tan(PI * self.cutoff / self.sample_rate);
 
         match self.biquad_type {
             BiquadType::LowPass => {
@@ -530,36 +530,36 @@ impl AutoBiquad {
             }
             BiquadType::LowShelf => {
                 if self.gain >= 0.0 {
-                    let norm = 1.0 / (1.0 + Sample::sqrt(2.0) * k + k * k);
-                    self.a0 = (1.0 + Sample::sqrt(2.0 * v) * k + v * k * k) * norm;
+                    let norm = 1.0 / (1.0 + Float::sqrt(2.0) * k + k * k);
+                    self.a0 = (1.0 + Float::sqrt(2.0 * v) * k + v * k * k) * norm;
                     self.a1 = 2.0 * (v * k * k - 1.0) * norm;
-                    self.a2 = (1.0 - Sample::sqrt(2.0 * v) * k + v * k * k) * norm;
+                    self.a2 = (1.0 - Float::sqrt(2.0 * v) * k + v * k * k) * norm;
                     self.b1 = 2.0 * (k * k - 1.0) * norm;
-                    self.b2 = (1.0 - Sample::sqrt(2.0) * k + k * k) * norm;
+                    self.b2 = (1.0 - Float::sqrt(2.0) * k + k * k) * norm;
                 } else {
-                    let norm = 1.0 / (1.0 + Sample::sqrt(2.0) * k + k * k);
-                    self.a0 = (v + Sample::sqrt(2.0 * v) * k + k * k) * norm;
+                    let norm = 1.0 / (1.0 + Float::sqrt(2.0) * k + k * k);
+                    self.a0 = (v + Float::sqrt(2.0 * v) * k + k * k) * norm;
                     self.a1 = 2.0 * (k * k - v) * norm;
-                    self.a2 = (v - Sample::sqrt(2.0 * v) * k + k * k) * norm;
+                    self.a2 = (v - Float::sqrt(2.0 * v) * k + k * k) * norm;
                     self.b1 = 2.0 * (k * k - 1.0) * norm;
-                    self.b2 = (1.0 - Sample::sqrt(2.0) * k + k * k) * norm;
+                    self.b2 = (1.0 - Float::sqrt(2.0) * k + k * k) * norm;
                 }
             }
             BiquadType::HighShelf => {
                 if self.gain >= 0.0 {
-                    let norm = 1.0 / (1.0 + Sample::sqrt(2.0) * k + k * k);
-                    self.a0 = (v + Sample::sqrt(2.0 * v) * k + k * k) * norm;
+                    let norm = 1.0 / (1.0 + Float::sqrt(2.0) * k + k * k);
+                    self.a0 = (v + Float::sqrt(2.0 * v) * k + k * k) * norm;
                     self.a1 = 2.0 * (k * k - v) * norm;
-                    self.a2 = (v - Sample::sqrt(2.0 * v) * k + k * k) * norm;
+                    self.a2 = (v - Float::sqrt(2.0 * v) * k + k * k) * norm;
                     self.b1 = 2.0 * (k * k - 1.0) * norm;
-                    self.b2 = (1.0 - Sample::sqrt(2.0) * k + k * k) * norm;
+                    self.b2 = (1.0 - Float::sqrt(2.0) * k + k * k) * norm;
                 } else {
-                    let norm = 1.0 / (v + Sample::sqrt(2.0 * v) * k + k * k);
-                    self.a0 = (1.0 + Sample::sqrt(2.0) * k + k * k) * norm;
+                    let norm = 1.0 / (v + Float::sqrt(2.0 * v) * k + k * k);
+                    self.a0 = (1.0 + Float::sqrt(2.0) * k + k * k) * norm;
                     self.a1 = 2.0 * (k * k - 1.0) * norm;
-                    self.a2 = (1.0 - Sample::sqrt(2.0) * k + k * k) * norm;
+                    self.a2 = (1.0 - Float::sqrt(2.0) * k + k * k) * norm;
                     self.b1 = 2.0 * (v * k * k - 1.0) * norm;
-                    self.b2 = (v - Sample::sqrt(2.0 * v) * k + v * k * k) * norm;
+                    self.b2 = (v - Float::sqrt(2.0 * v) * k + v * k * k) * norm;
                 }
             }
         }
@@ -579,18 +579,18 @@ impl AutoBiquad {
 impl Processor for AutoBiquad {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Sample),
-            SignalSpec::new("frequency", SignalKind::Sample),
-            SignalSpec::new("q", SignalKind::Sample),
-            SignalSpec::new("gain", SignalKind::Sample),
+            SignalSpec::new("in", SignalKind::Float),
+            SignalSpec::new("frequency", SignalKind::Float),
+            SignalSpec::new("q", SignalKind::Float),
+            SignalSpec::new("gain", SignalKind::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
         self.set_coefficients();
     }
@@ -616,9 +616,9 @@ impl Processor for AutoBiquad {
             let q = q.unwrap_or(self.q);
             let gain = gain.unwrap_or(self.gain);
 
-            let frequency_changed = (frequency - self.cutoff).abs() > Sample::EPSILON;
-            let q_changed = (q - self.q).abs() > Sample::EPSILON;
-            let gain_changed = (gain - self.gain).abs() > Sample::EPSILON;
+            let frequency_changed = (frequency - self.cutoff).abs() > Float::EPSILON;
+            let q_changed = (q - self.q).abs() > Float::EPSILON;
+            let gain_changed = (gain - self.gain).abs() > Float::EPSILON;
 
             if frequency_changed || q_changed || gain_changed {
                 self.cutoff = frequency;

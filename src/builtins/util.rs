@@ -10,7 +10,7 @@ use crossbeam_channel::{Receiver, Sender};
 use crate::{
     prelude::{GraphBuilder, Node, Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
-    signal::{Sample, SignalData, SignalKind},
+    signal::{Float, SignalData, SignalKind},
 };
 
 /// A processor that forwards its input to its output.
@@ -19,13 +19,13 @@ use crate::{
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Sample` | | The input signal to forward. |
+/// | `0` | `in` | `Float` | | The input signal to forward. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The output signal. |
+/// | `0` | `out` | `Float` | The output signal. |
 #[derive(Clone, Debug, Default)]
 pub struct Passthrough<S: SignalData>(PhantomData<S>);
 
@@ -291,10 +291,10 @@ impl GraphBuilder {
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `sample_rate` | `Sample` | The sample rate. |
+/// | `0` | `sample_rate` | `Float` | The sample rate. |
 #[derive(Clone, Debug, Default)]
 pub struct SampleRate {
-    sample_rate: Sample,
+    sample_rate: Float,
 }
 
 impl Processor for SampleRate {
@@ -303,10 +303,10 @@ impl Processor for SampleRate {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("sample_rate", SignalKind::Sample)]
+        vec![SignalSpec::new("sample_rate", SignalKind::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Sample, _block_size: usize) {
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.sample_rate = sample_rate;
     }
 
@@ -332,7 +332,7 @@ impl GraphBuilder {
 }
 
 #[inline(always)]
-fn lerp(a: Sample, b: Sample, t: Sample) -> Sample {
+fn lerp(a: Float, b: Float, t: Float) -> Float {
     a + (b - a) * t
 }
 
@@ -342,30 +342,30 @@ fn lerp(a: Sample, b: Sample, t: Sample) -> Sample {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `target` | `Sample` | 0.0 | The target value. |
-/// | `1` | `factor` | `Sample` | 1.0  | The factor of smoothing (0 <= factor <= 1). |
+/// | `0` | `target` | `Float` | 0.0 | The target value. |
+/// | `1` | `factor` | `Float` | 1.0  | The factor of smoothing (0 <= factor <= 1). |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The current value of the interpolation. |
+/// | `0` | `out` | `Float` | The current value of the interpolation. |
 #[derive(Clone, Debug, Default)]
 pub struct Smooth {
-    current: Sample,
-    factor: Sample,
+    current: Float,
+    factor: Float,
 }
 
 impl Processor for Smooth {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("target", SignalKind::Sample),
-            SignalSpec::new("factor", SignalKind::Sample),
+            SignalSpec::new("target", SignalKind::Float),
+            SignalSpec::new("factor", SignalKind::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
     fn process(
@@ -400,8 +400,8 @@ impl Processor for Smooth {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Sample` | | The input signal to detect changes on. |
-/// | `1` | `threshold` | `Sample` | | The threshold for a change to be detected. |
+/// | `0` | `in` | `Float` | | The input signal to detect changes on. |
+/// | `1` | `threshold` | `Float` | | The threshold for a change to be detected. |
 ///
 /// # Outputs
 ///
@@ -410,13 +410,13 @@ impl Processor for Smooth {
 /// | `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
 #[derive(Clone, Debug, Default)]
 pub struct Changed {
-    last: Sample,
-    threshold: Sample,
+    last: Float,
+    threshold: Float,
 }
 
 impl Changed {
     /// Creates a new `Changed` with the given threshold.
-    pub fn new(threshold: Sample) -> Self {
+    pub fn new(threshold: Float) -> Self {
         Self {
             last: 0.0,
             threshold,
@@ -427,8 +427,8 @@ impl Changed {
 impl Processor for Changed {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Sample),
-            SignalSpec::new("threshold", SignalKind::Sample),
+            SignalSpec::new("in", SignalKind::Float),
+            SignalSpec::new("threshold", SignalKind::Float),
         ]
     }
 
@@ -472,7 +472,7 @@ impl Processor for Changed {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Sample` | | The input signal to detect zero crossings on. |
+/// | `0` | `in` | `Float` | | The input signal to detect zero crossings on. |
 ///
 /// # Outputs
 ///
@@ -481,12 +481,12 @@ impl Processor for Changed {
 /// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
 #[derive(Clone, Debug, Default)]
 pub struct ZeroCrossing {
-    last: Sample,
+    last: Float,
 }
 
 impl Processor for ZeroCrossing {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", SignalKind::Sample)]
+        vec![SignalSpec::new("in", SignalKind::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -971,29 +971,29 @@ impl Processor for Counter {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Sample` | | The input signal to sample. |
+/// | `0` | `in` | `Float` | | The input signal to sample. |
 /// | `1` | `trig` | `Message(Bang)` | | Triggers the sample-and-hold. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Sample` | The sampled value. |
+/// | `0` | `out` | `Float` | The sampled value. |
 #[derive(Clone, Debug, Default)]
 pub struct SampleAndHold {
-    last: Option<Sample>,
+    last: Option<Float>,
 }
 
 impl Processor for SampleAndHold {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Sample),
+            SignalSpec::new("in", SignalKind::Float),
             SignalSpec::new("trig", SignalKind::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
     fn process(
@@ -1024,7 +1024,7 @@ impl Processor for SampleAndHold {
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Sample` | | The input signal to check. |
+/// | `0` | `in` | `Float` | | The input signal to check. |
 #[derive(Clone, Debug, Default)]
 pub struct CheckFinite {
     context: String,
@@ -1041,7 +1041,7 @@ impl CheckFinite {
 
 impl Processor for CheckFinite {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", SignalKind::Sample)]
+        vec![SignalSpec::new("in", SignalKind::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {

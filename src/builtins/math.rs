@@ -42,7 +42,7 @@ impl Processor for Constant {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         match (outputs.output(0), &self.value) {
-            (SignalBuffer::Sample(out), Signal::Sample(value)) => {
+            (SignalBuffer::Float(out), Signal::Float(value)) => {
                 out.fill(Some(*value));
             }
             (SignalBuffer::Int(out), Signal::Int(value)) => {
@@ -100,11 +100,11 @@ pub struct MidiToFreq;
 
 impl Processor for MidiToFreq {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("note", SignalKind::Sample)]
+        vec![SignalSpec::new("note", SignalKind::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("freq", SignalKind::Sample)]
+        vec![SignalSpec::new("freq", SignalKind::Float)]
     }
 
     fn process(
@@ -120,7 +120,7 @@ impl Processor for MidiToFreq {
                 *freq = None;
                 continue;
             };
-            *freq = Some(Sample::powf(2.0, (note - 69.0) / 12.0) * 440.0);
+            *freq = Some(Float::powf(2.0, (note - 69.0) / 12.0) * 440.0);
         }
 
         Ok(())
@@ -145,11 +145,11 @@ pub struct FreqToMidi;
 
 impl Processor for FreqToMidi {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("freq", SignalKind::Sample)]
+        vec![SignalSpec::new("freq", SignalKind::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("note", SignalKind::Sample)]
+        vec![SignalSpec::new("note", SignalKind::Float)]
     }
 
     fn process(
@@ -182,7 +182,7 @@ impl Processor for FreqToMidi {
 ///
 /// The names of the inputs are extracted from the expression itself.
 ///
-/// The inputs are expected to be of type `Sample`, that is, a floating-point number. They default to `0.0`.
+/// The inputs are expected to be of type `Float`, that is, a floating-point number. They default to `0.0`.
 ///
 /// # Outputs
 ///
@@ -195,7 +195,7 @@ pub struct Expr {
     context: evalexpr::HashMapContext<evalexpr::DefaultNumericTypes>,
     expr: evalexpr::Node<evalexpr::DefaultNumericTypes>,
     inputs: Vec<String>,
-    input_values: Vec<(String, Sample)>,
+    input_values: Vec<(String, Float)>,
 }
 
 #[cfg(feature = "expr")]
@@ -216,7 +216,7 @@ impl Expr {
         }
     }
 
-    fn eval(&mut self) -> Sample {
+    fn eval(&mut self) -> Float {
         use evalexpr::ContextWithMutableVariables;
         self.context.clear_variables();
         for (name, value) in self.input_values.iter() {
@@ -235,12 +235,12 @@ impl Processor for Expr {
     fn input_spec(&self) -> Vec<SignalSpec> {
         self.inputs
             .iter()
-            .map(|name| SignalSpec::new(name, SignalKind::Sample))
+            .map(|name| SignalSpec::new(name, SignalKind::Float))
             .collect()
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Sample)]
+        vec![SignalSpec::new("out", SignalKind::Float)]
     }
 
     fn process(
@@ -259,7 +259,7 @@ impl Processor for Expr {
                     .as_sample()
                     .ok_or(ProcessorError::InputSpecMismatch {
                         index: inp_idx,
-                        expected: SignalKind::Sample,
+                        expected: SignalKind::Float,
                         actual: buffer.kind(),
                     })?;
 
@@ -335,7 +335,7 @@ macro_rules! impl_binary_proc {
 impl_binary_proc!(
     Add,
     add,
-    (Sample, i64),
+    (Float, i64),
     r#"
 A processor that adds two signals together.
 
@@ -348,20 +348,20 @@ A processor that adds two signals together.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `a` | `Sample` | `0.0` | The first signal to add. |
-| `1` | `b` | `Sample` | `0.0` | The second signal to add. |
+| `0` | `a` | `Float` | `0.0` | The first signal to add. |
+| `1` | `b` | `Float` | `0.0` | The second signal to add. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The sum of the two input signals. |
+| `0` | `out` | `Float` | The sum of the two input signals. |
     "#
 );
 impl_binary_proc!(
     Sub,
     sub,
-    (Sample, i64),
+    (Float, i64),
     r#"
 A processor that subtracts one signal from another.
 
@@ -374,20 +374,20 @@ A processor that subtracts one signal from another.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `a` | `Sample` | `0.0` | The signal to subtract from. |
-| `1` | `b` | `Sample` | `0.0` | The signal to subtract. |
+| `0` | `a` | `Float` | `0.0` | The signal to subtract from. |
+| `1` | `b` | `Float` | `0.0` | The signal to subtract. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The difference of the two input signals. |
+| `0` | `out` | `Float` | The difference of the two input signals. |
     "#
 );
 impl_binary_proc!(
     Mul,
     mul,
-    (Sample, i64),
+    (Float, i64),
     r#"
 A processor that multiplies two signals together.
 
@@ -400,20 +400,20 @@ A processor that multiplies two signals together.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `a` | `Sample` | `0.0` | The first signal to multiply. |
-| `1` | `b` | `Sample` | `0.0` | The second signal to multiply. |
+| `0` | `a` | `Float` | `0.0` | The first signal to multiply. |
+| `1` | `b` | `Float` | `0.0` | The second signal to multiply. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The product of the two input signals. |
+| `0` | `out` | `Float` | The product of the two input signals. |
     "#
 );
 impl_binary_proc!(
     Div,
     div,
-    (Sample, i64),
+    (Float, i64),
     r#"
 A processor that divides one signal by another.
 
@@ -428,20 +428,20 @@ Note that the second input defaults to `0.0`, so be sure to provide a non-zero v
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `a` | `Sample` | `0.0` | The signal to divide. |
-| `1` | `b` | `Sample` | `0.0` | The signal to divide by. |
+| `0` | `a` | `Float` | `0.0` | The signal to divide. |
+| `1` | `b` | `Float` | `0.0` | The signal to divide by. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The quotient of the two input signals. |
+| `0` | `out` | `Float` | The quotient of the two input signals. |
     "#
 );
 impl_binary_proc!(
     Rem,
     rem,
-    (Sample, i64),
+    (Float, i64),
     r#"
 A processor that calculates the remainder of one signal divided by another.
 
@@ -456,20 +456,20 @@ Note that the second input defaults to `0.0`, so be sure to provide a non-zero v
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `a` | `Sample` | `0.0` | The signal to divide. |
-| `1` | `b` | `Sample` | `0.0` | The signal to divide by. |
+| `0` | `a` | `Float` | `0.0` | The signal to divide. |
+| `1` | `b` | `Float` | `0.0` | The signal to divide by. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The remainder of the two input signals. |
+| `0` | `out` | `Float` | The remainder of the two input signals. |
     "#
 );
 impl_binary_proc!(
     Powf,
     powf,
-    (Sample),
+    (Float),
     r#"
 A processor that raises one signal to the power of a constant value.
 
@@ -482,20 +482,20 @@ A processor that raises one signal to the power of another.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `a` | `Sample` | `0.0` | The base signal. |
-| `1` | `b` | `Sample` | `0.0` | The exponent signal. |
+| `0` | `a` | `Float` | `0.0` | The base signal. |
+| `1` | `b` | `Float` | `0.0` | The exponent signal. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The base signal raised to the power of the exponent signal. |
+| `0` | `out` | `Float` | The base signal raised to the power of the exponent signal. |
     "#
 );
 impl_binary_proc!(
     Atan2,
     atan2,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the arctangent of the ratio of two signals.
 
@@ -510,20 +510,20 @@ Note that the second input defaults to `0.0`, so be sure to provide a non-zero v
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `a` | `Sample` | `0.0` | The first signal. |
-| `1` | `b` | `Sample` | `0.0` | The second signal. |
+| `0` | `a` | `Float` | `0.0` | The first signal. |
+| `1` | `b` | `Float` | `0.0` | The second signal. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The arctangent of the ratio of the two input signals. |
+| `0` | `out` | `Float` | The arctangent of the ratio of the two input signals. |
     "#
 );
 impl_binary_proc!(
     Hypot,
     hypot,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the hypotenuse of two signals.
 
@@ -536,20 +536,20 @@ A processor that calculates the hypotenuse of two signals.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `a` | `Sample` | `0.0` | The first signal. |
-| `1` | `b` | `Sample` | `0.0` | The second signal. |
+| `0` | `a` | `Float` | `0.0` | The first signal. |
+| `1` | `b` | `Float` | `0.0` | The second signal. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The hypotenuse of the two input signals. |
+| `0` | `out` | `Float` | The hypotenuse of the two input signals. |
     "#
 );
 impl_binary_proc!(
     Max,
     max,
-    (Sample, i64),
+    (Float, i64),
     r#"
 A processor that calculates the maximum of two signals.
 
@@ -562,20 +562,20 @@ A processor that calculates the maximum of two signals.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `a` | `Sample` | `0.0` | The first signal. |
-| `1` | `b` | `Sample` | `0.0` | The second signal. |
+| `0` | `a` | `Float` | `0.0` | The first signal. |
+| `1` | `b` | `Float` | `0.0` | The second signal. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The maximum of the two input signals. |
+| `0` | `out` | `Float` | The maximum of the two input signals. |
     "#
 );
 impl_binary_proc!(
     Min,
     min,
-    (Sample, i64),
+    (Float, i64),
     r#"
 A processor that calculates the minimum of two signals.
 
@@ -588,14 +588,14 @@ A processor that calculates the minimum of two signals.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `a` | `Sample` | `0.0` | The first signal. |
-| `1` | `b` | `Sample` | `0.0` | The second signal. |
+| `0` | `a` | `Float` | `0.0` | The first signal. |
+| `1` | `b` | `Float` | `0.0` | The second signal. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The minimum of the two input signals. |
+| `0` | `out` | `Float` | The minimum of the two input signals. |
     "#
 );
 
@@ -653,7 +653,7 @@ macro_rules! impl_unary_proc {
 impl_unary_proc!(
     Neg,
     neg,
-    (Sample, i64),
+    (Float, i64),
     r#"
 A processor that negates a signal.
 
@@ -666,19 +666,19 @@ A processor that negates a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to negate. |
+| `0` | `in` | `Float` | `0.0` | The signal to negate. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The negated input signal. |
+| `0` | `out` | `Float` | The negated input signal. |
     "#
 );
 impl_unary_proc!(
     Abs,
     abs,
-    (Sample, i64),
+    (Float, i64),
     r#"
 A processor that calculates the absolute value of a signal.
 
@@ -691,19 +691,19 @@ A processor that calculates the absolute value of a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the absolute value of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the absolute value of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The absolute value of the input signal. |
+| `0` | `out` | `Float` | The absolute value of the input signal. |
     "#
 );
 impl_unary_proc!(
     Sqrt,
     sqrt,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the square root of a signal.
 
@@ -716,19 +716,19 @@ A processor that calculates the square root of a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the square root of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the square root of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The square root of the input signal. |
+| `0` | `out` | `Float` | The square root of the input signal. |
     "#
 );
 impl_unary_proc!(
     Cbrt,
     cbrt,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the cube root of a signal.
 
@@ -741,19 +741,19 @@ A processor that calculates the cube root of a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the cube root of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the cube root of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The cube root of the input signal. |
+| `0` | `out` | `Float` | The cube root of the input signal. |
     "#
 );
 impl_unary_proc!(
     Ceil,
     ceil,
-    (Sample),
+    (Float),
     r#"
 A processor that rounds a signal up to the nearest integer.
 
@@ -766,19 +766,19 @@ A processor that rounds a signal up to the nearest integer.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to round up. |
+| `0` | `in` | `Float` | `0.0` | The signal to round up. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The input signal rounded up to the nearest integer. |
+| `0` | `out` | `Float` | The input signal rounded up to the nearest integer. |
     "#
 );
 impl_unary_proc!(
     Floor,
     floor,
-    (Sample),
+    (Float),
     r#"
 A processor that rounds a signal down to the nearest integer.
 
@@ -791,19 +791,19 @@ A processor that rounds a signal down to the nearest integer.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to round down. |
+| `0` | `in` | `Float` | `0.0` | The signal to round down. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The input signal rounded down to the nearest integer. |
+| `0` | `out` | `Float` | The input signal rounded down to the nearest integer. |
     "#
 );
 impl_unary_proc!(
     Round,
     round,
-    (Sample),
+    (Float),
     r#"
 A processor that rounds a signal to the nearest integer.
 
@@ -816,19 +816,19 @@ A processor that rounds a signal to the nearest integer.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to round. |
+| `0` | `in` | `Float` | `0.0` | The signal to round. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The input signal rounded to the nearest integer. |
+| `0` | `out` | `Float` | The input signal rounded to the nearest integer. |
     "#
 );
 impl_unary_proc!(
     Trunc,
     trunc,
-    (Sample),
+    (Float),
     r#"
 A processor that truncates a signal to an integer.
 
@@ -841,19 +841,19 @@ A processor that truncates a signal to an integer.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to truncate. |
+| `0` | `in` | `Float` | `0.0` | The signal to truncate. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The input signal truncated to an integer. |
+| `0` | `out` | `Float` | The input signal truncated to an integer. |
     "#
 );
 impl_unary_proc!(
     Fract,
     fract,
-    (Sample),
+    (Float),
     r#"
 A processor that returns the fractional part of a signal.
 
@@ -866,19 +866,19 @@ A processor that returns the fractional part of a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to get the fractional part of. |
+| `0` | `in` | `Float` | `0.0` | The signal to get the fractional part of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The fractional part of the input signal. |
+| `0` | `out` | `Float` | The fractional part of the input signal. |
     "#
 );
 impl_unary_proc!(
     Recip,
     recip,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the reciprocal of a signal.
 
@@ -893,19 +893,19 @@ Note that the input signal defaults to `0.0`, so be sure to provide a non-zero v
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the reciprocal of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the reciprocal of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The reciprocal of the input signal. |
+| `0` | `out` | `Float` | The reciprocal of the input signal. |
     "#
 );
 impl_unary_proc!(
     Signum,
     signum,
-    (Sample, i64),
+    (Float, i64),
     r#"
 A processor that returns the sign of a signal.
 
@@ -918,19 +918,19 @@ A processor that returns the sign of a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to get the sign of. |
+| `0` | `in` | `Float` | `0.0` | The signal to get the sign of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The sign of the input signal. |
+| `0` | `out` | `Float` | The sign of the input signal. |
     "#
 );
 impl_unary_proc!(
     Sin,
     sin,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the sine of a signal.
 
@@ -943,19 +943,19 @@ A processor that calculates the sine of a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the sine of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the sine of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The sine of the input signal. |
+| `0` | `out` | `Float` | The sine of the input signal. |
     "#
 );
 impl_unary_proc!(
     Cos,
     cos,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the cosine of a signal.
 
@@ -968,19 +968,19 @@ A processor that calculates the cosine of a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the cosine of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the cosine of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The cosine of the input signal. |
+| `0` | `out` | `Float` | The cosine of the input signal. |
     "#
 );
 impl_unary_proc!(
     Tan,
     tan,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the tangent of a signal.
 
@@ -993,19 +993,19 @@ A processor that calculates the tangent of a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the tangent of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the tangent of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The tangent of the input signal. |
+| `0` | `out` | `Float` | The tangent of the input signal. |
     "#
 );
 impl_unary_proc!(
     Tanh,
     tanh,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the hyperbolic tangent of a signal.
 
@@ -1018,19 +1018,19 @@ A processor that calculates the hyperbolic tangent of a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the hyperbolic tangent of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the hyperbolic tangent of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The hyperbolic tangent of the input signal. |
+| `0` | `out` | `Float` | The hyperbolic tangent of the input signal. |
     "#
 );
 impl_unary_proc!(
     Exp,
     exp,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the exponential of a signal.
 
@@ -1043,19 +1043,19 @@ A processor that calculates the exponential of a signal.
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the exponential of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the exponential of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The exponential of the input signal. |
+| `0` | `out` | `Float` | The exponential of the input signal. |
     "#
 );
 impl_unary_proc!(
     Ln,
     ln,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the natural logarithm of a signal.
 
@@ -1070,19 +1070,19 @@ Note that the input signal defaults to `0.0`, so be sure to provide a positive v
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the natural logarithm of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the natural logarithm of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The natural logarithm of the input signal. |
+| `0` | `out` | `Float` | The natural logarithm of the input signal. |
     "#
 );
 impl_unary_proc!(
     Log2,
     log2,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the base-2 logarithm of a signal.
 
@@ -1097,19 +1097,19 @@ Note that the input signal defaults to `0.0`, so be sure to provide a positive v
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the base-2 logarithm of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the base-2 logarithm of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The base-2 logarithm of the input signal. |
+| `0` | `out` | `Float` | The base-2 logarithm of the input signal. |
     "#
 );
 impl_unary_proc!(
     Log10,
     log10,
-    (Sample),
+    (Float),
     r#"
 A processor that calculates the base-10 logarithm of a signal.
 
@@ -1124,12 +1124,12 @@ Note that the input signal defaults to `0.0`, so be sure to provide a positive v
 
 | Index | Name | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `0` | `in` | `Sample` | `0.0` | The signal to calculate the base-10 logarithm of. |
+| `0` | `in` | `Float` | `0.0` | The signal to calculate the base-10 logarithm of. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Sample` | The base-10 logarithm of the input signal. |
+| `0` | `out` | `Float` | The base-10 logarithm of the input signal. |
     "#
 );
