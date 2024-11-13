@@ -275,21 +275,34 @@ impl Processor for Expr {
 }
 
 macro_rules! impl_binary_proc {
-    ($name:ident, $method:ident, $shortdoc:literal, $doc:literal) => {
-        #[derive(Clone, Debug, Default)]
+    ($name:ident, $method:ident, ($($data:ty),*), $shortdoc:literal, $doc:literal) => {
+        #[derive(Clone, Debug)]
         #[doc = $doc]
-        pub struct $name;
+        pub struct $name<S: SignalData>(std::marker::PhantomData<S>);
 
-        impl Processor for $name {
+        impl<S: SignalData> $name<S> {
+            pub fn new() -> Self {
+                Self(std::marker::PhantomData)
+            }
+        }
+
+        impl<S: SignalData> Default for $name<S> {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        $(
+        impl Processor for $name<$data> {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![
-                    SignalSpec::new("a", SignalKind::Sample),
-                    SignalSpec::new("b", SignalKind::Sample),
+                    SignalSpec::new("a", <$data as SignalData>::KIND),
+                    SignalSpec::new("b", <$data as SignalData>::KIND),
                 ]
             }
 
             fn output_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("out", SignalKind::Sample)]
+                vec![SignalSpec::new("out", <$data as SignalData>::KIND)]
             }
 
             fn process(
@@ -298,29 +311,31 @@ macro_rules! impl_binary_proc {
                 mut outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {
                 for (sample, in1, in2) in itertools::izip!(
-                    outputs.iter_output_mut_as_samples(0)?,
-                    inputs.iter_input_as_samples(0)?,
-                    inputs.iter_input_as_samples(1)?
+                    outputs.iter_output_as::<$data>(0)?,
+                    inputs.iter_input_as::<$data>(0)?,
+                    inputs.iter_input_as::<$data>(1)?
                 ) {
                     let (Some(in1), Some(in2)) = (in1, in2) else {
                         *sample = None;
                         continue;
                     };
 
-                    debug_assert!(in1.is_finite());
-                    debug_assert!(in2.is_finite());
-                    *sample = Some(Sample::$method(in1, in2));
+                    // debug_assert!(in1.is_finite());
+                    // debug_assert!(in2.is_finite());
+                    *sample = Some(<$data>::$method(*in1, *in2));
                 }
 
                 Ok(())
             }
         }
+        )*
     };
 }
 
 impl_binary_proc!(
     Add,
     add,
+    (Sample, i64),
     r#"
 A processor that adds two signals together.
 
@@ -346,6 +361,7 @@ A processor that adds two signals together.
 impl_binary_proc!(
     Sub,
     sub,
+    (Sample, i64),
     r#"
 A processor that subtracts one signal from another.
 
@@ -371,6 +387,7 @@ A processor that subtracts one signal from another.
 impl_binary_proc!(
     Mul,
     mul,
+    (Sample, i64),
     r#"
 A processor that multiplies two signals together.
 
@@ -396,6 +413,7 @@ A processor that multiplies two signals together.
 impl_binary_proc!(
     Div,
     div,
+    (Sample, i64),
     r#"
 A processor that divides one signal by another.
 
@@ -423,6 +441,7 @@ Note that the second input defaults to `0.0`, so be sure to provide a non-zero v
 impl_binary_proc!(
     Rem,
     rem,
+    (Sample, i64),
     r#"
 A processor that calculates the remainder of one signal divided by another.
 
@@ -450,6 +469,7 @@ Note that the second input defaults to `0.0`, so be sure to provide a non-zero v
 impl_binary_proc!(
     Powf,
     powf,
+    (Sample),
     r#"
 A processor that raises one signal to the power of a constant value.
 
@@ -475,6 +495,7 @@ A processor that raises one signal to the power of another.
 impl_binary_proc!(
     Atan2,
     atan2,
+    (Sample),
     r#"
 A processor that calculates the arctangent of the ratio of two signals.
 
@@ -502,6 +523,7 @@ Note that the second input defaults to `0.0`, so be sure to provide a non-zero v
 impl_binary_proc!(
     Hypot,
     hypot,
+    (Sample),
     r#"
 A processor that calculates the hypotenuse of two signals.
 
@@ -527,6 +549,7 @@ A processor that calculates the hypotenuse of two signals.
 impl_binary_proc!(
     Max,
     max,
+    (Sample, i64),
     r#"
 A processor that calculates the maximum of two signals.
 
@@ -552,6 +575,7 @@ A processor that calculates the maximum of two signals.
 impl_binary_proc!(
     Min,
     min,
+    (Sample, i64),
     r#"
 A processor that calculates the minimum of two signals.
 
@@ -576,18 +600,31 @@ A processor that calculates the minimum of two signals.
 );
 
 macro_rules! impl_unary_proc {
-    ($name:ident, $method:ident, $shortdoc:literal, $doc:literal) => {
-        #[derive(Clone, Debug, Default)]
+    ($name:ident, $method:ident, ($($data:ty),*), $shortdoc:literal, $doc:literal) => {
+        #[derive(Clone, Debug)]
         #[doc = $doc]
-        pub struct $name;
+        pub struct $name<S: SignalData>(std::marker::PhantomData<S>);
 
-        impl Processor for $name {
+        impl<S: SignalData> $name<S> {
+            pub fn new() -> Self {
+                Self(std::marker::PhantomData)
+            }
+        }
+
+        impl<S: SignalData> Default for $name<S> {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        $(
+        impl Processor for $name<$data> {
             fn input_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("in", SignalKind::Sample)]
+                vec![SignalSpec::new("in", <$data as SignalData>::KIND)]
             }
 
             fn output_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("out", SignalKind::Sample)]
+                vec![SignalSpec::new("out", <$data as SignalData>::KIND)]
             }
 
             fn process(
@@ -603,19 +640,20 @@ macro_rules! impl_unary_proc {
                         *sample = None;
                         continue;
                     };
-                    debug_assert!(in1.is_finite());
                     *sample = Some(in1.$method());
                 }
 
                 Ok(())
             }
         }
+        )*
     };
 }
 
 impl_unary_proc!(
     Neg,
     neg,
+    (Sample, i64),
     r#"
 A processor that negates a signal.
 
@@ -640,6 +678,7 @@ A processor that negates a signal.
 impl_unary_proc!(
     Abs,
     abs,
+    (Sample, i64),
     r#"
 A processor that calculates the absolute value of a signal.
 
@@ -664,6 +703,7 @@ A processor that calculates the absolute value of a signal.
 impl_unary_proc!(
     Sqrt,
     sqrt,
+    (Sample),
     r#"
 A processor that calculates the square root of a signal.
 
@@ -688,6 +728,7 @@ A processor that calculates the square root of a signal.
 impl_unary_proc!(
     Cbrt,
     cbrt,
+    (Sample),
     r#"
 A processor that calculates the cube root of a signal.
 
@@ -712,6 +753,7 @@ A processor that calculates the cube root of a signal.
 impl_unary_proc!(
     Ceil,
     ceil,
+    (Sample),
     r#"
 A processor that rounds a signal up to the nearest integer.
 
@@ -736,6 +778,7 @@ A processor that rounds a signal up to the nearest integer.
 impl_unary_proc!(
     Floor,
     floor,
+    (Sample),
     r#"
 A processor that rounds a signal down to the nearest integer.
 
@@ -760,6 +803,7 @@ A processor that rounds a signal down to the nearest integer.
 impl_unary_proc!(
     Round,
     round,
+    (Sample),
     r#"
 A processor that rounds a signal to the nearest integer.
 
@@ -784,6 +828,7 @@ A processor that rounds a signal to the nearest integer.
 impl_unary_proc!(
     Trunc,
     trunc,
+    (Sample),
     r#"
 A processor that truncates a signal to an integer.
 
@@ -808,6 +853,7 @@ A processor that truncates a signal to an integer.
 impl_unary_proc!(
     Fract,
     fract,
+    (Sample),
     r#"
 A processor that returns the fractional part of a signal.
 
@@ -832,6 +878,7 @@ A processor that returns the fractional part of a signal.
 impl_unary_proc!(
     Recip,
     recip,
+    (Sample),
     r#"
 A processor that calculates the reciprocal of a signal.
 
@@ -858,6 +905,7 @@ Note that the input signal defaults to `0.0`, so be sure to provide a non-zero v
 impl_unary_proc!(
     Signum,
     signum,
+    (Sample, i64),
     r#"
 A processor that returns the sign of a signal.
 
@@ -882,6 +930,7 @@ A processor that returns the sign of a signal.
 impl_unary_proc!(
     Sin,
     sin,
+    (Sample),
     r#"
 A processor that calculates the sine of a signal.
 
@@ -906,6 +955,7 @@ A processor that calculates the sine of a signal.
 impl_unary_proc!(
     Cos,
     cos,
+    (Sample),
     r#"
 A processor that calculates the cosine of a signal.
 
@@ -930,6 +980,7 @@ A processor that calculates the cosine of a signal.
 impl_unary_proc!(
     Tan,
     tan,
+    (Sample),
     r#"
 A processor that calculates the tangent of a signal.
 
@@ -954,6 +1005,7 @@ A processor that calculates the tangent of a signal.
 impl_unary_proc!(
     Tanh,
     tanh,
+    (Sample),
     r#"
 A processor that calculates the hyperbolic tangent of a signal.
 
@@ -978,6 +1030,7 @@ A processor that calculates the hyperbolic tangent of a signal.
 impl_unary_proc!(
     Exp,
     exp,
+    (Sample),
     r#"
 A processor that calculates the exponential of a signal.
 
@@ -1002,6 +1055,7 @@ A processor that calculates the exponential of a signal.
 impl_unary_proc!(
     Ln,
     ln,
+    (Sample),
     r#"
 A processor that calculates the natural logarithm of a signal.
 
@@ -1028,6 +1082,7 @@ Note that the input signal defaults to `0.0`, so be sure to provide a positive v
 impl_unary_proc!(
     Log2,
     log2,
+    (Sample),
     r#"
 A processor that calculates the base-2 logarithm of a signal.
 
@@ -1054,6 +1109,7 @@ Note that the input signal defaults to `0.0`, so be sure to provide a positive v
 impl_unary_proc!(
     Log10,
     log10,
+    (Sample),
     r#"
 A processor that calculates the base-10 logarithm of a signal.
 

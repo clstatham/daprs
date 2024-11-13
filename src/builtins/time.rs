@@ -12,13 +12,14 @@ use crate::{
 ///
 /// | Index | Name | Type | Default | Description |
 /// | --- | --- | --- | --- | --- |
-/// | `0` | `period` | `Message(f64)` | | The period of the metronome in seconds. |
+/// | `0` | `period` | `Sample` | | The period of the metronome in seconds. |
+/// | `1` | `reset` | `Bool` | | Resets the metronome. |
 ///
 /// # Outputs
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `out` | `Bang` | Emits a bang at the given period. |
+/// | `0` | `out` | `Bool` | Emits a bang at the given period. |
 #[derive(Debug, Clone)]
 
 pub struct Metro {
@@ -64,7 +65,10 @@ impl Default for Metro {
 
 impl Processor for Metro {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("period", SignalKind::Sample)]
+        vec![
+            SignalSpec::new("period", SignalKind::Sample),
+            SignalSpec::new("reset", SignalKind::Bool),
+        ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -80,10 +84,17 @@ impl Processor for Metro {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (period, out) in itertools::izip!(
+        for (period, reset, out) in itertools::izip!(
             inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_bools(1)?,
             outputs.iter_output_mut_as_bools(0)?
         ) {
+            if reset.unwrap_or(false) {
+                self.time = 0.0;
+                self.last_time = 0.0;
+                self.next_time = 0.0;
+            }
+
             self.period = period.unwrap_or(self.period);
 
             if self.next_sample() {
@@ -247,6 +258,7 @@ impl Processor for SampleDelay {
 /// | `0` | `out` | `Sample` | The envelope signal. |
 #[derive(Debug, Clone)]
 pub struct DecayEnv {
+    last_trig: bool,
     tau: Sample,
     value: Sample,
     time: Sample,
@@ -257,6 +269,7 @@ impl DecayEnv {
     /// Creates a new decay envelope generator processor with the given time constant.
     pub fn new(tau: Sample) -> Self {
         Self {
+            last_trig: false,
             tau,
             value: 0.0,
             time: 100.0,
@@ -298,14 +311,17 @@ impl Processor for DecayEnv {
             outputs.iter_output_mut_as_samples(0)?
         ) {
             self.tau = tau.unwrap_or(self.tau);
+            let trig = trig.unwrap_or(false);
 
-            if trig.unwrap_or(false) {
+            if trig && !self.last_trig {
                 self.value = 1.0;
                 self.time = 0.0;
             } else {
                 self.time += self.sample_rate.recip();
                 self.value = (-self.tau.recip() * self.time).exp();
             }
+
+            self.last_trig = trig;
 
             self.value = self.value.clamp(0.0, 1.0);
 

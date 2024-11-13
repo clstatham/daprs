@@ -572,7 +572,7 @@ impl IntoOutputIdx for &str {
 }
 
 macro_rules! impl_binary_node_ops {
-    ($name:ident, $proc:ty, $doc:expr) => {
+    ($name:ident, $proc:ident, ($($kind:ident => $data:ty),*), $doc:literal) => {
         impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
@@ -581,8 +581,18 @@ macro_rules! impl_binary_node_ops {
                 self.assert_single_output();
                 other.assert_single_output();
 
-                let processor = <$proc>::default();
-                let node = self.graph().add(processor);
+                assert_eq!(
+                    self.output_kind(0),
+                    other.output_kind(0),
+                    "output signals must have the same type"
+                );
+
+                let kind = self.output_kind(0);
+                let node = match kind {
+                    $(SignalKind::$kind => self.graph().add(<math::$proc<$data>>::default()),)*
+                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), kind),
+                };
+
                 node.input(0).connect(&self.output(0));
                 node.input(1).connect(&other.output(0));
 
@@ -590,7 +600,7 @@ macro_rules! impl_binary_node_ops {
             }
         }
     };
-    ($name:ident, $std_op:ident, $proc:ty, $doc:expr) => {
+    ($name:ident, $std_op:ident, $proc:ident, ($($kind:ident => $data:ty),*), $doc:literal) => {
         impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
@@ -599,8 +609,19 @@ macro_rules! impl_binary_node_ops {
                 self.assert_single_output();
                 other.assert_single_output();
 
-                let processor = <$proc>::default();
-                let node = self.graph().add(processor);
+                assert_eq!(
+                    self.output_kind(0),
+                    other.output_kind(0),
+                    "output signals must have the same type"
+                );
+
+                let kind = self.output_kind(0);
+
+                let node = match kind {
+                    $(SignalKind::$kind => self.graph().add(<math::$proc<$data>>::default()),)*
+                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), kind),
+                };
+
                 node.input(0).connect(&self.output(0));
                 node.input(1).connect(&other.output(0));
 
@@ -648,33 +669,27 @@ macro_rules! impl_binary_node_ops {
     };
 }
 
-impl_binary_node_ops!(add, Add, math::Add, "Adds two signals together.");
-impl_binary_node_ops!(sub, Sub, math::Sub, "Subtracts one signal from another.");
-impl_binary_node_ops!(mul, Mul, math::Mul, "Multiplies two signals together.");
-impl_binary_node_ops!(div, Div, math::Div, "Divides one signal by another.");
+impl_binary_node_ops!(add, Add, Add, (Sample => Sample, Int => i64), "Adds two signals together.");
+impl_binary_node_ops!(sub, Sub, Sub, (Sample => Sample, Int => i64), "Subtracts one signal from another.");
+impl_binary_node_ops!(mul, Mul, Mul, (Sample => Sample, Int => i64), "Multiplies two signals together.");
+impl_binary_node_ops!(div, Div, Div, (Sample => Sample, Int => i64), "Divides one signal by another.");
 impl_binary_node_ops!(
     rem,
     Rem,
-    math::Rem,
+    Rem,
+    (Sample => Sample, Int => i64),
     "Calculates the remainder of one signal divided by another."
 );
-impl_binary_node_ops!(
-    powf,
-    math::Powf,
-    "Raises one signal to the power of another."
-);
+impl_binary_node_ops!(powf, Powf, (Sample => Sample), "Raises one signal to the power of another.");
 impl_binary_node_ops!(
     atan2,
-    math::Atan2,
+    Atan2,
+    (Sample => Sample),
     "Calculates the arctangent of the ratio of two signals."
 );
-impl_binary_node_ops!(
-    hypot,
-    math::Hypot,
-    "Calculates the hypotenuse of two signals."
-);
-impl_binary_node_ops!(max, math::Max, "Outputs the maximum of two signals.");
-impl_binary_node_ops!(min, math::Min, "Outputs the minimum of two signals.");
+impl_binary_node_ops!(hypot, Hypot, (Sample => Sample), "Calculates the hypotenuse of two signals.");
+impl_binary_node_ops!(max, Max, (Sample => Sample, Int => i64), "Outputs the maximum of two signals.");
+impl_binary_node_ops!(min, Min, (Sample => Sample, Int => i64), "Outputs the minimum of two signals.");
 
 macro_rules! impl_comparison_node_ops {
     ($name:ident, $proc:ident, $doc:expr) => {
@@ -739,15 +754,20 @@ impl_comparison_node_ops!(
 );
 
 macro_rules! impl_unary_node_ops {
-    ($name:ident, $proc:ty, $doc:expr) => {
+    ($name:ident, $proc:ident, ($($kind:ident => $data:ty),*), $doc:literal) => {
         impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
             pub fn $name(&self) -> Node {
                 self.assert_single_output();
 
-                let processor = <$proc>::default();
-                let node = self.graph().add(processor);
+                let kind = self.output_kind(0);
+
+                let node = match kind {
+                    $(SignalKind::$kind => self.graph().add(<math::$proc<$data>>::default()),)*
+                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), kind),
+                };
+
                 node.input(0).connect(&self.output(0));
 
                 node
@@ -756,7 +776,7 @@ macro_rules! impl_unary_node_ops {
     };
 }
 
-impl_unary_node_ops!(neg, math::Neg, "Negates the input signal.");
+impl_unary_node_ops!(neg, Neg, (Sample => Sample, Int => i64), "Negates the input signal.");
 
 impl std::ops::Neg for &Node {
     type Output = Node;
@@ -768,55 +788,89 @@ impl std::ops::Neg for &Node {
 
 impl_unary_node_ops!(
     abs,
-    math::Abs,
+    Abs,
+    (Sample => Sample, Int => i64),
     "Outputs the absolute value of the input signal."
 );
 impl_unary_node_ops!(
     sqrt,
-    math::Sqrt,
+    Sqrt,
+    (Sample => Sample),
     "Outputs the square root of the input signal."
 );
 impl_unary_node_ops!(
     cbrt,
-    math::Cbrt,
+    Cbrt,
+    (Sample => Sample),
     "Outputs the cube root of the input signal."
 );
 impl_unary_node_ops!(
     ceil,
-    math::Ceil,
+    Ceil,
+    (Sample => Sample),
     "Rounds the input signal up to the nearest integer."
 );
 impl_unary_node_ops!(
     floor,
-    math::Floor,
+    Floor,
+    (Sample => Sample),
     "Rounds the input signal down to the nearest integer."
 );
 impl_unary_node_ops!(
     round,
-    math::Round,
+    Round,
+    (Sample => Sample),
     "Rounds the input signal to the nearest integer."
 );
-impl_unary_node_ops!(sin, math::Sin, "Outputs the sine of the input signal.");
-impl_unary_node_ops!(cos, math::Cos, "Outputs the cosine of the input signal.");
-impl_unary_node_ops!(tan, math::Tan, "Outputs the tangent of the input signal.");
+impl_unary_node_ops!(sin, Sin, (Sample => Sample), "Outputs the sine of the input signal.");
+impl_unary_node_ops!(cos, Cos, (Sample => Sample), "Outputs the cosine of the input signal.");
+impl_unary_node_ops!(tan, Tan, (Sample => Sample), "Outputs the tangent of the input signal.");
 impl_unary_node_ops!(
     tanh,
-    math::Tanh,
+    Tanh,
+    (Sample => Sample),
     "Outputs the hyperbolic tangent of the input signal."
 );
 
 impl_unary_node_ops!(
     recip,
-    math::Recip,
+    Recip,
+    (Sample => Sample),
     "Outputs the reciprocal of the input signal."
 );
 impl_unary_node_ops!(
     signum,
-    math::Signum,
+    Signum,
+    (Sample => Sample, Int => i64),
     "Outputs the sign of the input signal."
 );
 impl_unary_node_ops!(
     fract,
-    math::Fract,
+    Fract,
+    (Sample => Sample),
     "Outputs the fractional part of the input signal."
+);
+impl_unary_node_ops!(
+    ln,
+    Ln,
+    (Sample => Sample),
+    "Outputs the natural logarithm of the input signal."
+);
+impl_unary_node_ops!(
+    log2,
+    Log2,
+    (Sample => Sample),
+    "Outputs the base-2 logarithm of the input signal."
+);
+impl_unary_node_ops!(
+    log10,
+    Log10,
+    (Sample => Sample),
+    "Outputs the base-10 logarithm of the input signal."
+);
+impl_unary_node_ops!(
+    exp,
+    Exp,
+    (Sample => Sample),
+    "Outputs the natural exponential of the input signal."
 );
