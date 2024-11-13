@@ -22,12 +22,12 @@ impl Debug for ProcessorNode {
 }
 
 impl ProcessorNode {
-    /// Creates a new [`ProcessorNode`] from the given [`Processor`] object.
+    /// Creates a new `ProcessorNode` with the given processor.
     pub fn new(processor: impl Processor) -> Self {
         Self::new_from_boxed(Box::new(processor))
     }
 
-    /// Creates a new [`ProcessorNode`] from the given boxed [`Processor`] object.
+    /// Creates a new `ProcessorNode` with the given boxed processor.
     pub fn new_from_boxed(processor: Box<dyn Processor>) -> Self {
         let input_spec = processor.input_spec();
         let output_spec = processor.output_spec();
@@ -38,48 +38,49 @@ impl ProcessorNode {
         }
     }
 
-    /// Returns the name of this [`ProcessorNode`].
+    /// Returns the name of the processor.
     #[inline]
     pub fn name(&self) -> &str {
         self.processor.name()
     }
 
-    /// Returns information about the inputs this [`ProcessorNode`] expects.
+    /// Returns information about the input signals of the processor.
     #[inline]
     pub fn input_spec(&self) -> &[SignalSpec] {
         &self.input_spec
     }
 
-    /// Returns information about the outputs this [`ProcessorNode`] produces.
+    /// Returns information about the output signals of the processor.
     #[inline]
     pub fn output_spec(&self) -> &[SignalSpec] {
         &self.output_spec
     }
 
-    /// Returns the number of input buffers/channels this [`ProcessorNode`] expects.
+    /// Returns the number of input signals of the processor.
     #[inline]
     pub fn num_inputs(&self) -> usize {
         self.input_spec.len()
     }
 
-    /// Returns the number of output buffers/channels this [`ProcessorNode`] produces.
+    /// Returns the number of output signals of the processor.
     #[inline]
     pub fn num_outputs(&self) -> usize {
         self.output_spec.len()
     }
 
-    /// Resizes the input and output buffers to match the given sample rates and block size.
+    /// Resizes the internal buffers of the processor and updates the sample rate and block size.
+    #[inline]
     pub fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) {
         self.processor.resize_buffers(sample_rate, block_size);
     }
 
-    /// Prepares the processor for processing. This is called before the first [`Processor::process`] call, and anytime the graph changes.
+    /// Prepares the processor for processing.
     #[inline]
     pub fn prepare(&mut self) {
         self.processor.prepare();
     }
 
-    /// Processes the input buffers and writes the results to the output buffers.
+    /// Processes the input signals and writes the output signals to the given buffers.
     #[inline]
     pub fn process(
         &mut self,

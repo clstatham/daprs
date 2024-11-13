@@ -14,7 +14,6 @@ pub mod processor;
 pub mod runtime;
 pub mod signal;
 
-/// Re-exports of the most commonly used types and traits.
 #[allow(unused_imports)]
 pub mod prelude {
     pub use crate::builder::{
@@ -33,9 +32,9 @@ pub mod prelude {
     pub use std::time::Duration;
 }
 
-/// Returns a Vec of available backends.
+/// Returns a list of available audio backends, as exposed by the `cpal` crate.
 pub fn available_audio_backends() -> Vec<AudioBackend> {
-    let mut backends = vec![AudioBackend::Default];
+    let mut backends = vec![];
     for host in cpal::available_hosts() {
         match host {
             #[cfg(all(target_os = "linux", feature = "jack"))]
@@ -58,7 +57,7 @@ pub fn available_audio_backends() -> Vec<AudioBackend> {
     backends
 }
 
-/// Prints the available backends.
+/// Prints a list of available audio backends to the console.
 pub fn list_audio_backends() {
     println!("Listing available backends:");
     for (i, backend) in available_audio_backends().into_iter().enumerate() {
@@ -66,7 +65,7 @@ pub fn list_audio_backends() {
     }
 }
 
-/// Prints the available devices for the given backend.
+/// Prints a list of available audio devices for the given backend to the console.
 pub fn list_audio_devices(backend: AudioBackend) {
     println!("Listing devices for backend: {:?}", backend);
     let host = match backend {
@@ -83,7 +82,7 @@ pub fn list_audio_devices(backend: AudioBackend) {
     }
 }
 
-/// Prints the available MIDI ports.
+/// Prints a list of available MIDI ports to the console.
 pub fn list_midi_ports() {
     let input = midir::MidiInput::new("raug").unwrap();
     println!("Listing available MIDI ports:");

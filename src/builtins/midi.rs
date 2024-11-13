@@ -2,19 +2,19 @@
 
 use crate::prelude::*;
 
-/// A processor that extracts the MIDI note number from a MIDI message.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `midi` | `Message(midi)` |  | The MIDI message. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `note` | `Message(float)` | The MIDI note number. |
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Debug, Clone)]
 pub struct MidiNote;
 
@@ -48,19 +48,19 @@ impl Processor for MidiNote {
     }
 }
 
-/// A processor that extracts the MIDI velocity from a MIDI message.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `midi` | `Message(midi)` |  | The MIDI message. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `velocity` | `Message(float)` | The MIDI velocity. |
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Debug, Clone)]
 pub struct MidiVelocity;
 
@@ -92,19 +92,19 @@ impl Processor for MidiVelocity {
     }
 }
 
-/// A processor that outputs a gate signal based on a MIDI note on/off message.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `midi` | `Midi` | | The MIDI message. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `gate` | `Bool` | The gate signal. |
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Debug, Clone, Default)]
 pub struct MidiGate {
     gate: bool,
@@ -143,21 +143,21 @@ impl Processor for MidiGate {
     }
 }
 
-/// A processor that triggers a signal based on a MIDI note on message.
-///
-/// The trigger signal is `true` for a single sample when a note on message is received.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `midi` | `Midi` | | The MIDI message. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `trigger` | `Bool` | The trigger signal. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Debug, Clone, Default)]
 pub struct MidiTrigger;
 
@@ -190,19 +190,19 @@ impl Processor for MidiTrigger {
     }
 }
 
-/// A processor that extracts the MIDI channel from a MIDI message.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `midi` | `Message(midi)` |  | The MIDI message. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `channel` | `Message(float)` | The MIDI channel. |
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Debug, Clone)]
 pub struct MidiChannel;
 

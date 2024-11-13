@@ -21,12 +21,12 @@ pub struct GraphBuilder {
 }
 
 impl GraphBuilder {
-    /// Creates a new graph builder.
+    /// Creates a new `GraphBuilder` with an empty graph.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Adds an input node to the graph.
+    /// Adds an audio input node to the graph.
     pub fn add_audio_input(&self) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
@@ -34,7 +34,7 @@ impl GraphBuilder {
         })
     }
 
-    /// Adds an output node to the graph.
+    /// Adds an audio output node to the graph.
     pub fn add_audio_output(&self) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
@@ -50,15 +50,15 @@ impl GraphBuilder {
         })
     }
 
-    /// Adds the given processor to the graph.
-    pub fn add<T: Processor>(&self, processor: T) -> Node {
+    /// Adds a processor node to the graph.
+    pub fn add(&self, processor: impl Processor) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
             node_id: graph.add_processor(processor),
         })
     }
 
-    /// Adds a [`Param`] node to the graph.
+    /// Adds a parameter node to the graph.
     pub fn add_param<S: Signal>(&self, value: Param<S>) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
@@ -66,19 +66,19 @@ impl GraphBuilder {
         })
     }
 
-    /// Creates a new graph builder from the given graph.
+    /// Creates a new [`GraphBuilder`] with the given graph as a starting point.
     pub fn from_graph(graph: Graph) -> Self {
         Self {
             graph: Arc::new(Mutex::new(graph)),
         }
     }
 
-    /// Builds a graph from the builder.
+    /// Builds the graph, returning a new [`Graph`] instance that can be used in a [`Runtime`].
     pub fn build(&self) -> Graph {
         self.with_graph(|graph| graph.clone())
     }
 
-    /// Builds a runtime from the graph.
+    /// Builds the graph and constructs a new [`Runtime`] instance from the graph.
     pub fn build_runtime(&self) -> Runtime {
         Runtime::new(self.build())
     }
@@ -93,7 +93,7 @@ impl GraphBuilder {
         self.with_graph(|graph| graph.digraph().edge_count())
     }
 
-    /// Calls the given function with a reference to the graph.
+    /// Runs the given closure with a reference to the graph.
     pub fn with_graph<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&Graph) -> R,
@@ -101,7 +101,7 @@ impl GraphBuilder {
         f(&self.graph.lock().unwrap())
     }
 
-    /// Calls the given function with a mutable reference to the graph.
+    /// Runs the given closure with a mutable reference to the graph.
     pub fn with_graph_mut<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut Graph) -> R,
@@ -109,11 +109,7 @@ impl GraphBuilder {
         f(&mut self.graph.lock().unwrap())
     }
 
-    /// Connects the given output of the source node to the given input of the target node.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the nodes, output, or input are invalid.
+    /// Connects the given output of one node to the given input of another node.
     #[track_caller]
     #[inline]
     pub fn connect(
@@ -131,8 +127,7 @@ impl GraphBuilder {
             .unwrap();
     }
 
-    /// Writes the graph to the given writer in the DOT format.
-    /// This is useful for visualizing the graph.
+    /// Writes a DOT representation of the graph to the given writer.
     pub fn write_dot(&self, writer: &mut impl Write) -> std::io::Result<()> {
         self.with_graph(|graph| graph.write_dot(writer))
     }

@@ -13,24 +13,24 @@ use crate::{
     signal::{Float, Signal, SignalType},
 };
 
-/// A processor that forwards its input to its output.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Float` | | The input signal to forward. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Float` | The output signal. |
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug, Default)]
 pub struct Passthrough<S: Signal>(PhantomData<S>);
 
 impl<S: Signal> Passthrough<S> {
-    /// Creates a new `Passthrough`.
+    
     pub fn new() -> Self {
         Self(PhantomData)
     }
@@ -114,27 +114,27 @@ impl<S: Signal, T: Signal> Processor for Cast<S, T> {
     }
 }
 
-/// A processor that sends a message when triggered.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `trig` | `Bang` | | Triggers the message. |
-/// | `1` | `message` | `Message` | | The message to send. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Message` | The message to send. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug)]
 pub struct MessageSender<S: Signal> {
     message: S,
 }
 
 impl<S: Signal> MessageSender<S> {
-    /// Creates a new `MessageProc` with the given initial message.
+    
     pub fn new(message: S) -> Self {
         Self { message }
     }
@@ -177,14 +177,14 @@ impl<S: Signal> Processor for MessageSender<S> {
     }
 }
 
-/// A processor that prints a message when triggered.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `trig` | `Message(Bang)` | | Triggers the print. |
-/// | `1` | `message` | `Message` | | The message to print. |
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug, Default)]
 pub struct Print {
     name: Option<String>,
@@ -192,7 +192,7 @@ pub struct Print {
 }
 
 impl Print {
-    /// Creates a new `Print`, optionally with a name and message.
+    
     pub fn new(name: Option<&str>, msg: Option<&str>) -> Self {
         Self {
             name: name.map(String::from),
@@ -200,7 +200,7 @@ impl Print {
         }
     }
 
-    /// Creates a new `Print` with the given name.
+    
     pub fn with_name(name: &str) -> Self {
         Self {
             name: Some(String::from(name)),
@@ -208,7 +208,7 @@ impl Print {
         }
     }
 
-    /// Creates a new `Print` with the given message.
+    
     pub fn with_msg(msg: &str) -> Self {
         Self {
             msg: Some(String::from(msg)),
@@ -216,7 +216,7 @@ impl Print {
         }
     }
 
-    /// Creates a new `Print` with the given name and message.
+    
     pub fn with_name_and_msg(name: &str, msg: &str) -> Self {
         Self {
             name: Some(String::from(name)),
@@ -273,9 +273,9 @@ impl Processor for Print {
 }
 
 impl GraphBuilder {
-    /// A processor that prints a message when triggered.
-    ///
-    /// See also: [Print].
+    
+    
+    
     pub fn print<'a>(
         &self,
         name: impl Into<Option<&'a str>>,
@@ -285,13 +285,13 @@ impl GraphBuilder {
     }
 }
 
-/// A processor that outputs the sample rate that the graph is running at.
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `sample_rate` | `Float` | The sample rate. |
+
+
+
+
+
+
+
 #[derive(Clone, Debug, Default)]
 pub struct SampleRate {
     sample_rate: Float,
@@ -315,7 +315,7 @@ impl Processor for SampleRate {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let sample_rate_out = outputs.output_as_samples(0)?;
+        let sample_rate_out = outputs.output_as_floats(0)?;
         sample_rate_out.fill(Some(self.sample_rate));
 
         Ok(())
@@ -323,9 +323,9 @@ impl Processor for SampleRate {
 }
 
 impl GraphBuilder {
-    /// A processor that outputs the sample rate that the graph is running at.
-    ///
-    /// See also: [SampleRate].
+    
+    
+    
     pub fn sample_rate(&self) -> Node {
         self.add(SampleRate::default())
     }
@@ -336,20 +336,20 @@ fn lerp(a: Float, b: Float, t: Float) -> Float {
     a + (b - a) * t
 }
 
-/// A processor that smoothly interpolates between values over time.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `target` | `Float` | 0.0 | The target value. |
-/// | `1` | `factor` | `Float` | 1.0  | The factor of smoothing (0 <= factor <= 1). |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Float` | The current value of the interpolation. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug, Default)]
 pub struct Smooth {
     current: Float,
@@ -374,8 +374,8 @@ impl Processor for Smooth {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (target, factor, out) in itertools::izip!(
-            inputs.iter_input_as_samples(0)?,
-            inputs.iter_input_as_samples(1)?,
+            inputs.iter_input_as_floats(0)?,
+            inputs.iter_input_as_floats(1)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
             self.factor = factor.unwrap_or(self.factor).clamp(0.0, 1.0);
@@ -394,20 +394,20 @@ impl Processor for Smooth {
     }
 }
 
-/// A processor that sends a bang message when a value changes beyond a certain threshold from the last value.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Float` | | The input signal to detect changes on. |
-/// | `1` | `threshold` | `Float` | | The threshold for a change to be detected. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Message(Bang)` | A bang message when a change is detected. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug, Default)]
 pub struct Changed {
     last: Float,
@@ -415,7 +415,7 @@ pub struct Changed {
 }
 
 impl Changed {
-    /// Creates a new `Changed` with the given threshold.
+    
     pub fn new(threshold: Float) -> Self {
         Self {
             last: 0.0,
@@ -442,8 +442,8 @@ impl Processor for Changed {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (in_signal, threshold, out_signal) in itertools::izip!(
-            inputs.iter_input_as_samples(0)?,
-            inputs.iter_input_as_samples(1)?,
+            inputs.iter_input_as_floats(0)?,
+            inputs.iter_input_as_floats(1)?,
             outputs.iter_output_mut_as_bools(0)?
         ) {
             let Some(in_signal) = in_signal else {
@@ -466,19 +466,19 @@ impl Processor for Changed {
     }
 }
 
-/// A processor that sends a bang message when a zero crossing is detected on the input signal.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Float` | | The input signal to detect zero crossings on. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Message(Bang)` | A bang message when a zero crossing is detected. |
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug, Default)]
 pub struct ZeroCrossing {
     last: Float,
@@ -499,7 +499,7 @@ impl Processor for ZeroCrossing {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (in_signal, out_signal) in itertools::izip!(
-            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_floats(0)?,
             outputs.iter_output_mut_as_bools(0)?
         ) {
             let Some(in_signal) = in_signal else {
@@ -520,7 +520,7 @@ impl Processor for ZeroCrossing {
     }
 }
 
-/// A signal sender, used for `Param` communication and breaking cycles in the graph.
+
 #[derive(Clone, Debug)]
 pub struct SignalTx<S: Signal> {
     tx: Sender<S>,
@@ -531,7 +531,7 @@ impl<S: Signal> SignalTx<S> {
         Self { tx }
     }
 
-    /// Sends a message to the `Param`.
+    
     pub fn send(&self, message: S) {
         self.tx.try_send(message).unwrap();
     }
@@ -561,7 +561,7 @@ impl<S: Signal> Processor for SignalTx<S> {
     }
 }
 
-/// A message receiver, used for `Param` communication and breaking cycles in the graph.
+
 #[derive(Clone, Debug)]
 pub struct SignalRx<S: Signal> {
     rx: Receiver<S>,
@@ -572,7 +572,7 @@ impl<S: Signal> SignalRx<S> {
         Self { rx }
     }
 
-    /// Receives a message from the `Param`.
+    
     pub fn recv(&mut self) -> Option<S> {
         self.rx.try_recv().ok()
     }
@@ -602,7 +602,7 @@ impl<S: Signal> Processor for SignalRx<S> {
     }
 }
 
-/// A receiver for a `Param`.
+
 #[derive(Clone, Debug)]
 pub struct ParamRx<S: Signal> {
     rx: SignalRx<S>,
@@ -617,7 +617,7 @@ impl<S: Signal> ParamRx<S> {
         }
     }
 
-    /// Receives a message from the `Param`.
+    
     pub fn recv(&mut self) -> Option<S> {
         let mut last = self.last.try_lock().ok()?;
         if let Some(msg) = self.rx.recv() {
@@ -629,7 +629,7 @@ impl<S: Signal> ParamRx<S> {
         }
     }
 
-    /// Returns the last message received from the `Param`.
+    
     pub fn last(&self) -> Option<S> {
         self.last.try_lock().ok()?.clone()
     }
@@ -640,19 +640,19 @@ pub(crate) fn param_channel<S: Signal>() -> (SignalTx<S>, ParamRx<S>) {
     (SignalTx::new(tx), ParamRx::new(SignalRx::new(rx)))
 }
 
-/// A processor that can be used to send/receive messages from outside the graph.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `set` | `Message` | | The message to set the parameter to. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `get` | `Message` | The current value of the parameter. |
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug)]
 pub struct Param<S: Signal> {
     name: String,
@@ -660,7 +660,7 @@ pub struct Param<S: Signal> {
 }
 
 impl<S: Signal> Param<S> {
-    /// Creates a new `Param`.
+    
     pub fn new(name: impl Into<String>, initial_value: impl Into<Option<S>>) -> Self {
         let this = Self {
             name: name.into(),
@@ -673,12 +673,12 @@ impl<S: Signal> Param<S> {
         this
     }
 
-    /// Returns the name of this `Param`.
+    
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    /// Returns the sender for this `Param`.
+    
     pub fn tx(&self) -> &SignalTx<S> {
         &self.channels.0
     }
@@ -687,23 +687,23 @@ impl<S: Signal> Param<S> {
         &self.channels.1
     }
 
-    /// Returns the receiver for this `Param`.
+    
     pub fn rx_mut(&mut self) -> &mut ParamRx<S> {
         &mut self.channels.1
     }
 
-    /// Sets the `Param`'s value.
+    
     pub fn set(&self, message: impl Into<S>) {
         let message = message.into();
         self.tx().send(message);
     }
 
-    /// Gets the `Param`'s value.
+    
     pub fn get(&mut self) -> Option<S> {
         self.rx_mut().recv()
     }
 
-    /// Gets the last value received by the `Param`.
+    
     pub fn last(&self) -> Option<S> {
         self.rx().last()
     }
@@ -738,24 +738,24 @@ impl<S: Signal> Processor for Param<S> {
     }
 }
 
-/// A processor that routes a message to one of its outputs.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Message` | | The message to route. |
-/// | `1` | `index` | `Message(int)` | `0` | The index of the output to route to. |
-///
-/// # Outputs
-///
-/// Note that the number of outputs is determined by the number specified at construction.
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `0` | `Message` | The message, if routed to output `0`. |
-/// | `1` | `1` | `Message` | The message, if routed to output `1`. |
-/// | `...` | `...` | `...` | etc... |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug)]
 pub struct Select<S: Signal> {
     num_outputs: usize,
@@ -764,7 +764,7 @@ pub struct Select<S: Signal> {
 }
 
 impl<S: Signal> Select<S> {
-    /// Creates a new `Select` with the given number of outputs.
+    
     pub fn new(num_outputs: usize) -> Self {
         Self {
             last_index: 0,
@@ -825,25 +825,25 @@ impl<S: Signal> Processor for Select<S> {
     }
 }
 
-/// A processor that outputs any messages it receives on any of its inputs.
-///
-/// If a message is received on multiple inputs, the message from the input with the lowest index is output.
-///
-/// # Inputs
-///
-/// Note that the number of inputs is determined by the number specified at construction.
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `0` | `Message` | | The message to merge. |
-/// | `1` | `1` | `Message` | | The message to merge. |
-/// | `...` | `...` | `...` | | etc... |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Message` | The merged message. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug)]
 pub struct Merge<S: Signal> {
     num_inputs: usize,
@@ -851,7 +851,7 @@ pub struct Merge<S: Signal> {
 }
 
 impl<S: Signal> Merge<S> {
-    /// Creates a new `Merge` with the given number of inputs.
+    
     pub fn new(num_inputs: usize) -> Self {
         Self {
             num_inputs,
@@ -907,20 +907,20 @@ impl<S: Signal> Processor for Merge<S> {
     }
 }
 
-/// A processor that counts the number of times it receives a bang message.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `trig` | `Message(Bang)` | | Triggers the counter. |
-/// | `1` | `reset` | `Message(Bang)` | | Resets the counter. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `count` | `Message(Int)` | The current count. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug, Default)]
 pub struct Counter {
     count: i64,
@@ -963,22 +963,22 @@ impl Processor for Counter {
     }
 }
 
-/// A sample-and-hold processor.
-///
-/// The processor holds the last value it received when triggered.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Float` | | The input signal to sample. |
-/// | `1` | `trig` | `Message(Bang)` | | Triggers the sample-and-hold. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Float` | The sampled value. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug, Default)]
 pub struct SampleAndHold {
     last: Option<Float>,
@@ -1002,7 +1002,7 @@ impl Processor for SampleAndHold {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (in_signal, trig, out_signal) in itertools::izip!(
-            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_bools(1)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
@@ -1017,21 +1017,21 @@ impl Processor for SampleAndHold {
     }
 }
 
-/// A processor that panics if the input signal is infinite or NaN.
-/// This is useful for debugging.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Float` | | The input signal to check. |
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug, Default)]
 pub struct CheckFinite {
     context: String,
 }
 
 impl CheckFinite {
-    /// Creates a new `CheckFinite` with the given context.
+    
     pub fn new(context: impl Into<String>) -> Self {
         Self {
             context: context.into(),
@@ -1053,7 +1053,7 @@ impl Processor for CheckFinite {
         inputs: ProcessorInputs,
         _outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs.iter_input_as_samples(0)?;
+        let in_signal = inputs.iter_input_as_floats(0)?;
         for in_signal in in_signal.flatten() {
             if in_signal.is_nan() {
                 panic!("{}: signal is NaN: {:?}", self.context, in_signal);

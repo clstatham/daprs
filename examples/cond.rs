@@ -13,7 +13,7 @@ fn main() {
 
     let clock = graph.add(Metro::new(0.5));
     let counter = graph.add(Counter::default());
-    counter.input(0).connect(&clock.output(0));
+    counter.input(0).connect(clock.output(0));
 
     let mix = (counter % 2.0).eq(0.0).cond(&sine1, &sine2);
 

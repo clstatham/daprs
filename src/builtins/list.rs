@@ -2,19 +2,19 @@ use std::marker::PhantomData;
 
 use crate::prelude::*;
 
-/// A processor that outputs the length of a [`List`].
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `list` | `List` | | The list to get the length of. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Int` | The length of the list. |
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Default, Debug, Clone)]
 pub struct Len;
 
@@ -48,20 +48,20 @@ impl Processor for Len {
     }
 }
 
-/// A processor that outputs the element at the given index of a [`List`].
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `list` | `List` | | The list to get the element from. |
-/// | `1` | `index` | `Int` | | The index of the element to get. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Signal` | The element at the given index. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Default, Debug, Clone)]
 pub struct Get<S: Signal>(PhantomData<S>);
 
@@ -120,21 +120,21 @@ impl<S: Signal> Processor for Get<S> {
     }
 }
 
-/// A processor that packs its input signals into a [`List`].
-///
-/// The signals must all have the same type.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0..N` | `0..N` | `Signal` | | The signals to pack into a list. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `List` | The list containing the input signals. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Debug, Clone)]
 pub struct Pack {
     type_: SignalType,
@@ -190,19 +190,19 @@ impl Processor for Pack {
     }
 }
 
-/// A processor that unpacks a [`List`] into its elements.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `list` | `List` | | The list to unpack. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0..N` | `0..N` | `Signal` | The unpacked signals. |
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Debug, Clone)]
 pub struct Unpack {
     type_: SignalType,

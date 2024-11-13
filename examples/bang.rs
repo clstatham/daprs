@@ -26,7 +26,7 @@ fn main() {
     bang.output(0).connect(&print.input("trig"));
 
     let cast = graph.add(Cast::<Float, String>::default());
-    cast.input(0).connect(&sine.output(0));
+    cast.input(0).connect(sine.output(0));
 
     // connect the sine oscillator to the print
     cast.output(0).connect(&print.input("message"));

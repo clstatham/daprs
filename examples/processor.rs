@@ -20,7 +20,7 @@ impl Processor for GainProc {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (input, output) in itertools::izip!(
-            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_floats(0)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
             let Some(input) = input else {
@@ -42,7 +42,7 @@ fn main() {
     let out2 = graph.add_audio_output();
 
     let sine = graph.add(SineOscillator::default());
-    sine.input("frequency").set(440.0);
+    sine.input("frequency").connect(440.0);
 
     let gain = graph.add(GainProc { gain: 0.5 });
 

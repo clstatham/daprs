@@ -13,13 +13,13 @@ fn main() {
 
     let clock = graph.add(Metro::new(0.5));
     let counter = graph.add(Counter::default());
-    counter.input(0).connect(&clock.output(0));
+    counter.input(0).connect(clock.output(0));
 
     let expr = graph.add(Expr::new("if(counter % 2 < 1, a, b)"));
 
-    expr.input("counter").connect(&counter.output(0));
-    expr.input("a").connect(&sine1.output(0));
-    expr.input("b").connect(&sine2.output(0));
+    expr.input("counter").connect(counter.output(0));
+    expr.input("a").connect(sine1.output(0));
+    expr.input("b").connect(sine2.output(0));
 
     let sine = expr * 0.2;
 

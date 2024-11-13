@@ -7,102 +7,102 @@ use std::{
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use petgraph::prelude::*;
-use rustc_hash::FxBuildHasher;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::{
-    graph::{Graph, GraphRunError, GraphRunErrorKind, NodeIndex},
+    graph::{Graph, GraphRunError, GraphRunErrorType, NodeIndex},
     prelude::{ProcessorInputs, SignalSpec},
     processor::{ProcessorError, ProcessorOutputs},
     signal::{Float, MidiMessage, SignalBuffer, SignalType},
 };
 
-/// An error that occurred during runtime operations.
+/// Errors that can occur related to the runtime.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 #[error("Runtime error")]
 pub enum RuntimeError {
-    /// An error occurred while accessing the audio stream.
+    /// An error occurred while the stream was running.
     StreamError(#[from] cpal::StreamError),
 
-    /// An error occurred while accessing audio devices.
+    /// An error occurred while enumerating available audio devices.
     DevicesError(#[from] cpal::DevicesError),
 
-    /// An error occurred while reading or writing a WAV file.
+    /// An error occurred while enumerating available hosts.
     Hound(#[from] hound::Error),
 
-    /// An error occurred during audio host configuration (host unavailable).
+    /// The requested host is unavailable.
     HostUnavailable(#[from] cpal::HostUnavailable),
 
-    /// An error occurred during audio device configuration (device unavailable).
+    /// The requested device is unavailable.
     #[error("Requested device is unavailable: {0:?}")]
     DeviceUnavailable(AudioDevice),
 
-    /// An error occurred during audio device configuration (error getting the device's name).
+    /// An error occurred while retrieving the device name.
     DeviceNameError(#[from] cpal::DeviceNameError),
 
-    /// An error occurred during audio device configuration (error getting the default device stream configuration).
+    /// An error occurred while retrieving the default output config.
     DefaultStreamConfigError(#[from] cpal::DefaultStreamConfigError),
 
-    /// An error occurred during audio device configuration (invalid sample format).
+    /// Output stream sample format is not supported.
     #[error("Unsupported sample format: {0}")]
     UnsupportedSampleFormat(cpal::SampleFormat),
 
-    /// An error occurred during MIDI device configuration (error initializing input).
+    /// An error occurred while initializing MIDI input.
     MidirInitError(#[from] midir::InitError),
 
-    /// An error occurred during MIDI device configuration (port unavailable).
+    /// The requested MIDI port is unavailable.
     MidiPortUnavailable(MidiPort),
 
-    /// An error occurred during MIDI device configuration (error connecting to port).
+    /// An error occurred while connecting to a MIDI port.
     MidiConnectError(#[from] midir::ConnectError<midir::MidiInput>),
 
-    /// An error occurred during graph processing.
+    /// An error occurred while running the audio graph.
     GraphRunError(#[from] GraphRunError),
 
-    /// The runtime needs to be reset before processing.
+    /// The runtime needs to be reset.
     NeedsReset,
 
-    /// An error occurred during processing.
+    /// An error occurred while processing a node in the audio graph.
     ProcessorError(#[from] ProcessorError),
 
-    /// The number of channels in the audio graph does not match the number of channels in the audio device.
+    /// The number of channels in the audio stream does not match the number of outputs in the graph.
     #[error("Channel mismatch: expected {0} channels, got {1}")]
     ChannelMismatch(usize, usize),
 }
 
-/// A result type for runtime operations.
+/// Result type for runtime operations.
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
-/// The audio backend to use for the runtime.
+/// The audio backend to use for audio I/O.
 #[derive(Default, Debug, Clone)]
 pub enum AudioBackend {
+    /// Use the default audio backend.
     #[default]
-    /// Default audio backend for the current platform.
     Default,
     #[cfg(all(target_os = "linux", feature = "jack"))]
-    /// JACK Audio Connection Kit
+    /// Use the JACK Audio Connection Kit audio backend.
     Jack,
     #[cfg(target_os = "linux")]
-    /// Advanced Linux Sound Architecture
+    /// Use the Advanced Linux Sound Architecture audio backend.
     Alsa,
     #[cfg(target_os = "windows")]
-    /// Windows Audio Session API
+    /// Use the Windows Audio Session API audio backend.
     Wasapi,
 }
 
-/// The audio device to use for the runtime.
+/// An audio device to use for audio I/O.
 #[derive(Default, Debug, Clone)]
 pub enum AudioDevice {
-    /// Use the default audio device as returned by [`cpal::Host::default_output_device`].
+    /// Use the default audio device.
     #[default]
     Default,
     /// Use the audio device at the given index.
     Index(usize),
-    /// Substring of the device name to match. The first device with a name containing this substring will be used.
+    /// Use the audio device with the given substring in its name.
     Name(String),
 }
 
-/// The MIDI port to use for the runtime.
+/// A MIDI port to use for MIDI I/O.
 #[derive(Default, Debug, Clone)]
 pub enum MidiPort {
     /// Use the default MIDI port.
@@ -110,52 +110,37 @@ pub enum MidiPort {
     Default,
     /// Use the MIDI port at the given index.
     Index(usize),
-    /// Substring of the port name to match. The first port with a name containing this substring will be used.
+    /// Use the MIDI port with the given substring in its name.
     Name(String),
 }
 
-/// Stores the input and output buffers for a node.
 #[derive(Clone)]
-pub struct NodeBuffers {
+pub(crate) struct NodeBuffers {
     input_spec: Vec<SignalSpec>,
     output_spec: Vec<SignalSpec>,
     outputs: Vec<SignalBuffer>,
 }
 
 impl NodeBuffers {
-    /// Resizes the input and output buffers to the given block size.
     pub fn resize(&mut self, block_size: usize) {
         for output in &mut self.outputs {
             output.resize_default(block_size);
         }
     }
-
-    /// Fill the output buffers with their default values.
-    pub fn reset(&mut self) {
-        for output in &mut self.outputs {
-            output.fill_default();
-        }
-    }
 }
 
 /// The audio graph processing runtime.
-///
-/// The runtime is responsible for running the audio graph and rendering audio samples.
-/// It can run in real-time ([`run`](Runtime::run)) or offline ([`run_offline`](Runtime::run_offline)) mode.
-///
-/// In real-time mode, the runtime will render audio samples in real-time using a specified audio backend and device.
-///
-/// In offline mode, the runtime will render audio samples as fast as possible and return the rendered output channels.
 #[derive(Clone)]
 pub struct Runtime {
     graph: Graph,
-    buffer_cache: hashbrown::HashMap<NodeIndex, NodeBuffers, FxBuildHasher>,
+    buffer_cache: FxHashMap<NodeIndex, NodeBuffers>,
 }
 
 impl Runtime {
-    /// Creates a new runtime with the given audio graph.
+    /// Creates a new runtime from the given graph.
     pub fn new(mut graph: Graph) -> Self {
-        let mut buffer_cache = hashbrown::HashMap::default();
+        let mut buffer_cache =
+            FxHashMap::with_capacity_and_hasher(graph.digraph().node_count(), FxBuildHasher);
 
         graph.allocate_visitor();
         graph
@@ -189,8 +174,7 @@ impl Runtime {
         }
     }
 
-    /// Resets the runtime with the given sample rate and block size.
-    /// This will potentially reallocate internal buffers.
+    /// Resets the runtime with the given sample rate and block size. This will allocate buffers for each node in the graph.
     #[inline(never)]
     pub fn reset(&mut self, sample_rate: Float, block_size: usize) -> RuntimeResult<()> {
         self.graph.allocate_visitor();
@@ -237,7 +221,7 @@ impl Runtime {
         Ok(())
     }
 
-    /// Runs the preparation phase for every node in the graph.
+    /// Prepares the runtime and audio graph for processing.
     #[inline]
     pub fn prepare(&mut self) -> RuntimeResult<()> {
         self.graph.prepare()?;
@@ -256,7 +240,7 @@ impl Runtime {
         &mut self.graph
     }
 
-    /// Returns an iterator over the output channels of the runtime.
+    /// Returns an iterator over the output signal buffers.
     #[inline]
     pub fn outputs(&self) -> impl Iterator<Item = &SignalBuffer> + '_ {
         self.graph()
@@ -265,7 +249,8 @@ impl Runtime {
             .map(|&id| &self.buffer_cache[&id].outputs[0])
     }
 
-    /// Renders the next block of audio.
+    /// Runs the audio graph for one block of samples.
+    #[cfg_attr(feature = "profiling", inline(never))]
     pub fn process(&mut self) -> RuntimeResult<()> {
         self.graph.reset_visitor();
         let path_len = self.graph.visit_path().len();
@@ -306,7 +291,7 @@ impl Runtime {
                 let error = GraphRunError {
                     node_index: node_id,
                     node_processor: node.name().to_string(),
-                    type_: GraphRunErrorKind::ProcessorError(err),
+                    type_: GraphRunErrorType::ProcessorError(err),
                 };
                 return Err(RuntimeError::GraphRunError(error));
             }
@@ -317,24 +302,13 @@ impl Runtime {
         Ok(())
     }
 
-    /// Returns the output buffer for the given node and output index.
+    /// Returns a reference to the output buffer for the given node and output index.
     #[inline]
     pub fn get_node_output(&self, node: NodeIndex, output_index: usize) -> &SignalBuffer {
         &self.buffer_cache.get(&node).unwrap().outputs[output_index]
     }
 
-    /// Returns the input buffer for the given input index.
-    #[inline]
-    pub fn get_input_mut(&mut self, input_index: usize) -> &mut SignalBuffer {
-        self.buffer_cache
-            .get_mut(&self.graph.input_indices()[input_index])
-            .unwrap()
-            .outputs
-            .get_mut(0)
-            .unwrap()
-    }
-
-    /// Returns the output buffer for the given input index.
+    /// Returns a reference to the runtime's output buffer for the given output index.
     #[inline]
     pub fn get_output(&self, output_index: usize) -> &SignalBuffer {
         &self
@@ -344,9 +318,7 @@ impl Runtime {
             .outputs[0]
     }
 
-    /// Runs the audio graph as fast as possible for the given duration's worth of samples, and returns the rendered output channels.
-    ///
-    /// Note that MIDI input is not supported in offline mode.
+    /// Runs the audio graph offline for the given duration and sample rate, returning the output buffers.
     pub fn run_offline(
         &mut self,
         duration: Duration,
@@ -356,11 +328,9 @@ impl Runtime {
         self.run_offline_inner(duration, sample_rate, block_size, false)
     }
 
-    /// Simulates the audio graph running for the given duration's worth of samples, and returns the rendered output channels.
+    /// Runs the audio graph offline for the given duration and sample rate, returning the output buffers.
     ///
-    /// This method will add a delay between each block of samples to simulate real-time processing.
-    ///
-    /// Note that MIDI input is not supported in offline mode.
+    /// This method will sleep for the duration of each block to simulate real-time processing.
     pub fn simulate(
         &mut self,
         duration: Duration,
@@ -383,7 +353,7 @@ impl Runtime {
         self.reset(sample_rate, block_size)?;
         self.prepare()?;
 
-        let num_outputs: usize = self.graph.num_outputs();
+        let num_outputs: usize = self.graph.num_audio_outputs();
 
         let mut outputs: Box<[Box<[Float]>]> =
             vec![vec![0.0; samples].into_boxed_slice(); num_outputs].into_boxed_slice();
@@ -428,9 +398,7 @@ impl Runtime {
         Ok(outputs)
     }
 
-    /// Runs the audio graph as fast as possible for the given duration's worth of samples, and writes the rendered output channels to a WAV file.
-    ///
-    /// Note that MIDI input is not supported in offline mode.
+    /// Runs the audio graph offline for the given duration and sample rate, writing the output to a file.
     pub fn run_offline_to_file(
         &mut self,
         file_path: impl AsRef<std::path::Path>,
@@ -476,11 +444,7 @@ impl Runtime {
         Ok(())
     }
 
-    /// Runs the audio graph in real-time for the given [`Duration`] using the specified audio backend, audio device, and optional MIDI port.
-    ///
-    /// This method will block the current thread until the runtime is stopped automatically after the given duration.
-    ///
-    /// If a MIDI port is not provided, the runtime will run without listening for MIDI messages.
+    /// Runs the audio graph in real-time for the given duration.
     pub fn run_for(
         &mut self,
         duration: Duration,
@@ -494,9 +458,7 @@ impl Runtime {
         Ok(())
     }
 
-    /// Runs the audio graph in real-time using the specified audio backend and device.
-    ///
-    /// If a MIDI port is not provided, the runtime will run without listening for MIDI messages.
+    /// Starts running the audio graph in real-time. Returns a [`RuntimeHandle`] that can be used to stop the runtime.
     pub fn run(
         &mut self,
         backend: AudioBackend,
@@ -544,9 +506,9 @@ impl Runtime {
         let config = device.default_output_config()?;
 
         let channels = config.channels();
-        if self.graph.num_outputs() != channels as usize {
+        if self.graph.num_audio_outputs() != channels as usize {
             return Err(RuntimeError::ChannelMismatch(
-                self.graph.num_outputs(),
+                self.graph.num_audio_outputs(),
                 channels as usize,
             ));
         }
@@ -716,7 +678,7 @@ impl Runtime {
     }
 }
 
-/// A handle to a running runtime. Can be used to stop the runtime.
+/// A handle to the runtime that can be used to stop it.
 #[must_use = "The runtime handle must be kept alive for the runtime to continue running"]
 #[derive(Clone)]
 pub struct RuntimeHandle {
@@ -726,7 +688,7 @@ pub struct RuntimeHandle {
 }
 
 impl RuntimeHandle {
-    /// Stops the running runtime.
+    /// Stops the runtime. This will close the audio stream and MIDI input.
     pub fn stop(&self) {
         self.kill_tx.send(()).ok();
         if let Ok(mut midi_in) = self.midi_in.lock() {
@@ -736,7 +698,7 @@ impl RuntimeHandle {
         }
     }
 
-    /// Hot-reloads the audio graph with the given graph.
+    /// Sends a new graph to the runtime, hot-reloading it.
     pub fn hot_reload(&self, graph: Graph) {
         self.graph_tx.send(graph).ok();
     }

@@ -1,17 +1,16 @@
 //! Contains the definition of the `Edge` struct, which represents an edge in the graph.
 
-/// An edge in the graph, connecting an output of one node to an input of another.
+/// Represents a connection between an output and an input of two nodes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-
 pub struct Edge {
-    /// The output of the source node that this edge connects.
+    /// The output index of the source node.
     pub source_output: u32,
-    /// The input of the target node that this edge connects.
+    /// The input index of the target node.
     pub target_input: u32,
 }
 
 impl Edge {
-    /// Creates a new edge connecting the given output of the source node to the given input of the target node.
+    /// Creates a new `Edge` with the given source output and target input.
     pub fn new(source_output: u32, target_input: u32) -> Self {
         Edge {
             source_output,

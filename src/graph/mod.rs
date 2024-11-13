@@ -17,62 +17,48 @@ use crate::{
 pub mod edge;
 pub mod node;
 
-pub(crate) type GraphIx = u32;
-pub(crate) type NodeIndex = petgraph::graph::NodeIndex<GraphIx>;
+/// The type of graph indices.
+pub type GraphIx = u32;
+/// The type of node indices.
+pub type NodeIndex = petgraph::graph::NodeIndex<GraphIx>;
 
-pub(crate) type DiGraph = StableDiGraph<ProcessorNode, Edge, GraphIx>;
+/// The type of the directed graph.
+pub type DiGraph = StableDiGraph<ProcessorNode, Edge, GraphIx>;
 
-/// An error that can occur during graph processing.
+/// An error that occurred while running a graph.
 #[derive(Debug, thiserror::Error)]
 #[error("Graph run error at node {} ({}): {type_:?}", node_index.index(), node_processor)]
 pub struct GraphRunError {
-    /// The index of the node that caused the error.
+    /// The index of the node where the error occurred.
     pub node_index: NodeIndex,
-    /// The name of the processor that caused the error.
+    /// The name of the processor of the node where the error occurred.
     pub node_processor: String,
-    /// The type_ of error that occurred.
-    pub type_: GraphRunErrorKind,
+    /// The type of error that occurred.
+    pub type_: GraphRunErrorType,
 }
 
-/// The type of error that occurred during graph processing.
+/// The type of error that occurred while running a graph.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum GraphRunErrorKind {
-    /// Miscellaneous error.
-    #[error("{0}")]
-    Other(&'static str),
-
-    /// An error occurred in a processor.
+pub enum GraphRunErrorType {
+    /// An error occurred while processing the node.
     #[error("Processor error: {0}")]
     ProcessorError(#[from] ProcessorError),
 }
 
-/// An error that can occur during graph construction.
+/// An error that occurred while constructing a graph.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum GraphConstructionError {
-    /// An error for when a node is attempted to be connected to itself.
-    #[error("Cannot connect node to itself directly")]
-    FeedbackLoop,
-
-    /// An error for when a graph is attempted to be modified after it has been finalized.
-    #[error("Graph has already been constructed and cannot be modified; use `Graph::into_builder()` to get a new builder")]
-    GraphAlreadyFinished,
-
-    /// An error for when a node is attempted to be connected to a node from a different graph.
+    /// Attempted to connect nodes from different graphs.
     #[error("Cannot connect nodes from different graphs")]
     MismatchedGraphs,
 
-    /// An error for when an operation that expects a single output is attempted on a node that has multiple outputs.
+    /// Attempted to perform an invalid operation on a node with multiple outputs.
     #[error("Operation `{op}` invalid: Node type `{type_}` has multiple outputs")]
-    NodeHasMultipleOutputs {
-        /// The operation that caused the error.
-        op: String,
-        /// The type of node that caused the error.
-        type_: String,
-    },
+    NodeHasMultipleOutputs { op: String, type_: String },
 
-    /// An error occurred while attempting to read or write to the filesystem.
+    /// Filesystem error.
     #[error("Filesystem error: {0}")]
     FilesystemError(#[from] std::io::Error),
 }
@@ -84,13 +70,7 @@ pub type GraphRunResult<T> = Result<T, GraphRunError>;
 pub type GraphConstructionResult<T> = Result<T, GraphConstructionError>;
 
 /// A directed graph of [`Processor`]s connected by [`Edge`]s.
-///
-/// The graph is responsible for managing the processing of its nodes and edges, and can be used to build complex signal processing networks.
-///
-/// This struct is meant for the actual management of processing the audio graph, or for building custom graphs using a more direct API.
-/// See also the [`builder`](crate::builder) module, which provides a more ergonomic way to construct graphs.
 #[derive(Default, Clone)]
-
 pub struct Graph {
     digraph: DiGraph,
 
@@ -113,30 +93,30 @@ pub struct Graph {
 }
 
 impl Graph {
-    /// Creates a new, empty [`Graph`].
+    /// Creates a new, empty graph.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Returns a reference to the underlying [`DiGraph`].
     #[inline]
-    /// Returns a reference to the inner [`StableDiGraph`] of the graph.
     pub fn digraph(&self) -> &DiGraph {
         &self.digraph
     }
 
+    /// Returns a mutable reference to the underlying [`DiGraph`].
     #[inline]
-    /// Returns a mutable reference to the inner [`StableDiGraph`] of the graph.
     pub fn digraph_mut(&mut self) -> &mut DiGraph {
         &mut self.digraph
     }
 
+    /// Returns `true` if the graph needs to allocate its visitor (call [`Graph::allocate_visitor()`]).
     #[inline]
-    /// Returns `true` if the graph's visitor needs to be reallocated.
     pub fn needs_visitor_alloc(&self) -> bool {
         self.needs_visitor_alloc
     }
 
-    /// Adds a new input [`Passthrough`] node to the graph.
+    /// Adds an audio input node to the graph.
     pub fn add_audio_input(&mut self) -> NodeIndex {
         let idx = self
             .digraph
@@ -145,7 +125,7 @@ impl Graph {
         idx
     }
 
-    /// Adds a new output [`Passthrough`] node to the graph.
+    /// Adds an audio output node to the graph.
     pub fn add_audio_output(&mut self) -> NodeIndex {
         let idx = self
             .digraph
@@ -154,13 +134,13 @@ impl Graph {
         idx
     }
 
-    /// Adds a new [`Processor`] to the graph.
+    /// Adds a processor node to the graph.
     pub fn add_processor(&mut self, processor: impl Processor) -> NodeIndex {
         self.needs_visitor_alloc = true;
         self.digraph.add_node(ProcessorNode::new(processor))
     }
 
-    /// Adds a new [`Processor`] representing a [`Param`] to the graph.
+    /// Adds a parameter node to the graph.
     pub fn add_param<S: Signal>(&mut self, param: Param<S>) -> NodeIndex {
         let name = param.name().to_string();
         let index = self.add_processor(param);
@@ -168,7 +148,7 @@ impl Graph {
         index
     }
 
-    /// Adds a new [`Processor`] representing a MIDI input to the graph.
+    /// Adds a MIDI input node to the graph.
     pub fn add_midi_input(&mut self, name: impl Into<String>) -> NodeIndex {
         let param = Param::<MidiMessage>::new(name, None);
         let index = self.add_param(param);
@@ -176,21 +156,11 @@ impl Graph {
         index
     }
 
-    /// Replaces the [`Processor`] at the given node with a new [`Processor`] and returns the old one.
-    pub fn replace_processor(
-        &mut self,
-        node: NodeIndex,
-        processor: impl Processor,
-    ) -> ProcessorNode {
-        std::mem::replace(&mut self.digraph[node], ProcessorNode::new(processor))
-    }
-
-    /// Connects two [`Processor`]s with a new [`Edge`].
-    /// The signal will flow from the `source` [`Processor`]'s `source_output`-th output to the `target` [`Processor`]'s `target_input`-th input.
+    /// Connects two nodes in the graph.
     ///
-    /// Duplicate edges will not be recreated, and instead the existing one will be returned.
+    /// If the edge already exists, this function does nothing.
     ///
-    /// If there is already an edge connected to the target input, it will be replaced.
+    /// If the target node already has an incoming edge at the target input, the existing edge is removed.
     pub fn connect(
         &mut self,
         source: NodeIndex,
@@ -198,10 +168,6 @@ impl Graph {
         target: NodeIndex,
         target_input: u32,
     ) -> Result<(), GraphConstructionError> {
-        if source == target {
-            return Err(GraphConstructionError::FeedbackLoop);
-        }
-
         // check if the edge already exists
         for edge in self.digraph.edges_directed(target, Direction::Incoming) {
             let weight = edge.weight();
@@ -231,31 +197,89 @@ impl Graph {
         Ok(())
     }
 
-    /// Returns the number of input [`Processor`]s in the graph.
+    /// Disconnects two nodes in the graph at the specified input and output indices.
+    ///
+    /// Does nothing if the edge does not exist.
+    pub fn disconnect(
+        &mut self,
+        source: NodeIndex,
+        source_output: u32,
+        target: NodeIndex,
+        target_input: u32,
+    ) {
+        let edge = self
+            .digraph
+            .edges_directed(target, Direction::Incoming)
+            .find(|edge| {
+                let weight = edge.weight();
+                edge.source() == source
+                    && weight.source_output == source_output
+                    && weight.target_input == target_input
+            });
+
+        if let Some(edge) = edge {
+            self.needs_visitor_alloc = true;
+            self.digraph.remove_edge(edge.id()).unwrap();
+        }
+    }
+
+    /// Disconnects all inputs to the specified node.
+    pub fn disconnect_all_inputs(&mut self, node: NodeIndex) {
+        let incoming_edges = self
+            .digraph
+            .edges_directed(node, Direction::Incoming)
+            .map(|edge| edge.id())
+            .collect::<Vec<_>>();
+        for edge in incoming_edges {
+            self.needs_visitor_alloc = true;
+            self.digraph.remove_edge(edge).unwrap();
+        }
+    }
+
+    /// Disconnects all outputs from the specified node.
+    pub fn disconnect_all_outputs(&mut self, node: NodeIndex) {
+        let outgoing_edges = self
+            .digraph
+            .edges_directed(node, Direction::Outgoing)
+            .map(|edge| edge.id())
+            .collect::<Vec<_>>();
+        for edge in outgoing_edges {
+            self.needs_visitor_alloc = true;
+            self.digraph.remove_edge(edge).unwrap();
+        }
+    }
+
+    /// Disconnects all inputs and outputs from the specified node.
+    pub fn disconnect_all(&mut self, node: NodeIndex) {
+        self.disconnect_all_inputs(node);
+        self.disconnect_all_outputs(node);
+    }
+
+    /// Returns the number of audio inputs in the graph.
     #[inline]
-    pub fn num_inputs(&self) -> usize {
+    pub fn num_audio_inputs(&self) -> usize {
         self.input_nodes.len()
     }
 
-    /// Returns the number of output [`Processor`]s in the graph.
+    /// Returns the number of audio outputs in the graph.
     #[inline]
-    pub fn num_outputs(&self) -> usize {
+    pub fn num_audio_outputs(&self) -> usize {
         self.output_nodes.len()
     }
 
-    /// Returns the number of [`Param`]s in the graph.
+    /// Returns the number of parameters in the graph.
     #[inline]
     pub fn num_params(&self) -> usize {
         self.params.len()
     }
 
-    /// Returns the index of the [`Param`] with the given name.
+    /// Returns the index of the parameter with the specified name.
     #[inline]
     pub fn param_index(&self, name: &str) -> Option<NodeIndex> {
         self.params.get(name).copied()
     }
 
-    /// Returns the index of the MIDI input [`Param`] with the given name.
+    /// Returns the index of the MIDI input with the specified name.
     #[inline]
     pub fn midi_input_index(&self, name: &str) -> Option<NodeIndex> {
         self.params
@@ -264,7 +288,7 @@ impl Graph {
             .filter(|&idx| self.midi_params.contains(&idx))
     }
 
-    /// Returns an iterator over the MIDI input [`Param`]s in the graph.
+    /// Returns an iterator over the MIDI input parameters in the graph.
     #[inline]
     pub fn midi_input_iter(&self) -> impl Iterator<Item = (&str, Param<MidiMessage>)> + '_ {
         self.params
@@ -281,25 +305,13 @@ impl Graph {
             })
     }
 
-    /// Returns the index of the input [`Processor`] at the given index.
-    #[inline]
-    pub fn node_for_input_index(&self, index: usize) -> Option<NodeIndex> {
-        self.input_nodes.get(index).copied()
-    }
-
-    /// Returns the index of the output [`Processor`] at the given index.
-    #[inline]
-    pub fn node_for_output_index(&self, index: usize) -> Option<NodeIndex> {
-        self.output_nodes.get(index).copied()
-    }
-
-    /// Returns a slice of the input indexes in the graph.
+    /// Returns the indices of the audio inputs in the graph.
     #[inline]
     pub fn input_indices(&self) -> &[NodeIndex] {
         &self.input_nodes
     }
 
-    /// Returns a slice of the output indexes in the graph.
+    /// Returns the indices of the audio outputs in the graph.
     #[inline]
     pub fn output_indices(&self) -> &[NodeIndex] {
         &self.output_nodes
@@ -310,8 +322,9 @@ impl Graph {
         &self.visit_path
     }
 
+    /// Allocates the visitor for the graph.
     #[inline]
-    pub(crate) fn allocate_visitor(&mut self) {
+    pub fn allocate_visitor(&mut self) {
         if self.visit_path.capacity() < self.digraph.node_count() {
             self.visit_path = Vec::with_capacity(self.digraph.node_count());
         }
@@ -336,8 +349,7 @@ impl Graph {
         self.visit_path.reverse();
     }
 
-    /// Visits each [`Processor`] in the graph in breadth-first order, calling the given closure with a mutable reference to the graph alongside each index.
-    // #[inline]
+    /// Calls the provided closure on each node in the graph in topological order.
     pub fn visit<F, E>(&mut self, mut f: F) -> Result<(), E>
     where
         F: FnMut(&mut Graph, NodeIndex) -> Result<(), E>,
@@ -356,7 +368,7 @@ impl Graph {
         Ok(())
     }
 
-    /// Sets the block size of all [`Processor`]s in the graph. This will implicitly reallocate all internal buffers and resources.
+    /// Calls [`Processor::resize_buffers()`] on each node in the graph.
     pub fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) -> GraphRunResult<()> {
         self.visit(|graph, node| {
             graph.digraph[node].resize_buffers(sample_rate, block_size);
@@ -364,9 +376,7 @@ impl Graph {
         })
     }
 
-    /// Prepares all [`Processor`]s in the graph for processing.
-    ///
-    /// This should be run at least once before the audio thread starts running, and again anytime the graph structure is modified.
+    /// Calls [`Processor::prepare()`] on each node in the graph.
     pub fn prepare(&mut self) -> GraphRunResult<()> {
         self.allocate_visitor();
         self.visit(|graph, node| {
@@ -377,7 +387,7 @@ impl Graph {
         Ok(())
     }
 
-    /// Writes a DOT representation of the graph to the given writer, suitable for rendering with Graphviz.
+    /// Writes a DOT representation of the graph to the provided writer, suitable for rendering with Graphviz.
     pub fn write_dot<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         write!(writer, "{:?}", petgraph::dot::Dot::new(&self.digraph))
     }

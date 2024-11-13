@@ -3,13 +3,14 @@
 use petgraph::prelude::*;
 
 use crate::{
+    graph::GraphConstructionResult,
     prelude::*,
     signal::{Signal, SignalType},
 };
 
 use super::graph_builder::GraphBuilder;
 
-/// A node in a [`GraphBuilder`].
+/// Represents a node in the audio graph. This type is used to build connections between nodes.
 #[derive(Clone)]
 pub struct Node {
     pub(crate) graph: GraphBuilder,
@@ -22,17 +23,45 @@ impl Node {
         self.node_id
     }
 
-    /// Returns the graph that the node belongs to.
+    /// Returns the graph builder that this node belongs to.
     #[inline]
     pub fn graph(&self) -> &GraphBuilder {
         &self.graph
     }
 
+    /// Returns the name of the processor this node represents.
+    #[inline]
+    pub fn name(&self) -> String {
+        self.graph
+            .with_graph(|graph| graph.digraph()[self.id()].name().to_string())
+    }
+
     /// Asserts that the node has a single output.
     #[inline]
     #[track_caller]
-    pub fn assert_single_output(&self) {
-        assert_eq!(self.num_outputs(), 1, "expected single output");
+    pub fn assert_single_output(&self, op: impl Into<String>) {
+        assert_eq!(
+            self.num_outputs(),
+            1,
+            "{}: expected single output on node: {}",
+            op.into(),
+            self.name()
+        );
+    }
+
+    /// Ensures that the node has a single output, returning an error if it does not.
+    #[inline]
+    pub fn ensure_single_output(&self, op: impl Into<String>) -> GraphConstructionResult<()> {
+        if self.num_outputs() == 1 {
+            Ok(())
+        } else {
+            Err(
+                crate::graph::GraphConstructionError::NodeHasMultipleOutputs {
+                    op: op.into(),
+                    type_: self.name(),
+                },
+            )
+        }
     }
 
     /// Returns the number of inputs of the node.
@@ -50,32 +79,91 @@ impl Node {
     }
 
     /// Returns the input of the node at the given index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of bounds.
     #[inline]
+    #[track_caller]
     pub fn input(&self, index: impl IntoInputIdx) -> Input {
+        let index = index.into_input_idx(self);
+        assert!(
+            index < self.num_inputs() as u32,
+            "input index {} out of bounds for node {}",
+            index,
+            self.name()
+        );
         Input {
             node: self.clone(),
-            input_index: index.into_input_idx(self),
+            input_index: index,
         }
     }
 
     /// Returns the output of the node at the given index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of bounds.
     #[inline]
     pub fn output(&self, index: impl IntoOutputIdx) -> Output {
+        let index = index.into_output_idx(self);
+        assert!(
+            index < self.num_outputs() as u32,
+            "output index {} out of bounds for node {}",
+            index,
+            self.name()
+        );
         Output {
             node: self.clone(),
-            output_index: index.into_output_idx(self),
+            output_index: index,
         }
     }
 
-    /// Returns the signal type of the output at the given index.
+    /// Returns the signal type of the input at the given index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of bounds.
     #[inline]
-    pub fn output_kind(&self, index: impl IntoOutputIdx) -> SignalType {
+    #[track_caller]
+    pub fn input_type(&self, index: impl IntoInputIdx) -> SignalType {
+        let index = index.into_input_idx(self);
+        assert!(
+            index < self.num_inputs() as u32,
+            "input index {} out of bounds for node {}",
+            index,
+            self.name()
+        );
+        self.graph
+            .with_graph(|graph| graph.digraph()[self.id()].input_spec()[index as usize].type_)
+    }
+
+    /// Returns the signal type of the output at the given index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of bounds.
+    #[inline]
+    #[track_caller]
+    pub fn output_type(&self, index: impl IntoOutputIdx) -> SignalType {
         let index = index.into_output_idx(self);
+        assert!(
+            index < self.num_outputs() as u32,
+            "output index {} out of bounds for node {}",
+            index,
+            self.name()
+        );
         self.graph
             .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].type_)
     }
 
-    /// Connects the given input of this node to the given output of another node.
+    /// Connects the output of another node to the input of this node.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the input signal type does not match the output signal type.
+    /// - Panics if the output index is out of bounds.
+    /// - Panics if the input index is out of bounds.
     #[inline]
     #[track_caller]
     pub fn connect_input(
@@ -87,12 +175,37 @@ impl Node {
         let output = source.into_node(&self.graph);
         let source_output = source_output.into_output_idx(&output);
         let target_input = target_input.into_input_idx(self);
+
+        assert_eq!(
+            output.output_type(source_output),
+            self.input_type(target_input),
+            "output and input signals must have the same type"
+        );
+        assert!(
+            target_input < self.num_inputs() as u32,
+            "input index {} out of bounds for node {}",
+            target_input,
+            self.name()
+        );
+        assert!(
+            source_output < output.num_outputs() as u32,
+            "output index {} out of bounds for node {}",
+            source_output,
+            output.name()
+        );
+
         self.graph
             .connect(output.id(), source_output, self.id(), target_input);
         self.clone()
     }
 
-    /// Connects the given output of this node to the given input of another node.
+    /// Connects the output of this node to the input of another node.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the output signal type does not match the input signal type.
+    /// - Panics if the output index is out of bounds.
+    /// - Panics if the input index is out of bounds.
     #[inline]
     #[track_caller]
     pub fn connect_output(
@@ -104,91 +217,129 @@ impl Node {
         let target = target.into_node(&self.graph);
         let output_index = output.into_output_idx(self);
         let target_input = target_input.into_input_idx(&target);
+
+        assert_eq!(
+            self.output_type(output_index),
+            target.input_type(target_input),
+            "output and input signals must have the same type"
+        );
+        assert!(
+            output_index < self.num_outputs() as u32,
+            "output index {} out of bounds for node {}",
+            output_index,
+            self.name()
+        );
+        assert!(
+            target_input < target.num_inputs() as u32,
+            "input index {} out of bounds for node {}",
+            target_input,
+            target.name()
+        );
+
         self.graph
             .connect(self.id(), output_index, target.id(), target_input);
         self.clone()
     }
 
-    /// Smooths the output signal.
+    /// Connects a [`Smooth`] processor to the output of this node.
+    ///
+    /// The `factor` parameter controls the smoothing factor, where a value of 0.0 means maximum smoothing and 1.0 means no smoothing.
     ///
     /// # Panics
     ///
-    /// Panics if the node has more than one output.
+    /// Panics if the node has multiple outputs.
     #[inline]
     #[track_caller]
     pub fn smooth(&self, factor: Float) -> Node {
-        self.assert_single_output();
+        self.assert_single_output("smooth");
         self.output(0).smooth(factor)
     }
 
-    /// Converts the output signal from a MIDI note to a frequency in Hz.
+    /// Connects a [`MidiToFreq`] processor to the output of this node.
     ///
     /// # Panics
     ///
-    /// Panics if the node has more than one output.
+    /// Panics if the node has multiple outputs.
     #[inline]
     #[track_caller]
     pub fn midi2freq(&self) -> Node {
-        self.assert_single_output();
+        self.assert_single_output("midi2freq");
         self.output(0).midi2freq()
     }
 
-    /// Converts the output signal from a frequency in Hz to a MIDI note.
+    /// Connects a [`FreqToMidi`] processor to the output of this node.
     ///
     /// # Panics
     ///
-    /// Panics if the node has more than one output.
+    /// Panics if the node has multiple outputs.
     #[inline]
     #[track_caller]
     pub fn freq2midi(&self) -> Node {
-        self.assert_single_output();
+        self.assert_single_output("freq2midi");
         self.output(0).freq2midi()
     }
 
-    /// Creates a new, single-output node that holds and continuously outputs the last value of this node.
+    /// Connects a [`Register`] processor to the output of this node.
+    ///
+    /// The register processor stores the last value of the input signal and continuously outputs it.
+    /// Useful for "remembering" a value across multiple frames.
     ///
     /// # Panics
     ///
-    /// Panics if the node has more than one output.
+    /// Panics if the node has multiple outputs.
     #[inline]
     #[track_caller]
     pub fn make_register(&self) -> Node {
-        self.assert_single_output();
+        self.assert_single_output("make_register");
         self.output(0).make_register()
     }
 
-    /// Creates a new [`Cond`] node that selects one of its two inputs based on a condition.
+    /// Connects a [`Cond`] processor to the output of this node.
+    ///
+    /// The `then` and `else_` parameters are the signals to output when the condition is true or false, respectively.
     ///
     /// # Panics
     ///
-    /// Panics if the node has more than one output.
+    /// - Panics if the node has multiple outputs.
+    /// - Panics if the output signals do not have the same type.
+    /// - Panics if the node's output is not a boolean signal.
     #[inline]
+    #[track_caller]
     pub fn cond(&self, then: impl IntoNode, else_: impl IntoNode) -> Node {
-        self.assert_single_output();
+        self.assert_single_output("cond");
         self.output(0).cond(then, else_)
     }
 
-    /// Creates a new [`Len`] node that outputs the length of the output signal.
-    ///
-    /// The output signal must be a list.
+    /// Connects a [`Len`] processor to the output of this node.
     ///
     /// # Panics
     ///
-    /// Panics if the node has more than one output.
+    /// - Panics if the node has multiple outputs.
+    /// - Panics if the output signal is not a [`List`].
     #[inline]
+    #[track_caller]
     pub fn len(&self) -> Node {
-        self.assert_single_output();
+        self.assert_single_output("len");
         self.output(0).len()
     }
 
+    /// Connects a [`Cast`] processor to the output of this node.
+    ///
+    /// The `type_` parameter specifies the type to cast the signal to.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the node has multiple outputs.
+    /// - Panics if the output signal cannot be cast to the specified type.
     #[inline]
+    #[track_caller]
     pub fn cast(&self, type_: SignalType) -> Node {
-        self.assert_single_output();
+        self.assert_single_output("cast");
         self.output(0).cast(type_)
     }
 }
 
-/// An input of a node in the graph.
+/// Represents an input of a [`Node`].
 #[derive(Clone)]
 pub struct Input {
     pub(crate) node: Node,
@@ -199,35 +350,24 @@ impl Input {
     /// Returns the signal type of the input.
     #[inline]
     pub fn type_(&self) -> SignalType {
-        self.node.graph.with_graph(|graph| {
-            graph.digraph()[self.node.id()].input_spec()[self.input_index as usize].type_
-        })
+        self.node.input_type(self.input_index)
     }
 
-    /// Sets the value of the input.
-    #[inline]
-    pub fn set(&self, value: impl IntoNode) -> Node {
-        let value = value.into_node(self.node.graph());
-        value.assert_single_output();
-        assert_eq!(
-            self.type_(),
-            value.output_kind(0),
-            "output and input signals must have the same type"
-        );
-        self.node.connect_input(&value, 0, self.input_index);
-        self.node.clone()
-    }
-
-    /// Returns the node that the input belongs to.
+    /// Returns the [`Node`] that this input is connected to.
     #[inline]
     pub fn node(&self) -> Node {
         self.node.clone()
     }
 
-    /// Connects the input to the given output.
+    /// Connects the input to the output of another node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the output and input signals do not have the same type.
     #[inline]
     #[track_caller]
-    pub fn connect(&self, output: &Output) -> Node {
+    pub fn connect(&self, output: impl IntoOutput) -> Node {
+        let output = output.into_output(self.node.graph());
         assert_eq!(
             self.type_(),
             output.type_(),
@@ -238,7 +378,13 @@ impl Input {
         self.node.clone()
     }
 
-    /// Creates a parameter for the input.
+    /// Creates a [`Param`] processor and connects it to the input.
+    ///
+    /// This can be used to create a parameter that can be controlled externally.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the input signal type does not match the initial value signal type (type parameter `S`).
     #[inline]
     pub fn param<S: Signal>(
         &self,
@@ -253,7 +399,7 @@ impl Input {
     }
 }
 
-/// An output of a node in the graph.
+/// Represents an output of a [`Node`].
 #[derive(Clone)]
 pub struct Output {
     pub(crate) node: Node,
@@ -261,7 +407,23 @@ pub struct Output {
 }
 
 impl Output {
-    /// Connects the output to the given input.
+    /// Returns the [`Node`] that this output is connected to.
+    #[inline]
+    pub fn node(&self) -> Node {
+        self.node.clone()
+    }
+
+    /// Returns the signal type of the output.
+    #[inline]
+    pub fn type_(&self) -> SignalType {
+        self.node.output_type(self.output_index)
+    }
+
+    /// Connects the output to the input of another node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the output and input signals do not have the same type.
     #[inline]
     #[track_caller]
     pub fn connect(&self, input: &Input) -> Node {
@@ -275,25 +437,20 @@ impl Output {
         self.node.clone()
     }
 
-    /// Returns the node that the output belongs to.
-    #[inline]
-    pub fn node(&self) -> Node {
-        self.node.clone()
-    }
-
-    /// Returns the signal type of the output.
-    #[inline]
-    pub fn type_(&self) -> SignalType {
-        self.node.output_kind(self.output_index)
-    }
-
+    /// Creates a [`Cast`] processor and connects it to the output.
+    ///
+    /// The `type_` parameter specifies the type to cast the signal to.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the output signal cannot be cast to the specified type.
     #[inline]
     pub fn cast(&self, type_: SignalType) -> Node {
-        let current_kind = self.type_();
-        if current_kind == type_ {
+        let current_type = self.type_();
+        if current_type == type_ {
             return self.node.clone();
         }
-        let cast = match (current_kind, type_) {
+        let cast = match (current_type, type_) {
             // bool <-> int
             (SignalType::Bool, SignalType::Int) => self.node.graph().add(Cast::<bool, i64>::new()),
             (SignalType::Int, SignalType::Bool) => self.node.graph().add(Cast::<i64, bool>::new()),
@@ -330,14 +487,16 @@ impl Output {
                 self.node.graph().add(Cast::<i64, String>::new())
             }
 
-            _ => panic!("cannot cast from {:?} to {:?}", current_kind, type_),
+            _ => panic!("cannot cast from {:?} to {:?}", current_type, type_),
         };
 
         cast.input(0).connect(self);
         cast
     }
 
-    /// Creates a new, single-output node that passes the value of this output through.
+    /// Creates a [`Passthrough`] processor and connects it to the output.
+    ///
+    /// This can be useful in situations where a [`Node`] is required instead of an [`Output`].
     #[inline]
     pub fn make_node(&self) -> Node {
         let type_ = self.type_();
@@ -354,7 +513,10 @@ impl Output {
         node
     }
 
-    /// Creates a new, single-output node that holds and continuously outputs the last value of this output.
+    /// Creates a [`Register`] processor and connects it to the output.
+    ///
+    /// The register processor stores the last value of the input signal and continuously outputs it.
+    /// Useful for "remembering" a value across multiple frames.
     #[inline]
     pub fn make_register(&self) -> Node {
         let type_ = self.type_();
@@ -371,16 +533,19 @@ impl Output {
         node
     }
 
-    /// Creates a new, single-output node that smooths the output signal.
+    /// Creates a [`Smooth`] processor and connects it to the output.
+    ///
+    /// The `factor` parameter controls the smoothing factor, where a value of 0.0 means maximum smoothing and 1.0 means no smoothing.
     #[inline]
-    pub fn smooth(&self, factor: Float) -> Node {
+    pub fn smooth(&self, factor: impl IntoOutput) -> Node {
+        let factor = factor.into_output(self.node.graph());
         let proc = self.node.graph().add(Smooth::default());
-        proc.input("factor").set(factor);
+        proc.input("factor").connect(factor);
         proc.input(0).connect(self);
         proc
     }
 
-    /// Creates a new, single-output node that converts the output signal from a MIDI note to a frequency in Hz.
+    /// Creates a [`MidiToFreq`] processor and connects it to the output.
     #[inline]
     pub fn midi2freq(&self) -> Node {
         let proc = self.node.graph().add(MidiToFreq);
@@ -388,7 +553,7 @@ impl Output {
         proc
     }
 
-    /// Creates a new, single-output node that converts the output signal from a frequency in Hz to a MIDI note.
+    /// Creates a [`FreqToMidi`] processor and connects it to the output.
     #[inline]
     pub fn freq2midi(&self) -> Node {
         let proc = self.node.graph().add(FreqToMidi);
@@ -396,17 +561,23 @@ impl Output {
         proc
     }
 
-    /// Creates a new [`Cond`] node that selects one of its two inputs based on the condition given by this output signal.
+    /// Creates a [`Cond`] processor and connects it to the output.
+    ///
+    /// The `then` and `else_` parameters are the signals to output when the condition is true or false, respectively.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the output signals do not have the same type.
+    /// - Panics if the node's output is not a boolean signal.
     #[inline]
-    pub fn cond(&self, then: impl IntoNode, else_: impl IntoNode) -> Node {
-        let then = then.into_node(self.node.graph());
-        let else_ = else_.into_node(self.node.graph());
-        then.assert_single_output();
-        else_.assert_single_output();
-        let type_ = then.output_kind(0);
+    #[track_caller]
+    pub fn cond(&self, then: impl IntoOutput, else_: impl IntoOutput) -> Node {
+        let then = then.into_output(self.node.graph());
+        let else_ = else_.into_output(self.node.graph());
+        let type_ = then.type_();
         assert_eq!(
             type_,
-            else_.output_kind(0),
+            else_.type_(),
             "output signals must have the same type"
         );
         let cond = match type_ {
@@ -419,14 +590,12 @@ impl Output {
             SignalType::Midi => self.node.graph().add(Cond::<MidiMessage>::new()),
         };
         cond.input("cond").connect(self);
-        cond.input("then").connect(&then.output(0));
-        cond.input("else").connect(&else_.output(0));
+        cond.input("then").connect(&then);
+        cond.input("else").connect(&else_);
         cond
     }
 
-    /// Creates a new [`Len`] node that outputs the length of the output signal.
-    ///
-    /// The output signal must be a list.
+    /// Creates a [`Len`] processor and connects it to the output.
     #[inline]
     pub fn len(&self) -> Node {
         assert_eq!(
@@ -441,23 +610,48 @@ impl Output {
 }
 
 mod sealed {
-    use crate::signal::Signal;
-
     pub trait Sealed {}
     impl Sealed for crate::graph::NodeIndex {}
     impl Sealed for super::Node {}
     impl Sealed for &super::Node {}
+    impl Sealed for super::Output {}
+    impl Sealed for &super::Output {}
     impl Sealed for super::AnySignal {}
-    impl<S: Signal> Sealed for super::Param<S> {}
+    impl<S: crate::signal::Signal> Sealed for crate::builtins::util::Param<S> {}
     impl Sealed for crate::signal::Float {}
+    impl Sealed for i32 {}
     impl Sealed for i64 {}
     impl Sealed for u32 {}
     impl Sealed for &str {}
 }
 
-/// Trait for converting a value into a node.
+/// A trait for coercing a value into an [`Output`].
+pub trait IntoOutput: sealed::Sealed {
+    fn into_output(self, graph: &GraphBuilder) -> Output;
+}
+
+impl IntoOutput for Output {
+    fn into_output(self, _graph: &GraphBuilder) -> Output {
+        self
+    }
+}
+
+impl IntoOutput for &Output {
+    fn into_output(self, _graph: &GraphBuilder) -> Output {
+        self.clone()
+    }
+}
+
+impl<T: IntoNode> IntoOutput for T {
+    fn into_output(self, graph: &GraphBuilder) -> Output {
+        let node = self.into_node(graph);
+        node.assert_single_output("into_output");
+        node.output(0)
+    }
+}
+
+/// A trait for coercing a value into a [`Node`].
 pub trait IntoNode: sealed::Sealed {
-    /// Converts the value into a node.
     fn into_node(self, graph: &GraphBuilder) -> Node;
 }
 
@@ -512,21 +706,31 @@ impl IntoNode for i64 {
     }
 }
 
+impl IntoNode for i32 {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
+        graph.constant(AnySignal::Int(self as i64))
+    }
+}
+
 impl IntoNode for u32 {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.constant(AnySignal::Int(self as i64))
     }
 }
 
-/// Trait for converting a value into an input index for a node.
+impl IntoNode for &str {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
+        graph.constant(AnySignal::String(self.to_string()))
+    }
+}
+
+/// A trait for coercing a value into an output index of a node.
 pub trait IntoOutputIdx: sealed::Sealed {
-    /// Converts the value into an input index for the given node.
     fn into_output_idx(self, node: &Node) -> u32;
 }
 
-/// Trait for converting a value into an output index for a node.
+/// A trait for coercing a value into an input index of a node.
 pub trait IntoInputIdx: sealed::Sealed {
-    /// Converts the value into an output index for the given node.
     fn into_input_idx(self, node: &Node) -> u32;
 }
 
@@ -583,61 +787,98 @@ impl IntoOutputIdx for &str {
 
 macro_rules! impl_binary_node_ops {
     ($name:ident, $proc:ident, ($($type_:ident => $data:ty),*), $doc:literal) => {
-        impl Node {
+        impl Output {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
-            pub fn $name(&self, other: impl IntoNode) -> Node {
-                let other = other.into_node(self.graph());
-                self.assert_single_output();
-                other.assert_single_output();
+            pub fn $name(&self, other: impl IntoOutput) -> Node {
+                let other = other.into_output(self.node().graph());
 
                 assert_eq!(
-                    self.output_kind(0),
-                    other.output_kind(0),
+                    self.type_(),
+                    other.type_(),
                     "output signals must have the same type"
                 );
 
-                let type_ = self.output_kind(0);
+                let type_ = self.type_();
                 let node = match type_ {
-                    $(SignalType::$type_ => self.graph().add(<math::$proc<$data>>::default()),)*
+                    $(SignalType::$type_ => self.node().graph().add(<math::$proc<$data>>::default()),)*
                     _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), type_),
                 };
 
-                node.input(0).connect(&self.output(0));
-                node.input(1).connect(&other.output(0));
+                node.input(0).connect(self);
+                node.input(1).connect(&other);
 
                 node
+            }
+        }
+
+        impl Node {
+            #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
+            pub fn $name(&self, other: impl IntoOutput) -> Node {
+                self.assert_single_output(stringify!($name));
+                self.output(0).$name(other)
             }
         }
     };
     ($name:ident, $std_op:ident, $proc:ident, ($($type_:ident => $data:ty),*), $doc:literal) => {
-        impl Node {
+        impl Output {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
-            pub fn $name(&self, other: impl IntoNode) -> Node {
-                let other = other.into_node(self.graph());
-                self.assert_single_output();
-                other.assert_single_output();
+            pub fn $name(&self, other: impl IntoOutput) -> Node {
+                let other = other.into_output(self.node().graph());
 
                 assert_eq!(
-                    self.output_kind(0),
-                    other.output_kind(0),
+                    self.type_(),
+                    other.type_(),
                     "output signals must have the same type"
                 );
 
-                let type_ = self.output_kind(0);
+                let type_ = self.type_();
 
                 let node = match type_ {
-                    $(SignalType::$type_ => self.graph().add(<math::$proc<$data>>::default()),)*
+                    $(SignalType::$type_ => self.node().graph().add(<math::$proc<$data>>::default()),)*
                     _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), type_),
                 };
 
-                node.input(0).connect(&self.output(0));
-                node.input(1).connect(&other.output(0));
+                node.input(0).connect(self);
+                node.input(1).connect(&other);
 
                 node
             }
         }
+
+        impl Node {
+            #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
+            pub fn $name(&self, other: impl IntoOutput) -> Node {
+                self.assert_single_output(stringify!($name));
+                self.output(0).$name(other)
+            }
+        }
+
+        impl<T> std::ops::$std_op<T> for Output
+        where
+            T: IntoOutput,
+        {
+            type Output = Node;
+
+            fn $name(self, other: T) -> Node {
+                Output::$name(&self, other)
+            }
+        }
+
+        impl<T> std::ops::$std_op<T> for &Output
+        where
+            T: IntoOutput,
+        {
+            type Output = Node;
+
+            fn $name(self, other: T) -> Node {
+                Output::$name(self, other)
+            }
+        }
+
 
         impl<T> std::ops::$std_op<T> for Node
         where
@@ -658,22 +899,6 @@ macro_rules! impl_binary_node_ops {
 
             fn $name(self, other: T) -> Node {
                 Node::$name(self, other)
-            }
-        }
-
-        impl std::ops::$std_op<Node> for Float {
-            type Output = Node;
-
-            fn $name(self, other: Node) -> Node {
-                Node::$name(&other, self)
-            }
-        }
-
-        impl std::ops::$std_op<&Node> for Float {
-            type Output = Node;
-
-            fn $name(self, other: &Node) -> Node {
-                Node::$name(other, self)
             }
         }
     };
@@ -703,34 +928,48 @@ impl_binary_node_ops!(min, Min, (Float => Float, Int => i64), "Outputs the minim
 
 macro_rules! impl_comparison_node_ops {
     ($name:ident, $proc:ident, $doc:expr) => {
-        impl Node {
+        impl Output {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
-            pub fn $name(&self, other: impl IntoNode) -> Node {
-                let other = other.into_node(self.graph());
-                self.assert_single_output();
-                other.assert_single_output();
+            pub fn $name(&self, other: impl IntoOutput) -> Node {
+                let other = other.into_output(self.node().graph());
 
-                let type_ = self.output_kind(0);
                 assert_eq!(
-                    type_,
-                    other.output_kind(0),
+                    self.type_(),
+                    other.type_(),
                     "output signals must have the same type"
                 );
 
+                let type_ = self.type_();
+
                 let node = match type_ {
-                    SignalType::Dynamic => self.graph().add(control::$proc::<AnySignal>::new()),
-                    SignalType::Bool => self.graph().add(control::$proc::<bool>::default()),
-                    SignalType::Int => self.graph().add(control::$proc::<i64>::default()),
-                    SignalType::Float => self.graph().add(control::$proc::<Float>::default()),
-                    SignalType::String => self.graph().add(control::$proc::<String>::default()),
+                    SignalType::Dynamic => {
+                        self.node().graph().add(control::$proc::<AnySignal>::new())
+                    }
+                    SignalType::Bool => self.node().graph().add(control::$proc::<bool>::default()),
+                    SignalType::Int => self.node().graph().add(control::$proc::<i64>::default()),
+                    SignalType::Float => {
+                        self.node().graph().add(control::$proc::<Float>::default())
+                    }
+                    SignalType::String => {
+                        self.node().graph().add(control::$proc::<String>::default())
+                    }
                     _ => panic!("unsupported signal type"),
                 };
 
-                node.input(0).connect(&self.output(0));
-                node.input(1).connect(&other.output(0));
+                node.input(0).connect(self);
+                node.input(1).connect(&other);
 
                 node
+            }
+        }
+
+        impl Node {
+            #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
+            pub fn $name(&self, other: impl IntoOutput) -> Node {
+                self.assert_single_output(stringify!($name));
+                self.output(0).$name(other)
             }
         }
     };
@@ -765,22 +1004,29 @@ impl_comparison_node_ops!(
 
 macro_rules! impl_unary_node_ops {
     ($name:ident, $proc:ident, ($($type_:ident => $data:ty),*), $doc:literal) => {
+        impl Output {
+            #[allow(clippy::should_implement_trait)]
+            #[doc = $doc]
+            pub fn $name(&self) -> Node {
+                let type_ = self.type_();
+
+                let node = match type_ {
+                    $(SignalType::$type_ => self.node().graph().add(<math::$proc<$data>>::default()),)*
+                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), type_),
+                };
+
+                node.input(0).connect(self);
+
+                node
+            }
+        }
+
         impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
             pub fn $name(&self) -> Node {
-                self.assert_single_output();
-
-                let type_ = self.output_kind(0);
-
-                let node = match type_ {
-                    $(SignalType::$type_ => self.graph().add(<math::$proc<$data>>::default()),)*
-                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), type_),
-                };
-
-                node.input(0).connect(&self.output(0));
-
-                node
+                self.assert_single_output(stringify!($name));
+                self.output(0).$name()
             }
         }
     };

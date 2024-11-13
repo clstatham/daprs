@@ -4,28 +4,6 @@ use std::marker::PhantomData;
 
 use crate::{prelude::*, signal::Signal};
 
-/// A processor that reads and writes audio samples in a buffer.
-///
-/// When reading: from the buffer:
-/// - If the index is a whole number, the processor reads the sample at the given index.
-/// - If the index is a fraction, the processor linearly interpolates between the samples at the floor and ceil positions.
-///
-/// When writing to the buffer:
-/// - The processor sets the value at the given index (rounded down) if a message is received at the `set` input.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `index` | `Message(i64)` | `0` | The sample index to read from the buffer. |
-/// | `1` | `set` | `Message(f64)` |  | Set the value at the given index. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Float` | The sample value read from the buffer. |
-/// | `1` | `length` | `Message(i64)` | The length of the buffer in samples. |
 #[derive(Clone, Debug)]
 pub struct AudioBuffer {
     buffer: Buffer<Float>,
@@ -34,7 +12,6 @@ pub struct AudioBuffer {
 }
 
 impl AudioBuffer {
-    /// Creates a new audio buffer processor with the given buffer.
     pub fn new(buffer: Buffer<Float>) -> Self {
         Self {
             buffer,
@@ -73,8 +50,8 @@ impl Processor for AudioBuffer {
         for (out, length, index, write) in itertools::izip!(
             outputs0.iter_output_mut_as_samples(0)?,
             outputs1.iter_output_mut_as_ints(0)?,
-            inputs.iter_input_as_samples(0)?,
-            inputs.iter_input_as_samples(1)?,
+            inputs.iter_input_as_floats(0)?,
+            inputs.iter_input_as_floats(1)?,
         ) {
             self.index = index.unwrap_or(self.index);
 
@@ -111,20 +88,6 @@ impl Processor for AudioBuffer {
     }
 }
 
-/// A processor that stores a message in a register.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `set` | `Message` |  | Set the register to the value. |
-/// | `1` | `clear` | `Message` |  | Clear the register. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Message` | The value stored in the register. |
 #[derive(Clone, Debug)]
 pub struct Register<S: Signal> {
     value: Option<S>,
@@ -132,7 +95,6 @@ pub struct Register<S: Signal> {
 }
 
 impl<S: Signal> Register<S> {
-    /// Creates a new register processor.
     pub fn new() -> Self {
         Self {
             value: None,

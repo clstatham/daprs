@@ -2,38 +2,38 @@
 
 use crate::prelude::*;
 
-/// A peak limiter processor.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Float` | | The input signal to limit. |
-/// | `1` | `threshold` | `Float` | `~0.99` | The threshold amplitude. |
-/// | `2` | `attack` | `Float` | `0.9` | The attack coefficient. |
-/// | `3` | `release` | `Float` | `0.9995` | The release coefficient. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Float` | The limited output signal. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Debug, Clone)]
 pub struct PeakLimiter {
     gain: Float,
     sample_rate: Float,
     envelope: Float,
 
-    /// The threshold amplitude.
+    
     pub threshold: Float,
-    /// The attack factor.
+    
     pub attack: Float,
-    /// The release factor.
+    
     pub release: Float,
 }
 
 impl PeakLimiter {
-    /// Creates a new peak limiter processor with the given default threshold, attack coefficient, and release coefficient.
+    
     pub fn new(threshold: Float, attack: Float, release: Float) -> Self {
         Self {
             threshold,
@@ -83,10 +83,10 @@ impl Processor for PeakLimiter {
     ) -> Result<(), ProcessorError> {
         for (out, in_signal, threshold, attack, release) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
-            inputs.iter_input_as_samples(0)?,
-            inputs.iter_input_as_samples(1)?,
-            inputs.iter_input_as_samples(2)?,
-            inputs.iter_input_as_samples(3)?
+            inputs.iter_input_as_floats(0)?,
+            inputs.iter_input_as_floats(1)?,
+            inputs.iter_input_as_floats(2)?,
+            inputs.iter_input_as_floats(3)?
         ) {
             if let Some(threshold) = threshold {
                 self.threshold = threshold;

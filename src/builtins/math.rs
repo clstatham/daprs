@@ -5,13 +5,6 @@ use std::ops::{
     Add as AddOp, Div as DivOp, Mul as MulOp, Neg as NegOp, Rem as RemOp, Sub as SubOp,
 };
 
-/// A processor that outputs a constant value.
-///
-/// # Outputs
-///
-/// | Index | Name | Default | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `0.0` | The constant value. |
 #[derive(Clone, Debug)]
 
 pub struct Constant {
@@ -19,7 +12,6 @@ pub struct Constant {
 }
 
 impl Constant {
-    /// Creates a new constant processor with the given value.
     pub fn new(value: impl Into<AnySignal>) -> Self {
         Self {
             value: value.into(),
@@ -74,27 +66,11 @@ impl Processor for Constant {
 }
 
 impl GraphBuilder {
-    /// A processor that outputs a constant value.
-    ///
-    /// See also: [`Constant`].
     pub fn constant(&self, value: impl Into<AnySignal>) -> Node {
         self.add(Constant::new(value))
     }
 }
 
-/// A processor that converts a MIDI note number to a frequency in Hz.
-///
-/// # Inputs
-///
-/// | Index | Name | Default | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `note` | `69.0` | The MIDI note number to convert to a frequency. |
-///
-/// # Outputs
-///
-/// | Index | Name | Default | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `freq` | `440.0` | The frequency in Hz. |
 #[derive(Clone, Debug, Default)]
 pub struct MidiToFreq;
 
@@ -113,7 +89,7 @@ impl Processor for MidiToFreq {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (note, freq) in itertools::izip!(
-            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_floats(0)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
             let Some(note) = note else {
@@ -127,19 +103,6 @@ impl Processor for MidiToFreq {
     }
 }
 
-/// A processor that converts a frequency in Hz to a MIDI note number.
-///
-/// # Inputs
-///
-/// | Index | Name | Default | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `freq` | `440.0` | The frequency in Hz to convert to a MIDI note number. |
-///
-/// # Outputs
-///
-/// | Index | Name | Default | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `note` | `69.0` | The MIDI note number. |
 #[derive(Clone, Debug, Default)]
 pub struct FreqToMidi;
 
@@ -158,7 +121,7 @@ impl Processor for FreqToMidi {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (freq, note) in itertools::izip!(
-            inputs.iter_input_as_samples(0)?,
+            inputs.iter_input_as_floats(0)?,
             outputs.iter_output_mut_as_samples(0)?
         ) {
             let Some(freq) = freq else {
@@ -172,23 +135,6 @@ impl Processor for FreqToMidi {
     }
 }
 
-/// A processor that evaluates an expression.
-///
-/// The expression uses a simple syntax based on the [`evalexpr`] crate.
-///
-/// # Inputs
-///
-/// The inputs are the variables that are referenced in the expression.
-///
-/// The names of the inputs are extracted from the expression itself.
-///
-/// The inputs are expected to be of type `Float`, that is, a floating-point number. They default to `0.0`.
-///
-/// # Outputs
-///
-/// | Index | Name | Default | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `0.0` | The result of the expression. |
 #[cfg(feature = "expr")]
 #[derive(Clone, Debug)]
 pub struct Expr {
@@ -200,7 +146,6 @@ pub struct Expr {
 
 #[cfg(feature = "expr")]
 impl Expr {
-    /// Creates a new `Eval` processor with the given expression.
     pub fn new(expr: impl AsRef<str>) -> Self {
         let expr: evalexpr::Node<evalexpr::DefaultNumericTypes> =
             evalexpr::build_operator_tree(expr.as_ref()).unwrap();
@@ -248,7 +193,7 @@ impl Processor for Expr {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let out = outputs.output_as_samples(0)?;
+        let out = outputs.output_as_floats(0)?;
 
         for (samp_idx, out) in out.iter_mut().enumerate() {
             self.input_values.clear();
@@ -633,8 +578,8 @@ macro_rules! impl_unary_proc {
                 mut outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {
                 for (sample, in1) in itertools::izip!(
-                    outputs.iter_output_mut_as_samples(0)?,
-                    inputs.iter_input_as_samples(0)?
+                    outputs.iter_output_as::<$data>(0)?,
+                    inputs.iter_input_as::<$data>(0)?
                 ) {
                     let Some(in1) = in1 else {
                         *sample = None;

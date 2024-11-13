@@ -198,7 +198,7 @@ comparison_op!(
     r#"
 A processor that outputs `true` if `a` is less than or equal to `b`, otherwise `false`.
 
-The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
+The comparison is done by casting the inputs to floats as implemented by the [`Signal::cast_to_float`] method.
 
 # Inputs
 
@@ -221,8 +221,6 @@ The comparison is done by casting the inputs to floats as implemented by the [`M
 comparison_op!(
     r#"
 A processor that outputs `true` if `a` is greater than or equal to `b`, otherwise `false`.
-
-The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
 
 # Inputs
 

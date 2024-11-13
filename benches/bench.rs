@@ -23,7 +23,7 @@ pub fn bench_demo(c: &mut Criterion) {
     let out1 = graph.add_audio_output();
 
     let sine = graph.add(SineOscillator::default());
-    sine.input("frequency").set(440.0);
+    sine.input("frequency").connect(440.0);
     let sine = sine * 0.2;
     sine.output(0).connect(&out1.input(0));
 
@@ -52,7 +52,7 @@ pub fn bench_demo_reset(c: &mut Criterion) {
     let out1 = graph.add_audio_output();
 
     let sine = graph.add(SineOscillator::default());
-    sine.input("frequency").set(440.0);
+    sine.input("frequency").connect(440.0);
     let sine = sine * 0.2;
     sine.output(0).connect(&out1.input(0));
 

@@ -15,6 +15,7 @@ default = ["expr"]
 f32_samples = []
 jack = ["cpal/jack"]
 expr = ["dep:evalexpr"]
+profiling = []
 
 [dependencies]
 cpal = { version = "0.15.3", features = [] }

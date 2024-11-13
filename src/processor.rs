@@ -7,18 +7,18 @@ use thiserror::Error;
 
 use crate::signal::{Buffer, Float, List, MidiMessage, Signal, SignalBuffer, SignalType};
 
-/// An error that can occur when processing signals.
+/// Error type for [`Processor`] operations.
 #[derive(Debug, Clone, Error)]
 pub enum ProcessorError {
-    /// The number of inputs must match the number returned by [`Processor::num_inputs`].
+    /// The number of inputs must match the number returned by [`Processor::num_inputs()`].
     #[error("The number of inputs must match the number returned by Processor::num_inputs()")]
     NumInputsMismatch,
 
-    /// The number of outputs must match the number returned by [`Processor::num_outputs`].
+    /// The number of outputs must match the number returned by [`Processor::num_outputs()`].
     #[error("The number of outputs must match the number returned by Processor::num_outputs()")]
     NumOutputsMismatch,
 
-    /// The input signal type at the given index does not match the expected type.
+    /// Input signal type mismatch.
     #[error("Input {index} signal type mismatch (expected {expected:?}, got {actual:?})")]
     InputSpecMismatch {
         /// The index of the input signal.
@@ -29,7 +29,7 @@ pub enum ProcessorError {
         actual: SignalType,
     },
 
-    /// The output signal type at the given index does not match the expected type.
+    /// Output signal type mismatch.
     #[error("Output {index} signal type mismatch (expected {expected:?}, got {actual:?})")]
     OutputSpecMismatch {
         /// The index of the output signal.
@@ -40,22 +40,21 @@ pub enum ProcessorError {
         actual: SignalType,
     },
 
-    /// The signal value is invalid for the given reason.
+    /// Invalid value.
     #[error("Invalid value: {0}")]
     InvalidValue(&'static str),
 }
 
-/// Information about an input or output of a [`Processor`] implementor.
+/// Information about an input or output of a [`Processor`].
 #[derive(Debug, Clone)]
 pub struct SignalSpec {
-    /// The name of the signal.
+    /// The name of the input or output.
     pub name: String,
-    /// The type of the signal.
+    /// The type of the input or output.
     pub type_: SignalType,
 }
 
 impl Default for SignalSpec {
-    /// Creates a new unnamed [`Float`] [`SignalSpec`].
     fn default() -> Self {
         Self {
             name: "".into(),
@@ -65,7 +64,7 @@ impl Default for SignalSpec {
 }
 
 impl SignalSpec {
-    /// Creates a new bounded [`SignalSpec`] with the given name, minimum, maximum, and default value.
+    /// Creates a new [`SignalSpec`] with the given name and type.
     pub fn new(name: impl Into<String>, type_: SignalType) -> Self {
         Self {
             name: name.into(),
@@ -74,28 +73,36 @@ impl SignalSpec {
     }
 }
 
-/// A collection of borrowed input buffers for a [`Processor`] to read from, and related information about them.
+/// A collection of input signals for a [`Processor`] and their specifications.
 #[derive(Debug, Clone, Copy)]
 pub struct ProcessorInputs<'a, 'b> {
-    /// The input signal specs.
+    /// The specifications of the input signals.
     pub input_specs: &'a [SignalSpec],
-    /// The input buffers to read from.
+
+    /// The input signals.
     pub inputs: &'a [Option<&'b SignalBuffer>],
 }
 
 impl<'a, 'b> ProcessorInputs<'a, 'b> {
-    /// Returns the number of input buffers.
+    /// Returns the number of input signals.
     #[inline]
     pub fn num_inputs(&self) -> usize {
         self.input_specs.len()
     }
 
-    /// Returns an iterator over the input buffers.
+    /// Returns the input signal at the given index. Unconnected inputs are represented as `None`.
+    #[inline]
+    pub fn input(&self, index: usize) -> Option<&'b SignalBuffer> {
+        self.inputs[index]
+    }
+
+    /// Returns an iterator over the input signals. Unconnected inputs are represented as `None`.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = Option<&'b SignalBuffer>> + '_ {
         self.inputs.iter().copied()
     }
 
+    /// Returns an iterator over the input signal at the given index, if it is of the given type.
     #[inline]
     pub fn iter_input_as<S: Signal>(
         &self,
@@ -118,16 +125,16 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         }
     }
 
-    /// Returns an iterator over the input samples at the given index, if the input is a sample buffer.
+    /// Returns an iterator over the input signal at the given index, if it is a [`Float`] signal.
     #[inline]
-    pub fn iter_input_as_samples(
+    pub fn iter_input_as_floats(
         &self,
         index: usize,
     ) -> Result<impl Iterator<Item = Option<Float>> + '_, ProcessorError> {
         Self::iter_input_as::<Float>(self, index).map(|iter| iter.copied())
     }
 
-    /// Returns an iterator over the input integers at the given index, if the input is an integer buffer.
+    /// Returns an iterator over the input signal at the given index, if it is an [`i64`] signal.
     #[inline]
     pub fn iter_input_as_ints(
         &self,
@@ -136,7 +143,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         Self::iter_input_as::<i64>(self, index).map(|iter| iter.copied())
     }
 
-    /// Returns an iterator over the input booleans at the given index, if the input is a boolean buffer.
+    /// Returns an iterator over the input signal at the given index, if it is a [`bool`] signal.
     #[inline]
     pub fn iter_input_as_bools(
         &self,
@@ -145,7 +152,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         Self::iter_input_as::<bool>(self, index).map(|iter| iter.copied())
     }
 
-    /// Returns an iterator over the input strings at the given index, if the input is a string buffer.
+    /// Returns an iterator over the input signal at the given index, if it is a [`String`] signal.
     #[inline]
     pub fn iter_input_as_strings(
         &self,
@@ -154,7 +161,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         Self::iter_input_as::<String>(self, index).map(|iter| iter.map(Option::as_ref))
     }
 
-    /// Returns an iterator over the input lists at the given index, if the input is a list buffer.
+    /// Returns an iterator over the input signal at the given index, if it is a [`List`] signal.
     #[inline]
     pub fn iter_input_as_lists(
         &self,
@@ -163,7 +170,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         Self::iter_input_as::<List>(self, index).map(|iter| iter.map(Option::as_ref))
     }
 
-    /// Returns an iterator over the input MIDI messages at the given index, if the input is a MIDI message buffer.
+    /// Returns an iterator over the input signal at the given index, if it is a [`MidiMessage`] signal.
     #[inline]
     pub fn iter_input_as_midi(
         &self,
@@ -173,21 +180,23 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     }
 }
 
-/// A collection of borrowed output buffers for a [`Processor`] to write to, and related information about them.
+/// A collection of output signals for a [`Processor`] and their specifications.
 pub struct ProcessorOutputs<'a> {
-    /// The output signal specs.
+    /// The specifications of the output signals.
     pub output_spec: &'a [SignalSpec],
-    /// The output buffers to write to.
+
+    /// The output signals.
     pub outputs: &'a mut [SignalBuffer],
 }
 
 impl<'a> ProcessorOutputs<'a> {
-    /// Returns the output buffer at the given index.
+    /// Returns the output signal at the given index.
     #[inline]
     pub fn output(&mut self, index: usize) -> &mut SignalBuffer {
         &mut self.outputs[index]
     }
 
+    /// Returns the output signal at the given index, if it is of the given type.
     #[inline]
     pub fn output_as<S: Signal>(&mut self, index: usize) -> Result<&mut Buffer<S>, ProcessorError> {
         let actual = self.output(index).type_();
@@ -200,28 +209,25 @@ impl<'a> ProcessorOutputs<'a> {
             })
     }
 
-    /// Returns the output buffer at the given index, if it is a sample buffer.
+    /// Returns the output signal at the given index, if it is a [`Float`] signal.
     #[inline]
-    pub fn output_as_samples(
-        &mut self,
-        index: usize,
-    ) -> Result<&mut Buffer<Float>, ProcessorError> {
+    pub fn output_as_floats(&mut self, index: usize) -> Result<&mut Buffer<Float>, ProcessorError> {
         self.output_as::<Float>(index)
     }
 
-    /// Returns the output buffer at the given index, if it is an integer buffer.
+    /// Returns the output signal at the given index, if it is an [`i64`] signal.
     #[inline]
     pub fn output_as_ints(&mut self, index: usize) -> Result<&mut Buffer<i64>, ProcessorError> {
         self.output_as::<i64>(index)
     }
 
-    /// Returns the output buffer at the given index, if it is a boolean buffer.
+    /// Returns the output signal at the given index, if it is a [`bool`] signal.
     #[inline]
     pub fn output_as_bools(&mut self, index: usize) -> Result<&mut Buffer<bool>, ProcessorError> {
         self.output_as::<bool>(index)
     }
 
-    /// Returns the output buffer at the given index, if it is a string buffer.
+    /// Returns the output signal at the given index, if it is a [`String`] signal.
     #[inline]
     pub fn output_as_strings(
         &mut self,
@@ -230,13 +236,13 @@ impl<'a> ProcessorOutputs<'a> {
         self.output_as::<String>(index)
     }
 
-    /// Returns the output buffer at the given index, if it is a list buffer.
+    /// Returns the output signal at the given index, if it is a [`List`] signal.
     #[inline]
     pub fn output_as_lists(&mut self, index: usize) -> Result<&mut Buffer<List>, ProcessorError> {
         self.output_as::<List>(index)
     }
 
-    /// Returns the output buffer at the given index, if it is a MIDI message buffer.
+    /// Returns the output signal at the given index, if it is a [`MidiMessage`] signal.
     #[inline]
     pub fn output_as_midi(
         &mut self,
@@ -245,12 +251,13 @@ impl<'a> ProcessorOutputs<'a> {
         self.output_as::<MidiMessage>(index)
     }
 
-    /// Returns an iterator over the output buffers.
+    /// Returns an iterator over the output signals.
     #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut SignalBuffer> + '_ {
         self.outputs.iter_mut()
     }
 
+    /// Returns an iterator over the output signal at the given index, if it is of the given type.
     #[inline]
     pub fn iter_output_as<S: Signal>(
         &mut self,
@@ -259,16 +266,16 @@ impl<'a> ProcessorOutputs<'a> {
         Ok(self.output_as::<S>(index)?.iter_mut())
     }
 
-    /// Returns an iterator over the output samples at the given index.
+    /// Returns an iterator over the output signal at the given index, if it is a [`Float`] signal.
     #[inline]
     pub fn iter_output_mut_as_samples(
         &mut self,
         index: usize,
     ) -> Result<impl Iterator<Item = &mut Option<Float>> + '_, ProcessorError> {
-        Ok(self.output_as_samples(index)?.iter_mut())
+        Ok(self.output_as_floats(index)?.iter_mut())
     }
 
-    /// Returns an iterator over the output integers at the given index.
+    /// Returns an iterator over the output signal at the given index, if it is an [`i64`] signal.
     #[inline]
     pub fn iter_output_mut_as_ints(
         &mut self,
@@ -277,7 +284,7 @@ impl<'a> ProcessorOutputs<'a> {
         Ok(self.output_as_ints(index)?.iter_mut())
     }
 
-    /// Returns an iterator over the output booleans at the given index.
+    /// Returns an iterator over the output signal at the given index, if it is a [`bool`] signal.
     #[inline]
     pub fn iter_output_mut_as_bools(
         &mut self,
@@ -286,7 +293,7 @@ impl<'a> ProcessorOutputs<'a> {
         Ok(self.output_as_bools(index)?.iter_mut())
     }
 
-    /// Returns an iterator over the output strings at the given index.
+    /// Returns an iterator over the output signal at the given index, if it is a [`String`] signal.
     #[inline]
     pub fn iter_output_mut_as_strings(
         &mut self,
@@ -295,7 +302,7 @@ impl<'a> ProcessorOutputs<'a> {
         Ok(self.output_as_strings(index)?.iter_mut())
     }
 
-    /// Returns an iterator over the output lists at the given index.
+    /// Returns an iterator over the output signal at the given index, if it is a [`List`] signal.
     #[inline]
     pub fn iter_output_mut_as_lists(
         &mut self,
@@ -304,7 +311,7 @@ impl<'a> ProcessorOutputs<'a> {
         Ok(self.output_as_lists(index)?.iter_mut())
     }
 
-    /// Returns an iterator over the output MIDI messages at the given index.
+    /// Returns an iterator over the output signal at the given index, if it is a [`MidiMessage`] signal.
     #[inline]
     pub fn iter_output_mut_as_midi(
         &mut self,
@@ -313,47 +320,11 @@ impl<'a> ProcessorOutputs<'a> {
         Ok(self.output_as_midi(index)?.iter_mut())
     }
 
-    /// Splits this [`ProcessorOutputs`] into two at the given index.
+    /// Splits the outputs into two parts at the given index.
     ///
-    /// Note that the indices in the returned [`ProcessorOutputs`] are relative to the split point, not the original outputs.
+    /// # Panics
     ///
-    /// # Example
-    ///
-    /// ```
-    /// use raug::processor::{ProcessorOutputs, SignalSpec};
-    /// use raug::signal::{Signal, SignalBuffer};
-    ///
-    /// // Create some output buffers and their specs.
-    /// let mut outputs = vec![
-    ///     SignalBuffer::new_sample(1),
-    ///     SignalBuffer::new_sample(2),
-    ///     SignalBuffer::new_sample(3),
-    /// ];
-    ///
-    /// let output_spec = vec![
-    ///     SignalSpec::unbounded("a", 0.0),
-    ///     SignalSpec::unbounded("b", 0.0),
-    ///     SignalSpec::unbounded("c", 0.0),
-    /// ];
-    ///
-    /// let mut process_outputs = ProcessorOutputs {
-    ///     output_spec: &output_spec,
-    ///     outputs: &mut outputs,
-    /// };
-    ///
-    /// // Split the outputs at index 1.
-    /// let (mut left, mut right) = process_outputs.split_at_mut(1);
-    ///
-    /// assert_eq!(left.output_spec.len(), 1);
-    /// assert_eq!(right.output_spec.len(), 2);
-    ///
-    /// // The first output buffer is now in `left` at index 0.
-    /// assert_eq!(left.output(0).len(), 1);
-    ///
-    /// // The second and third output buffers are now in `right` at indices 0 and 1.
-    /// assert_eq!(right.output(0).len(), 2);
-    /// assert_eq!(right.output(1).len(), 3);
-    /// ```
+    /// Panics if `index` is out of bounds.
     #[inline]
     pub fn split_at_mut(&mut self, index: usize) -> (ProcessorOutputs, ProcessorOutputs) {
         let (left, right) = self.outputs.split_at_mut(index);
@@ -370,9 +341,9 @@ impl<'a> ProcessorOutputs<'a> {
     }
 }
 
-/// A trait for processing audio or control signals.
+/// A processor that can process audio signals.
 pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
-    /// Returns the name of this [`Processor`].
+    /// Returns the name of the processor.
     fn name(&self) -> &str {
         std::any::type_name::<Self>()
             .split("::")
@@ -380,32 +351,30 @@ pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
             .unwrap_or_default()
     }
 
-    /// Returns the names of the inputs this [`Processor`] expects.
+    /// Returns the specifications of the input signals of the processor.
     fn input_spec(&self) -> Vec<SignalSpec>;
 
-    /// Returns information about the outputs this [`Processor`] produces.
+    /// Returns the specifications of the output signals of the processor.
     fn output_spec(&self) -> Vec<SignalSpec>;
 
-    /// Returns the number of input buffers/channels this [`Processor`] expects.
+    /// Returns the number of input signals required by the processor.
     fn num_inputs(&self) -> usize {
         self.input_spec().len()
     }
 
-    /// Returns the number of output buffers/channels this [`Processor`] produces.
+    /// Returns the number of output signals produced by the processor.
     fn num_outputs(&self) -> usize {
         self.output_spec().len()
     }
 
-    /// Called before the first [`Processor::process`] call, and anytime the graph changes.
+    /// Prepares the processor for processing.
     fn prepare(&mut self) {}
 
-    /// Called whenever the runtime's sample rates or block size change.
+    /// Called anytime the sample rate or block size changes.
     #[allow(unused)]
     fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) {}
 
-    /// Processes the given input buffers and writes the results to the given output buffers.
-    ///
-    /// The number of input and output buffers must match the numbers returned by [`Processor::num_inputs`] and [`Processor::num_outputs`].
+    /// Processes the input signals and writes the output signals.
     fn process(
         &mut self,
         inputs: ProcessorInputs,

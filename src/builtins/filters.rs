@@ -4,21 +4,21 @@ use crate::{prelude::*, signal::PI};
 
 const THERMAL: Float = 0.000025;
 
-/// A 4-pole low-pass filter based on the Moog ladder filter.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Float` | | The input signal to filter. |
-/// | `1` | `cutoff` | `Float` | `1000.0` | The cutoff frequency of the filter. |
-/// | `2` | `resonance` | `Float` | `0.1` | The resonance of the filter. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Float` | The filtered output signal. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug)]
 pub struct MoogLadder {
     sample_rate: Float,
@@ -29,9 +29,9 @@ pub struct MoogLadder {
     acr: Float,
     res_quad: Float,
 
-    /// The cutoff frequency of the filter.
+    
     pub cutoff: Float,
-    /// The resonance of the filter.
+    
     pub resonance: Float,
 }
 
@@ -52,7 +52,7 @@ impl Default for MoogLadder {
 }
 
 impl MoogLadder {
-    /// Creates a new Moog ladder filter with the given cutoff frequency and resonance.
+    
     pub fn new(cutoff: Float, resonance: Float) -> Self {
         Self {
             cutoff,
@@ -87,9 +87,9 @@ impl Processor for MoogLadder {
         // based on: https://github.com/ddiakopoulos/MoogLadders/blob/fd147415573e723ba102dfc63dc46af0b7fe55b9/src/HuovilainenModel.h
         for (out, in_signal, cutoff, resonance) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
-            inputs.iter_input_as_samples(0)?,
-            inputs.iter_input_as_samples(1)?,
-            inputs.iter_input_as_samples(2)?
+            inputs.iter_input_as_floats(0)?,
+            inputs.iter_input_as_floats(1)?,
+            inputs.iter_input_as_floats(2)?
         ) {
             let Some(in_signal) = in_signal else {
                 *out = None;
@@ -144,36 +144,36 @@ impl Processor for MoogLadder {
     }
 }
 
-/// A 2-pole, 2-zero biquad filter.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Float` | | The input signal to filter. |
-/// | `1` | `a0` | `Float` | `1.0` | The a0 coefficient: amount of input signal that contributes to the output. |
-/// | `2` | `a1` | `Float` | `0.0` | The a1 coefficient: amount of input signal delayed by 1 sample that contributes to the output. |
-/// | `3` | `a2` | `Float` | `0.0` | The a2 coefficient: amount of input signal delayed by 2 samples that contributes to the output. |
-/// | `4` | `b1` | `Float` | `0.0` | The b1 coefficient: amount of output signal delayed by 1 sample that contributes to the output. |
-/// | `5` | `b2` | `Float` | `0.0` | The b2 coefficient: amount of output signal delayed by 2 samples that contributes to the output. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Float` | The filtered output signal. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug)]
 pub struct Biquad {
     sample_rate: Float,
-    /// The a0 coefficient: amount of input signal that contributes to the output.
+    
     pub a0: Float,
-    /// The a1 coefficient: amount of input signal delayed by 1 sample that contributes to the output.
+    
     pub a1: Float,
-    /// The a2 coefficient: amount of input signal delayed by 2 samples that contributes to the output.
+    
     pub a2: Float,
-    /// The b1 coefficient: amount of output signal delayed by 1 sample that contributes to the output.
+    
     pub b1: Float,
-    /// The b2 coefficient: amount of output signal delayed by 2 samples that contributes to the output.
+    
     pub b2: Float,
 
     // input state
@@ -203,7 +203,7 @@ impl Default for Biquad {
 }
 
 impl Biquad {
-    /// Creates a new biquad filter with the given coefficients.
+    
     pub fn new(a0: Float, a1: Float, a2: Float, b1: Float, b2: Float) -> Self {
         Self {
             a0,
@@ -243,12 +243,12 @@ impl Processor for Biquad {
     ) -> Result<(), ProcessorError> {
         for (out, in_signal, a0, a1, a2, b1, b2) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
-            inputs.iter_input_as_samples(0)?,
-            inputs.iter_input_as_samples(1)?,
-            inputs.iter_input_as_samples(2)?,
-            inputs.iter_input_as_samples(3)?,
-            inputs.iter_input_as_samples(4)?,
-            inputs.iter_input_as_samples(5)?
+            inputs.iter_input_as_floats(0)?,
+            inputs.iter_input_as_floats(1)?,
+            inputs.iter_input_as_floats(2)?,
+            inputs.iter_input_as_floats(3)?,
+            inputs.iter_input_as_floats(4)?,
+            inputs.iter_input_as_floats(5)?
         ) {
             let Some(in_signal) = in_signal else {
                 *out = None;
@@ -287,22 +287,22 @@ impl Processor for Biquad {
     }
 }
 
-/// The type of biquad filter to use.
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BiquadType {
-    /// A low-pass filter.
+    
     LowPass,
-    /// A high-pass filter.
+    
     HighPass,
-    /// A band-pass filter.
+    
     BandPass,
-    /// A notch filter.
+    
     Notch,
-    /// A peak filter.
+    
     Peak,
-    /// A low-shelf filter.
+    
     LowShelf,
-    /// A high-shelf filter.
+    
     HighShelf,
 }
 
@@ -337,22 +337,22 @@ impl std::fmt::Display for BiquadType {
     }
 }
 
-/// A 2-pole, 2-zero biquad filter with automatic coefficient calculation based on the given filter type.
-///
-/// # Inputs
-///
-/// | Index | Name | Type | Default | Description |
-/// | --- | --- | --- | --- | --- |
-/// | `0` | `in` | `Float` | | The input signal to filter. |
-/// | `1` | `frequency` | `Float` | `1000.0` | The cutoff frequency of the filter. |
-/// | `2` | `q` | `Float` | `0.707` | The quality factor of the filter. |
-/// | `3` | `gain` | `Float` | `0.0` | The gain of the filter. |
-///
-/// # Outputs
-///
-/// | Index | Name | Type | Description |
-/// | --- | --- | --- | --- |
-/// | `0` | `out` | `Float` | The filtered output signal. |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #[derive(Clone, Debug)]
 pub struct AutoBiquad {
     sample_rate: Float,
@@ -371,11 +371,11 @@ pub struct AutoBiquad {
     // the type of biquad filter
     biquad_type: BiquadType,
 
-    /// The cutoff frequency of the filter.
+    
     pub cutoff: Float,
-    /// The Q/resonance factor of the filter.
+    
     pub q: Float,
-    /// The gain of the filter.
+    
     pub gain: Float,
 }
 
@@ -401,7 +401,7 @@ impl Default for AutoBiquad {
 }
 
 impl AutoBiquad {
-    /// Creates a new auto biquad filter with the given type, frequency, Q, and gain.
+    
     pub fn new(biquad_type: BiquadType, cutoff: Float, q: Float, gain: Float) -> Self {
         let mut this = Self {
             biquad_type,
@@ -414,54 +414,54 @@ impl AutoBiquad {
         this
     }
 
-    /// Returns the type of biquad filter used.
+    
     pub fn biquad_type(&self) -> BiquadType {
         self.biquad_type
     }
 
-    /// Creates a new low-pass biquad filter with the given frequency and Q.
+    
     pub fn lowpass(cutoff: Float, q: Float) -> Self {
         let mut this = Self::new(BiquadType::LowPass, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
-    /// Creates a new high-pass biquad filter with the given frequency and Q.
+    
     pub fn highpass(cutoff: Float, q: Float) -> Self {
         let mut this = Self::new(BiquadType::HighPass, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
-    /// Creates a new band-pass biquad filter with the given frequency and Q.
+    
     pub fn bandpass(cutoff: Float, q: Float) -> Self {
         let mut this = Self::new(BiquadType::BandPass, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
-    /// Creates a new notch biquad filter with the given frequency and Q.
+    
     pub fn notch(cutoff: Float, q: Float) -> Self {
         let mut this = Self::new(BiquadType::Notch, cutoff, q, 0.0);
         this.set_coefficients();
         this
     }
 
-    /// Creates a new peak biquad filter with the given frequency, Q, and gain.
+    
     pub fn peak(cutoff: Float, q: Float, gain: Float) -> Self {
         let mut this = Self::new(BiquadType::Peak, cutoff, q, gain);
         this.set_coefficients();
         this
     }
 
-    /// Creates a new low-shelf biquad filter with the given frequency, Q, and gain.
+    
     pub fn lowshelf(cutoff: Float, q: Float, gain: Float) -> Self {
         let mut this = Self::new(BiquadType::LowShelf, cutoff, q, gain);
         this.set_coefficients();
         this
     }
 
-    /// Creates a new high-shelf biquad filter with the given frequency, Q, and gain.
+    
     pub fn highshelf(cutoff: Float, q: Float, gain: Float) -> Self {
         let mut this = Self::new(BiquadType::HighShelf, cutoff, q, gain);
         this.set_coefficients();
@@ -602,10 +602,10 @@ impl Processor for AutoBiquad {
     ) -> Result<(), ProcessorError> {
         for (out, in_signal, frequency, q, gain) in itertools::izip!(
             outputs.iter_output_mut_as_samples(0)?,
-            inputs.iter_input_as_samples(0)?,
-            inputs.iter_input_as_samples(1)?,
-            inputs.iter_input_as_samples(2)?,
-            inputs.iter_input_as_samples(3)?
+            inputs.iter_input_as_floats(0)?,
+            inputs.iter_input_as_floats(1)?,
+            inputs.iter_input_as_floats(2)?,
+            inputs.iter_input_as_floats(3)?
         ) {
             let Some(in_signal) = in_signal else {
                 *out = None;

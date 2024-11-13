@@ -17,8 +17,8 @@ pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Nod
     let select = graph.add(Select::<bool>::new(options.len()));
     select
         .input("in")
-        .connect(&graph.constant(AnySignal::new_bool(true)).output(0));
-    select.input("index").connect(&index.output(0));
+        .connect(graph.constant(AnySignal::new_bool(true)));
+    select.input("index").connect(index);
 
     let merge = graph.add(Merge::<Float>::new(options.len()));
 
@@ -28,9 +28,9 @@ pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Nod
         .collect::<Vec<_>>();
 
     for (i, (option, msg)) in options.iter().zip(msgs.iter()).enumerate() {
-        msg.input(0).connect(&select.output(i as u32));
-        msg.input(1).connect(&option.output(0));
-        merge.input(i as u32).connect(&msg.output(0));
+        msg.input(0).connect(select.output(i as u32));
+        msg.input(1).connect(option.output(0));
+        merge.input(i as u32).connect(msg.output(0));
     }
 
     merge
@@ -40,15 +40,15 @@ pub fn fm_sine_osc(graph: &GraphBuilder, freq: &Node, mod_freq: &Node) -> Node {
     let sr = graph.sample_rate();
     let phase = graph.add(PhaseAccumulator::default());
     let increment = freq / sr;
-    phase.input(0).connect(&increment.output(0));
+    phase.input(0).connect(increment.output(0));
     (phase * 2.0 * PI + mod_freq * 2.0 * PI).sin()
 }
 
 pub fn decay_env(graph: &GraphBuilder, trig: &Node, decay: &Node) -> Node {
     let sr = graph.sample_rate();
     let time = graph.add(PhaseAccumulator::default());
-    time.input(0).connect(&sr.recip().output(0));
-    time.input(1).connect(&trig.output(0));
+    time.input(0).connect(sr.recip().output(0));
+    time.input(1).connect(trig.output(0));
 
     let time = time % 1.0;
 
@@ -89,14 +89,14 @@ pub fn random_tones(
     amps: &[Float],
 ) -> Node {
     let mast = graph.add(Metro::default());
-    mast.input(0).set(rates[0]);
+    mast.input(0).connect(rates[0]);
 
     // select a random rate
     let rates = rates.iter().map(|&r| graph.constant(r)).collect::<Vec<_>>();
     let rate = pick_randomly(graph, &mast, &rates);
 
     let trig = graph.add(Metro::default());
-    trig.input(0).connect(&rate.output(0));
+    trig.input(0).connect(rate.output(0));
 
     // select a random frequency
     let freqs = freqs.iter().map(|&f| graph.constant(f)).collect::<Vec<_>>();
@@ -146,16 +146,16 @@ pub fn random_tones(
 
     // create the modulator
     let modulator = graph.add(BlSawOscillator::default());
-    modulator.input(0).connect(&(&freq * ratio).output(0));
+    modulator.input(0).connect((&freq * ratio).output(0));
 
     // create the carrier
     let carrier = fm_sine_osc(graph, &freq, &(modulator * 0.1));
 
     // create the filter
     let filt = graph.add(MoogLadder::default());
-    filt.input("in").connect(&carrier.output(0));
-    filt.input("cutoff").connect(&filt_env.output(0));
-    filt.input("resonance").set(0.1);
+    filt.input("in").connect(carrier.output(0));
+    filt.input("cutoff").connect(filt_env.output(0));
+    filt.input("resonance").connect(0.1);
 
     filt * amp_env * amp
 }
@@ -188,7 +188,7 @@ pub fn generative1(num_tones: usize) -> GraphBuilder {
     let mix = mix * amp;
 
     let master = graph.add(PeakLimiter::default());
-    master.input(0).connect(&mix.output(0));
+    master.input(0).connect(mix.output(0));
 
     master.output(0).connect(&out1.input(0));
     master.output(0).connect(&out2.input(0));
