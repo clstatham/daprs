@@ -35,10 +35,10 @@ fn main() {
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     // change the frequency of the sine oscillator a few times
-    freq_param.set(880.0);
+    freq_param.send(880.0);
     std::thread::sleep(std::time::Duration::from_secs(1));
 
-    freq_param.set(220.0);
+    freq_param.send(220.0);
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     // stop playback

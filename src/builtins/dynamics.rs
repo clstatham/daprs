@@ -2,38 +2,40 @@
 
 use crate::prelude::*;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/// A simple peak limiter.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `in` | `Float` | The input signal. |
+/// | `1` | `threshold` | `Float` | The amplitude threshold of the limiter. |
+/// | `2` | `attack` | `Float` | The attack factor of the limiter. |
+/// | `3` | `release` | `Float` | The release factor of the limiter. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The output signal. |
 #[derive(Debug, Clone)]
 pub struct PeakLimiter {
     gain: Float,
     sample_rate: Float,
     envelope: Float,
 
-    
+    /// The amplitude threshold of the limiter.
     pub threshold: Float,
-    
+
+    /// The attack factor of the limiter.
     pub attack: Float,
-    
+
+    /// The release factor of the limiter.
     pub release: Float,
 }
 
 impl PeakLimiter {
-    
+    /// Creates a new `PeakLimiter` processor with the given threshold, attack, and release.
     pub fn new(threshold: Float, attack: Float, release: Float) -> Self {
         Self {
             threshold,

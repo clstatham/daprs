@@ -8,6 +8,22 @@ use crate::{
     signal::{PI, TAU},
 };
 
+/// A processor that accumulates a phase value.
+///
+/// The phase value will be incremented by the `increment` input signal each sample, and can be reset to 0 by the `reset` input signal.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `increment` | `Float` | The phase increment per sample. |
+/// | `1` | `reset` | `Bool` | Whether to reset the phase accumulator to 0. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The phase accumulator value. |
 #[derive(Clone, Debug, Default)]
 pub struct PhaseAccumulator {
     // phase accumulator
@@ -56,6 +72,20 @@ impl Processor for PhaseAccumulator {
     }
 }
 
+/// A processor that generates a sine wave.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `frequency` | `Float` | The frequency of the sine wave. |
+/// | `1` | `phase` | `Float` | The phase offset of the sine wave. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The sine wave value. |
 #[derive(Clone, Debug)]
 pub struct SineOscillator {
     // phase accumulator
@@ -65,12 +95,15 @@ pub struct SineOscillator {
     // sample rate
     sample_rate: Float,
 
+    /// The frequency of the sine wave.
     pub frequency: Float,
 
+    /// The phase offset of the sine wave.
     pub phase: Float,
 }
 
 impl SineOscillator {
+    /// Creates a new [`SineOscillator`] processor with the given frequency.
     pub fn new(frequency: Float) -> Self {
         Self {
             frequency,
@@ -144,6 +177,22 @@ impl Processor for SineOscillator {
     }
 }
 
+/// A processor that generates a unipolar sawtooth wave, appropriate for use as a modulation source.
+///
+/// This processor's output is not anti-aliased. For band-limited sawtooth waves, see the [`BlSawOscillator`] processor.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `frequency` | `Float` | The frequency of the sawtooth wave. |
+/// | `1` | `phase` | `Float` | The phase offset of the sawtooth wave. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The sawtooth wave value. |
 #[derive(Clone, Debug)]
 pub struct SawOscillator {
     // phase accumulator
@@ -153,8 +202,10 @@ pub struct SawOscillator {
     // sample rate
     sample_rate: Float,
 
+    /// The frequency of the sawtooth wave.
     pub frequency: Float,
 
+    /// The phase offset of the sawtooth wave.
     pub phase: Float,
 }
 
@@ -171,6 +222,7 @@ impl Default for SawOscillator {
 }
 
 impl SawOscillator {
+    /// Creates a new [`SawOscillator`] processor with the given frequency.
     pub fn new(frequency: Float) -> Self {
         Self {
             frequency,
@@ -231,12 +283,24 @@ impl Processor for SawOscillator {
     }
 }
 
+/// A processor that generates unipolar white noise.
+///
+/// # Inputs
+///
+/// None.
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The white noise value. |
 #[derive(Clone, Debug)]
 pub struct NoiseOscillator {
     distribution: rand::distributions::Uniform<f64>,
 }
 
 impl NoiseOscillator {
+    /// Creates a new [`NoiseOscillator`] processor.
     pub fn new() -> Self {
         NoiseOscillator {
             distribution: rand::distributions::Uniform::new(0.0, 1.0),
@@ -274,6 +338,19 @@ impl Processor for NoiseOscillator {
     }
 }
 
+/// A processor that generates a band-limited sawtooth wave.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `frequency` | `Float` | The frequency of the sawtooth wave. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The sawtooth wave value. |
 #[derive(Clone, Debug)]
 pub struct BlSawOscillator {
     p: Float,
@@ -281,6 +358,7 @@ pub struct BlSawOscillator {
     saw: Float,
     sample_rate: Float,
 
+    /// The frequency of the sawtooth wave.
     pub frequency: Float,
 }
 
@@ -297,6 +375,7 @@ impl Default for BlSawOscillator {
 }
 
 impl BlSawOscillator {
+    /// Creates a new [`BlSawOscillator`] processor with the given frequency.
     pub fn new(frequency: Float) -> Self {
         Self {
             frequency,
@@ -362,6 +441,20 @@ impl Processor for BlSawOscillator {
 
 const BL_SQUARE_MAX_HARMONICS: usize = 512;
 
+/// A processor that generates a band-limited square/pulse wave.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `frequency` | `Float` | The frequency of the square wave. |
+/// | `1` | `pulse_width` | `Float` | The pulse width of the square wave. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The square wave value. |
 #[derive(Clone, Debug)]
 pub struct BlSquareOscillator {
     sample_rate: Float,
@@ -374,8 +467,10 @@ pub struct BlSquareOscillator {
     // band-limited square wave coefficients
     coeff: Box<[Float; BL_SQUARE_MAX_HARMONICS]>,
 
+    /// The frequency of the square wave.
     pub frequency: Float,
 
+    /// The pulse width of the square wave (0.0 to 1.0).
     pub pulse_width: Float,
 }
 
@@ -386,6 +481,7 @@ impl Default for BlSquareOscillator {
 }
 
 impl BlSquareOscillator {
+    /// Creates a new [`BlSquareOscillator`] processor with the given frequency and pulse width.
     pub fn new(frequency: Float, pulse_width: Float) -> Self {
         Self {
             frequency,

@@ -4,21 +4,21 @@ use crate::{prelude::*, signal::PI};
 
 const THERMAL: Float = 0.000025;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/// A 4-pole Moog ladder lowpass filter.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `in` | `Float` | The input signal. |
+/// | `1` | `cutoff` | `Float` | The cutoff frequency of the filter. |
+/// | `2` | `resonance` | `Float` | The resonance of the filter. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The output signal. |
 #[derive(Clone, Debug)]
 pub struct MoogLadder {
     sample_rate: Float,
@@ -29,9 +29,10 @@ pub struct MoogLadder {
     acr: Float,
     res_quad: Float,
 
-    
+    /// The cutoff frequency of the filter.
     pub cutoff: Float,
-    
+
+    /// The resonance of the filter.
     pub resonance: Float,
 }
 
@@ -52,7 +53,7 @@ impl Default for MoogLadder {
 }
 
 impl MoogLadder {
-    
+    /// Creates a new `MoogLadder` filter with the given cutoff frequency and resonance.
     pub fn new(cutoff: Float, resonance: Float) -> Self {
         Self {
             cutoff,
@@ -144,36 +145,41 @@ impl Processor for MoogLadder {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/// A biquad filter with configurable coefficients.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `in` | `Float` | The input signal. |
+/// | `1` | `a0` | `Float` | The `a0` coefficient. |
+/// | `2` | `a1` | `Float` | The `a1` coefficient. |
+/// | `3` | `a2` | `Float` | The `a2` coefficient. |
+/// | `4` | `b1` | `Float` | The `b1` coefficient. |
+/// | `5` | `b2` | `Float` | The `b2` coefficient. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The output signal. |
 #[derive(Clone, Debug)]
 pub struct Biquad {
     sample_rate: Float,
-    
+
+    /// The `a0` coefficient.
     pub a0: Float,
-    
+
+    /// The `a1` coefficient.
     pub a1: Float,
-    
+
+    /// The `a2` coefficient.
     pub a2: Float,
-    
+
+    /// The `b1` coefficient.
     pub b1: Float,
-    
+
+    /// The `b2` coefficient.
     pub b2: Float,
 
     // input state
@@ -203,7 +209,7 @@ impl Default for Biquad {
 }
 
 impl Biquad {
-    
+    /// Creates a new `Biquad` filter with the given coefficients.
     pub fn new(a0: Float, a1: Float, a2: Float, b1: Float, b2: Float) -> Self {
         Self {
             a0,
@@ -287,22 +293,22 @@ impl Processor for Biquad {
     }
 }
 
-
+/// A type of biquad filter.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BiquadType {
-    
+    /// A lowpass filter.
     LowPass,
-    
+    /// A highpass filter.
     HighPass,
-    
+    /// A bandpass filter.
     BandPass,
-    
+    /// A notch filter.
     Notch,
-    
+    /// An equalizer peak filter.
     Peak,
-    
+    /// An equalizer low shelf filter.
     LowShelf,
-    
+    /// An equalizer high shelf filter.
     HighShelf,
 }
 
@@ -337,22 +343,7 @@ impl std::fmt::Display for BiquadType {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/// A bi-quad filter with automatic coefficient calculation.
 #[derive(Clone, Debug)]
 pub struct AutoBiquad {
     sample_rate: Float,
@@ -371,11 +362,13 @@ pub struct AutoBiquad {
     // the type of biquad filter
     biquad_type: BiquadType,
 
-    
+    /// The cutoff frequency of the filter.
     pub cutoff: Float,
-    
+
+    /// The Q factor of the filter.
     pub q: Float,
-    
+
+    /// The gain of the filter.
     pub gain: Float,
 }
 
@@ -401,7 +394,7 @@ impl Default for AutoBiquad {
 }
 
 impl AutoBiquad {
-    
+    /// Creates a new `AutoBiquad` filter with the given type, cutoff frequency, Q factor, and gain.
     pub fn new(biquad_type: BiquadType, cutoff: Float, q: Float, gain: Float) -> Self {
         let mut this = Self {
             biquad_type,
@@ -414,58 +407,44 @@ impl AutoBiquad {
         this
     }
 
-    
+    /// Creates a new lowpass `AutoBiquad` filter with the given cutoff frequency and Q factor.
+    pub fn lowpass(cutoff: Float, q: Float) -> Self {
+        Self::new(BiquadType::LowPass, cutoff, q, 0.0)
+    }
+
+    /// Creates a new highpass `AutoBiquad` filter with the given cutoff frequency and Q factor.
+    pub fn highpass(cutoff: Float, q: Float) -> Self {
+        Self::new(BiquadType::HighPass, cutoff, q, 0.0)
+    }
+
+    /// Creates a new bandpass `AutoBiquad` filter with the given cutoff frequency and Q factor.
+    pub fn bandpass(cutoff: Float, q: Float) -> Self {
+        Self::new(BiquadType::BandPass, cutoff, q, 0.0)
+    }
+
+    /// Creates a new notch `AutoBiquad` filter with the given cutoff frequency and Q factor.
+    pub fn notch(cutoff: Float, q: Float) -> Self {
+        Self::new(BiquadType::Notch, cutoff, q, 0.0)
+    }
+
+    /// Creates a new peak `AutoBiquad` filter with the given cutoff frequency, Q factor, and gain.
+    pub fn peak(cutoff: Float, q: Float, gain: Float) -> Self {
+        Self::new(BiquadType::Peak, cutoff, q, gain)
+    }
+
+    /// Creates a new low shelf `AutoBiquad` filter with the given cutoff frequency, Q factor, and gain.
+    pub fn low_shelf(cutoff: Float, q: Float, gain: Float) -> Self {
+        Self::new(BiquadType::LowShelf, cutoff, q, gain)
+    }
+
+    /// Creates a new high shelf `AutoBiquad` filter with the given cutoff frequency, Q factor, and gain.
+    pub fn high_shelf(cutoff: Float, q: Float, gain: Float) -> Self {
+        Self::new(BiquadType::HighShelf, cutoff, q, gain)
+    }
+
+    /// Returns the type of biquad filter this is.
     pub fn biquad_type(&self) -> BiquadType {
         self.biquad_type
-    }
-
-    
-    pub fn lowpass(cutoff: Float, q: Float) -> Self {
-        let mut this = Self::new(BiquadType::LowPass, cutoff, q, 0.0);
-        this.set_coefficients();
-        this
-    }
-
-    
-    pub fn highpass(cutoff: Float, q: Float) -> Self {
-        let mut this = Self::new(BiquadType::HighPass, cutoff, q, 0.0);
-        this.set_coefficients();
-        this
-    }
-
-    
-    pub fn bandpass(cutoff: Float, q: Float) -> Self {
-        let mut this = Self::new(BiquadType::BandPass, cutoff, q, 0.0);
-        this.set_coefficients();
-        this
-    }
-
-    
-    pub fn notch(cutoff: Float, q: Float) -> Self {
-        let mut this = Self::new(BiquadType::Notch, cutoff, q, 0.0);
-        this.set_coefficients();
-        this
-    }
-
-    
-    pub fn peak(cutoff: Float, q: Float, gain: Float) -> Self {
-        let mut this = Self::new(BiquadType::Peak, cutoff, q, gain);
-        this.set_coefficients();
-        this
-    }
-
-    
-    pub fn lowshelf(cutoff: Float, q: Float, gain: Float) -> Self {
-        let mut this = Self::new(BiquadType::LowShelf, cutoff, q, gain);
-        this.set_coefficients();
-        this
-    }
-
-    
-    pub fn highshelf(cutoff: Float, q: Float, gain: Float) -> Self {
-        let mut this = Self::new(BiquadType::HighShelf, cutoff, q, gain);
-        this.set_coefficients();
-        this
     }
 
     // http://www.earlevel.com/scripts/widgets/20131013/biquads2.js
@@ -564,14 +543,14 @@ impl AutoBiquad {
             }
         }
 
-        // #[cfg(debug_assertions)]
+        #[cfg(debug_assertions)]
         if self.sample_rate > 0.0 {
             // check for NaN
-            assert!(self.a0.is_finite());
-            assert!(self.a1.is_finite());
-            assert!(self.a2.is_finite());
-            assert!(self.b1.is_finite());
-            assert!(self.b2.is_finite());
+            assert!(self.a0.is_finite(), "biquad: malformed a0 coefficient");
+            assert!(self.a1.is_finite(), "biquad: malformed a1 coefficient");
+            assert!(self.a2.is_finite(), "biquad: malformed a2 coefficient");
+            assert!(self.b1.is_finite(), "biquad: malformed b1 coefficient");
+            assert!(self.b2.is_finite(), "biquad: malformed b2 coefficient");
         }
     }
 }

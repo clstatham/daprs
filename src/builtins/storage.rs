@@ -4,6 +4,21 @@ use std::marker::PhantomData;
 
 use crate::{prelude::*, signal::Signal};
 
+/// A processor that reads from and writes to a buffer of audio samples.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `index` | `Float` | The index of the sample to read. |
+/// | `1` | `set` | `Float` | The value to write to the buffer at the current index. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The value of the sample at the current index. |
+/// | `1` | `length` | `Int` | The length of the buffer. |
 #[derive(Clone, Debug)]
 pub struct AudioBuffer {
     buffer: Buffer<Float>,
@@ -12,6 +27,7 @@ pub struct AudioBuffer {
 }
 
 impl AudioBuffer {
+    /// Creates a new [`AudioBuffer`] processor with the given buffer.
     pub fn new(buffer: Buffer<Float>) -> Self {
         Self {
             buffer,
@@ -88,13 +104,28 @@ impl Processor for AudioBuffer {
     }
 }
 
+/// A processor that stores / "remembers" a single value and outputs it continuously.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `set` | `Any` | The value to store. |
+/// | `1` | `clear` | `Bool` | Whether to clear the stored value. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Any` | The stored value. |
 #[derive(Clone, Debug)]
-pub struct Register<S: Signal> {
+pub struct Register<S: Signal + Clone> {
     value: Option<S>,
     _phantom: PhantomData<S>,
 }
 
-impl<S: Signal> Register<S> {
+impl<S: Signal + Clone> Register<S> {
+    /// Creates a new [`Register`] processor.
     pub fn new() -> Self {
         Self {
             value: None,
@@ -103,13 +134,13 @@ impl<S: Signal> Register<S> {
     }
 }
 
-impl<S: Signal> Default for Register<S> {
+impl<S: Signal + Clone> Default for Register<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: Signal> Processor for Register<S> {
+impl<S: Signal + Clone> Processor for Register<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("set", S::TYPE),

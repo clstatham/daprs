@@ -14,6 +14,7 @@ pub mod processor;
 pub mod runtime;
 pub mod signal;
 
+/// Re-exports of commonly used types and traits from the crate.
 #[allow(unused_imports)]
 pub mod prelude {
     pub use crate::builder::{

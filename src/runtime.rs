@@ -560,7 +560,7 @@ impl Runtime {
                     log::debug!("MIDI message: {:2x?}", message);
 
                     for (_name, param) in midi_runtime.graph().midi_input_iter() {
-                        param.set(MidiMessage::new([message[0], message[1], message[2]]));
+                        param.send(MidiMessage::new([message[0], message[1], message[2]]));
                     }
                 },
                 (),

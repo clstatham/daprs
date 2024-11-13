@@ -56,7 +56,12 @@ pub enum GraphConstructionError {
 
     /// Attempted to perform an invalid operation on a node with multiple outputs.
     #[error("Operation `{op}` invalid: Node type `{type_}` has multiple outputs")]
-    NodeHasMultipleOutputs { op: String, type_: String },
+    NodeHasMultipleOutputs {
+        /// The operation that was attempted.
+        op: String,
+        /// The type of the node.
+        type_: String,
+    },
 
     /// Filesystem error.
     #[error("Filesystem error: {0}")]
@@ -141,7 +146,7 @@ impl Graph {
     }
 
     /// Adds a parameter node to the graph.
-    pub fn add_param<S: Signal>(&mut self, param: Param<S>) -> NodeIndex {
+    pub fn add_param<S: Signal + Clone>(&mut self, param: Param<S>) -> NodeIndex {
         let name = param.name().to_string();
         let index = self.add_processor(param);
         self.params.insert(name, index);

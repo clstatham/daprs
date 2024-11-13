@@ -386,7 +386,7 @@ impl Input {
     ///
     /// Panics if the input signal type does not match the initial value signal type (type parameter `S`).
     #[inline]
-    pub fn param<S: Signal>(
+    pub fn param<S: Signal + Clone>(
         &self,
         name: impl Into<String>,
         initial_value: impl Into<Option<S>>,
@@ -617,7 +617,7 @@ mod sealed {
     impl Sealed for super::Output {}
     impl Sealed for &super::Output {}
     impl Sealed for super::AnySignal {}
-    impl<S: crate::signal::Signal> Sealed for crate::builtins::util::Param<S> {}
+    impl<S: crate::signal::Signal + Clone> Sealed for crate::builtins::util::Param<S> {}
     impl Sealed for crate::signal::Float {}
     impl Sealed for i32 {}
     impl Sealed for i64 {}
@@ -627,6 +627,7 @@ mod sealed {
 
 /// A trait for coercing a value into an [`Output`].
 pub trait IntoOutput: sealed::Sealed {
+    /// Converts the value into an [`Output`] in the given graph.
     fn into_output(self, graph: &GraphBuilder) -> Output;
 }
 
@@ -652,6 +653,7 @@ impl<T: IntoNode> IntoOutput for T {
 
 /// A trait for coercing a value into a [`Node`].
 pub trait IntoNode: sealed::Sealed {
+    /// Converts the value into a [`Node`] in the given graph.
     fn into_node(self, graph: &GraphBuilder) -> Node;
 }
 
@@ -673,7 +675,7 @@ impl IntoNode for &Node {
     }
 }
 
-impl<S: Signal> IntoNode for Param<S> {
+impl<S: Signal + Clone> IntoNode for Param<S> {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.add(self)
     }
@@ -726,11 +728,13 @@ impl IntoNode for &str {
 
 /// A trait for coercing a value into an output index of a node.
 pub trait IntoOutputIdx: sealed::Sealed {
+    /// Converts the value into an output index of the given node.
     fn into_output_idx(self, node: &Node) -> u32;
 }
 
 /// A trait for coercing a value into an input index of a node.
 pub trait IntoInputIdx: sealed::Sealed {
+    /// Converts the value into an input index of the given node.
     fn into_input_idx(self, node: &Node) -> u32;
 }
 

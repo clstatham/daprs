@@ -112,7 +112,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
 
         if let Some(input) = buffer {
             let input = input
-                .as_kind::<S>()
+                .as_type::<S>()
                 .ok_or(ProcessorError::InputSpecMismatch {
                     index,
                     expected: S::TYPE,

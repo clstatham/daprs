@@ -1,20 +1,22 @@
+//! Processors for working with lists.
+
 use std::marker::PhantomData;
 
 use crate::prelude::*;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+/// A processor that computes the length of a list.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `list` | `List` | The input list. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Int` | The length of the input list. |
 #[derive(Default, Debug, Clone)]
 pub struct Len;
 
@@ -48,30 +50,31 @@ impl Processor for Len {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/// A processor that gets an element from a list.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `list` | `List` | The input list. |
+/// | `1` | `index` | `Int` | The index of the element to get. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Any` | The element at the specified index. |
 #[derive(Default, Debug, Clone)]
-pub struct Get<S: Signal>(PhantomData<S>);
+pub struct Get<S: Signal + Clone>(PhantomData<S>);
 
-impl<S: Signal> Get<S> {
+impl<S: Signal + Clone> Get<S> {
+    /// Creates a new `Get` processor.
     pub fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<S: Signal> Processor for Get<S> {
+impl<S: Signal + Clone> Processor for Get<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("list", SignalType::List),
@@ -120,21 +123,21 @@ impl<S: Signal> Processor for Get<S> {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/// A processor that packs multiple signals into a list.
+///
+/// The input signals must all have the same type.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0..n` | `0..n` | `Any` | The input signals to pack. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `List` | The packed list. |
 #[derive(Debug, Clone)]
 pub struct Pack {
     type_: SignalType,
@@ -142,6 +145,7 @@ pub struct Pack {
 }
 
 impl Pack {
+    /// Creates a new `Pack` processor with the specified type and number of inputs.
     pub fn new(type_: SignalType, num_inputs: usize) -> Self {
         Self {
             type_,
@@ -190,19 +194,21 @@ impl Processor for Pack {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+/// A processor that unpacks a list into multiple signals.
+///
+/// The output signals will all have the same type.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `list` | `List` | The input list. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0..n` | `0..n` | `Any` | The unpacked signals. |
 #[derive(Debug, Clone)]
 pub struct Unpack {
     type_: SignalType,
@@ -210,6 +216,7 @@ pub struct Unpack {
 }
 
 impl Unpack {
+    /// Creates a new `Unpack` processor with the specified type and number of outputs.
     pub fn new(type_: SignalType, num_outputs: usize) -> Self {
         Self { type_, num_outputs }
     }

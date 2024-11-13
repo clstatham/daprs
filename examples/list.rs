@@ -30,7 +30,7 @@ fn main() {
     get.input("list").connect(&list);
     get.input("index").connect(&counter);
 
-    let print = graph.add(Print::new(None, None));
+    let print = graph.add(Print::<String>::default());
     print.input("trig").connect(&metro);
     print.input("message").connect(get.cast(SignalType::String));
 

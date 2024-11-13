@@ -56,7 +56,10 @@ impl<T: Signal> Buffer<T> {
 
     /// Clones the slice into a new buffer. All elements are wrapped in `Some`.
     #[inline]
-    pub fn from_slice(value: &[T]) -> Self {
+    pub fn from_slice(value: &[T]) -> Self
+    where
+        T: Clone,
+    {
         Buffer {
             buf: value.iter().map(|v| Some(v.clone())).collect(),
         }
@@ -229,6 +232,7 @@ impl<'a, T: Signal> IntoIterator for &'a mut Buffer<T> {
     }
 }
 
+/// A list of signals that are all of the same type.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct List {
     type_: SignalType,
@@ -236,6 +240,7 @@ pub struct List {
 }
 
 impl List {
+    /// Creates an empty list of the given type.
     pub fn new(type_: SignalType) -> Self {
         Self {
             type_,
@@ -243,18 +248,26 @@ impl List {
         }
     }
 
+    /// Returns the type of the list.
     pub fn type_(&self) -> SignalType {
         self.type_
     }
 
+    /// Returns a slice of the items in the list.
     pub fn items(&self) -> &[AnySignal] {
         &self.items
     }
 
+    /// Returns a mutable slice of the items in the list.
     pub fn items_mut(&mut self) -> &mut [AnySignal] {
         &mut self.items
     }
 
+    /// Appends an item to the end of the list.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the item type does not match the list type.
     pub fn push(&mut self, item: AnySignal) {
         assert_eq!(
             item.type_(),
@@ -264,10 +277,16 @@ impl List {
         self.items.push(item);
     }
 
+    /// Removes the last item from the list and returns it.
     pub fn pop(&mut self) -> Option<AnySignal> {
         self.items.pop()
     }
 
+    /// Inserts an item at the given index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the item type does not match the list type.
     pub fn insert(&mut self, index: usize, item: AnySignal) {
         assert_eq!(
             item.type_(),
@@ -277,22 +296,27 @@ impl List {
         self.items.insert(index, item);
     }
 
+    /// Removes the item at the given index and returns it.
     pub fn remove(&mut self, index: usize) -> AnySignal {
         self.items.remove(index)
     }
 
+    /// Returns the number of items in the list.
     pub fn len(&self) -> usize {
         self.items.len()
     }
 
+    /// Returns `true` if the list is empty.
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
 
+    /// Returns a reference to the item at the given index.
     pub fn get(&self, index: usize) -> Option<&AnySignal> {
         self.items.get(index)
     }
 
+    /// Returns a mutable reference to the item at the given index.
     pub fn get_mut(&mut self, index: usize) -> Option<&mut AnySignal> {
         self.items.get_mut(index)
     }
@@ -307,7 +331,7 @@ impl From<Vec<AnySignal>> for List {
 
 impl From<Vec<Float>> for List {
     fn from(items: Vec<Float>) -> Self {
-        let items = items.into_iter().map(AnySignal::new_sample).collect();
+        let items = items.into_iter().map(AnySignal::new_float).collect();
         Self {
             type_: SignalType::Float,
             items,
@@ -365,28 +389,35 @@ impl From<Vec<MidiMessage>> for List {
     }
 }
 
+/// A 3-byte MIDI message.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub struct MidiMessage {
+    /// The MIDI message data.
     pub data: [u8; 3],
 }
 
 impl MidiMessage {
+    /// Creates a new MIDI message from the given data.
     pub fn new(data: [u8; 3]) -> Self {
         Self { data }
     }
 
+    /// Returns the status byte of the MIDI message.
     pub fn status(&self) -> u8 {
         self.data[0] & 0xF0
     }
 
+    /// Returns the channel of the MIDI message.
     pub fn channel(&self) -> u8 {
         self.data[0] & 0x0F
     }
 
+    /// Returns the first data byte of the MIDI message.
     pub fn data1(&self) -> u8 {
         self.data[1]
     }
 
+    /// Returns the second data byte of the MIDI message.
     pub fn data2(&self) -> u8 {
         self.data[2]
     }
@@ -405,24 +436,45 @@ impl DerefMut for MidiMessage {
     }
 }
 
-pub trait Signal: Clone + Debug + Send + Sync + PartialOrd + PartialEq + 'static {
+/// A trait for types that can be stored in a [`Buffer`] and processed by a [`Processor`](crate::processor::Processor).
+pub trait Signal: Debug + Send + Sync + PartialOrd + PartialEq + 'static {
+    /// The type of the signal.
     const TYPE: SignalType;
 
-    fn into_signal(this: Self) -> AnySignal;
+    /// Converts the signal into an [`AnySignal`].
+    fn into_signal(self) -> AnySignal;
 
-    fn try_from_signal(signal: AnySignal) -> Option<Self>;
+    /// Attempts to convert an [`AnySignal`] into the signal type.
+    fn try_from_signal(signal: AnySignal) -> Option<Self>
+    where
+        Self: Sized;
 
-    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>>;
+    /// Attempts to convert a [`SignalBuffer`] into a buffer of the signal type.
+    fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>>
+    where
+        Self: Sized;
 
-    fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>>;
+    /// Attempts to convert a mutable [`SignalBuffer`] into a mutable buffer of the signal type.
+    fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>>
+    where
+        Self: Sized;
+
+    /// Attempts to cast the signal from another signal type.
+    fn cast_from<T>(other: &T) -> Option<Self>
+    where
+        Self: Sized,
+        T: Signal + Clone,
+    {
+        Self::try_from_signal(other.clone().into_signal())
+    }
 }
 
 impl Signal for AnySignal {
     const TYPE: SignalType = SignalType::Dynamic;
 
     #[inline]
-    fn into_signal(this: Self) -> AnySignal {
-        this
+    fn into_signal(self) -> AnySignal {
+        self
     }
 
     #[inline]
@@ -445,8 +497,8 @@ impl Signal for Float {
     const TYPE: SignalType = SignalType::Float;
 
     #[inline]
-    fn into_signal(this: Self) -> AnySignal {
-        AnySignal::Float(this)
+    fn into_signal(self) -> AnySignal {
+        AnySignal::Float(self)
     }
 
     #[inline]
@@ -459,7 +511,7 @@ impl Signal for Float {
 
     #[inline]
     fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>> {
-        buffer.as_sample()
+        buffer.as_float()
     }
 
     #[inline]
@@ -472,8 +524,8 @@ impl Signal for bool {
     const TYPE: SignalType = SignalType::Bool;
 
     #[inline]
-    fn into_signal(this: Self) -> AnySignal {
-        AnySignal::Bool(this)
+    fn into_signal(self) -> AnySignal {
+        AnySignal::Bool(self)
     }
 
     #[inline]
@@ -499,8 +551,8 @@ impl Signal for i64 {
     const TYPE: SignalType = SignalType::Int;
 
     #[inline]
-    fn into_signal(this: Self) -> AnySignal {
-        AnySignal::Int(this)
+    fn into_signal(self) -> AnySignal {
+        AnySignal::Int(self)
     }
 
     #[inline]
@@ -526,8 +578,8 @@ impl Signal for String {
     const TYPE: SignalType = SignalType::String;
 
     #[inline]
-    fn into_signal(this: Self) -> AnySignal {
-        AnySignal::String(this)
+    fn into_signal(self) -> AnySignal {
+        AnySignal::String(self)
     }
 
     #[inline]
@@ -553,8 +605,8 @@ impl Signal for List {
     const TYPE: SignalType = SignalType::List;
 
     #[inline]
-    fn into_signal(this: Self) -> AnySignal {
-        AnySignal::List(this)
+    fn into_signal(self) -> AnySignal {
+        AnySignal::List(self)
     }
 
     #[inline]
@@ -580,8 +632,8 @@ impl Signal for MidiMessage {
     const TYPE: SignalType = SignalType::Midi;
 
     #[inline]
-    fn into_signal(this: Self) -> AnySignal {
-        AnySignal::Midi(this)
+    fn into_signal(self) -> AnySignal {
+        AnySignal::Midi(self)
     }
 
     #[inline]
@@ -603,87 +655,110 @@ impl Signal for MidiMessage {
     }
 }
 
+/// A type that can hold any signal type.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum AnySignal {
+    /// No signal. The inner value is the expected signal type.
     None(SignalType),
 
+    /// A floating-point value.
     Float(Float),
 
+    /// An integer.
     Int(i64),
 
+    /// A boolean.
     Bool(bool),
 
+    /// A string.
     String(String),
 
+    /// A list of signals.
     List(List),
 
+    /// A MIDI message.
     Midi(MidiMessage),
 }
 
 impl AnySignal {
+    /// Creates a new signal of the given type with no value.
     pub const fn new_none(type_: SignalType) -> Self {
         Self::None(type_)
     }
 
-    pub const fn new_sample(value: Float) -> Self {
+    /// Creates a new floating-point signal.
+    pub const fn new_float(value: Float) -> Self {
         Self::Float(value)
     }
 
+    /// Creates a new integer signal.
     pub const fn new_int(value: i64) -> Self {
         Self::Int(value)
     }
 
+    /// Creates a new boolean signal.
     pub const fn new_bool(value: bool) -> Self {
         Self::Bool(value)
     }
 
+    /// Creates a new string signal.
     pub fn new_string(value: impl Into<String>) -> Self {
         Self::String(value.into())
     }
 
+    /// Creates a new list signal.
     pub fn new_list(value: impl Into<List>) -> Self {
         Self::List(value.into())
     }
 
+    /// Creates a new MIDI signal.
     pub fn new_midi(value: impl Into<MidiMessage>) -> Self {
         Self::Midi(value.into())
     }
 
+    /// Returns `true` if the signal is [`None`](AnySignal::None).
     #[inline]
     pub fn is_none(&self) -> bool {
         matches!(self, Self::None(_))
     }
 
+    /// Returns `true` if the signal is a floating-point value.
     #[inline]
     pub fn is_float(&self) -> bool {
         matches!(self, Self::Float(_))
     }
 
+    /// Returns `true` if the signal is an integer.
     #[inline]
     pub fn is_int(&self) -> bool {
         matches!(self, Self::Int(_))
     }
 
+    /// Returns `true` if the signal is a boolean.
     #[inline]
     pub fn is_bool(&self) -> bool {
         matches!(self, Self::Bool(_))
     }
 
+    /// Returns `true` if the signal is a string.
     #[inline]
     pub fn is_string(&self) -> bool {
         matches!(self, Self::String(_))
     }
 
+    /// Returns `true` if the signal is a list.
     #[inline]
     pub fn is_list(&self) -> bool {
         matches!(self, Self::List(_))
     }
 
+    /// Returns `true` if the signal is a MIDI message.
     #[inline]
     pub fn is_midi(&self) -> bool {
         matches!(self, Self::Midi(_))
     }
 
+    /// Returns the floating-point value if the signal is a float, without casting.
     #[inline]
     pub fn as_float(&self) -> Option<Float> {
         match self {
@@ -692,6 +767,7 @@ impl AnySignal {
         }
     }
 
+    /// Returns the integer value if the signal is an integer, without casting.
     #[inline]
     pub fn as_int(&self) -> Option<i64> {
         match self {
@@ -700,6 +776,7 @@ impl AnySignal {
         }
     }
 
+    /// Returns the boolean value if the signal is a boolean, without casting.
     #[inline]
     pub fn as_bool(&self) -> Option<bool> {
         match self {
@@ -708,6 +785,7 @@ impl AnySignal {
         }
     }
 
+    /// Returns the string value if the signal is a string, without casting.
     #[inline]
     pub fn as_string(&self) -> Option<&String> {
         match self {
@@ -716,6 +794,7 @@ impl AnySignal {
         }
     }
 
+    /// Returns the list value if the signal is a list, without casting.
     #[inline]
     pub fn as_list(&self) -> Option<&List> {
         match self {
@@ -724,6 +803,7 @@ impl AnySignal {
         }
     }
 
+    /// Returns the MIDI message if the signal is a MIDI message, without casting.
     #[inline]
     pub fn as_midi(&self) -> Option<&MidiMessage> {
         match self {
@@ -732,6 +812,7 @@ impl AnySignal {
         }
     }
 
+    /// Returns `true` if the signal is of the same type as the other signal.
     pub fn is_same_type(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::None(type_), Self::None(other_kind)) => type_ == other_kind,
@@ -745,6 +826,7 @@ impl AnySignal {
         }
     }
 
+    /// Returns the type of the signal.
     pub fn type_(&self) -> SignalType {
         match self {
             Self::None(type_) => *type_,
@@ -757,6 +839,19 @@ impl AnySignal {
         }
     }
 
+    /// Attempts to cast the signal to the given signal type.
+    ///
+    /// Currently, the following conversions are supported:
+    ///
+    /// | From \ To | Float | Int | Bool | String | List | Midi |
+    /// |-----------|-------|-----|------|--------|------|------|
+    /// | Float     | -     | Yes | Yes  | Yes    | -    | -    |
+    /// | Int       | Yes   | -   | Yes  | Yes    | -    | -    |
+    /// | Bool      | Yes   | Yes | -    | Yes    | -    | -    |
+    /// | String    | Yes   | Yes | Yes  | -      | -    | -    |
+    /// | List      | -     | -   | -    | -      | -    | -    |
+    /// | Midi      | -     | -   | -    | -      | -    | -    |
+    /// | Dynamic   | Yes   | Yes | Yes  | Yes    | Yes  | Yes  |
     pub fn cast<T: Signal>(&self) -> Option<T> {
         if self.type_() == T::TYPE {
             T::try_from_signal(self.clone())
@@ -764,17 +859,17 @@ impl AnySignal {
             match (self, T::TYPE) {
                 (Self::None(_), _) => None,
 
-                // sample <-> int
-                (Self::Float(sample), SignalType::Int) => {
-                    T::try_from_signal(AnySignal::Int(*sample as i64))
+                // float <-> int
+                (Self::Float(float), SignalType::Int) => {
+                    T::try_from_signal(AnySignal::Int(*float as i64))
                 }
                 (Self::Int(int), SignalType::Float) => {
                     T::try_from_signal(AnySignal::Float(*int as Float))
                 }
 
-                // sample <-> bool
-                (Self::Float(sample), SignalType::Bool) => {
-                    T::try_from_signal(AnySignal::Bool(*sample != 0.0))
+                // float <-> bool
+                (Self::Float(float), SignalType::Bool) => {
+                    T::try_from_signal(AnySignal::Bool(*float != 0.0))
                 }
                 (Self::Bool(bool), SignalType::Float) => {
                     T::try_from_signal(AnySignal::Float(if *bool { 1.0 } else { 0.0 }))
@@ -788,12 +883,12 @@ impl AnySignal {
                     T::try_from_signal(AnySignal::Int(if *bool { 1 } else { 0 }))
                 }
 
-                // string <-> sample
+                // string <-> float
                 (Self::String(string), SignalType::Float) => {
                     T::try_from_signal(AnySignal::Float(string.parse().ok()?))
                 }
-                (Self::Float(sample), SignalType::String) => {
-                    T::try_from_signal(AnySignal::String(sample.to_string()))
+                (Self::Float(float), SignalType::String) => {
+                    T::try_from_signal(AnySignal::String(float.to_string()))
                 }
 
                 // string <-> int
@@ -846,41 +941,58 @@ impl From<MidiMessage> for AnySignal {
     }
 }
 
+/// A signal type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SignalType {
+    /// A dynamic signal that can hold any type.
     Dynamic,
 
+    /// A floating-point signal.
     Float,
 
+    /// An integer signal.
     Int,
 
+    /// A boolean signal.
     Bool,
 
+    /// A string signal.
     String,
 
+    /// A list signal.
     List,
 
+    /// A MIDI signal.
     Midi,
 }
 
+/// A buffer of signals that can hold any signal type.
 #[derive(Debug, Clone)]
 pub enum SignalBuffer {
+    /// A dynamic buffer that can hold any type of signal.
     Dynamic(Buffer<AnySignal>),
 
+    /// A buffer of floating-point signals.
     Float(Buffer<Float>),
 
+    /// A buffer of integer signals.
     Int(Buffer<i64>),
 
+    /// A buffer of boolean signals.
     Bool(Buffer<bool>),
 
+    /// A buffer of string signals.
     String(Buffer<String>),
 
+    /// A buffer of list signals.
     List(Buffer<List>),
 
+    /// A buffer of MIDI signals.
     Midi(Buffer<MidiMessage>),
 }
 
 impl SignalBuffer {
+    /// Creates a new buffer of the given type with the given length filled with `None`.
     pub fn new_of_kind(type_: SignalType, length: usize) -> Self {
         match type_ {
             SignalType::Dynamic => Self::Dynamic(Buffer::zeros(length)),
@@ -893,38 +1005,42 @@ impl SignalBuffer {
         }
     }
 
-    pub fn new_of_data_kind<T: Signal>(length: usize) -> Self {
-        Self::new_of_kind(T::TYPE, length)
-    }
-
+    /// Creates a new dynamic buffer with the given length filled with `None`.
     pub fn new_dynamic(length: usize) -> Self {
         Self::Dynamic(Buffer::zeros(length))
     }
 
+    /// Creates a new buffer of floating-point signals with the given length filled with `None`.
     pub fn new_sample(length: usize) -> Self {
         Self::Float(Buffer::zeros(length))
     }
 
+    /// Creates a new buffer of integer signals with the given length filled with `None`.
     pub fn new_int(length: usize) -> Self {
         Self::Int(Buffer::zeros(length))
     }
 
+    /// Creates a new buffer of boolean signals with the given length filled with `None`.
     pub fn new_bool(length: usize) -> Self {
         Self::Bool(Buffer::zeros(length))
     }
 
+    /// Creates a new buffer of string signals with the given length filled with `None`.
     pub fn new_string(length: usize) -> Self {
         Self::String(Buffer::zeros(length))
     }
 
+    /// Creates a new buffer of list signals with the given length filled with `None`.
     pub fn new_list(length: usize) -> Self {
         Self::List(Buffer::zeros(length))
     }
 
+    /// Creates a new buffer of MIDI signals with the given length filled with `None`.
     pub fn new_midi(length: usize) -> Self {
         Self::Midi(Buffer::zeros(length))
     }
 
+    /// Returns the type of the buffer.
     pub fn type_(&self) -> SignalType {
         match self {
             Self::Dynamic(_) => SignalType::Dynamic,
@@ -937,34 +1053,47 @@ impl SignalBuffer {
         }
     }
 
-    pub const fn is_sample(&self) -> bool {
+    /// Returns `true` if the buffer is dynamic and can hold any type of signal.
+    pub const fn is_dynamic(&self) -> bool {
+        matches!(self, Self::Dynamic(_))
+    }
+
+    /// Returns `true` if the buffer is for floating-point signals.
+    pub const fn is_float(&self) -> bool {
         matches!(self, Self::Float(_))
     }
 
+    /// Returns `true` if the buffer is for integer signals.
     pub const fn is_int(&self) -> bool {
         matches!(self, Self::Int(_))
     }
 
+    /// Returns `true` if the buffer is for boolean signals.
     pub const fn is_bool(&self) -> bool {
         matches!(self, Self::Bool(_))
     }
 
+    /// Returns `true` if the buffer is for string signals.
     pub const fn is_string(&self) -> bool {
         matches!(self, Self::String(_))
     }
 
+    /// Returns `true` if the buffer is for list signals.
     pub const fn is_list(&self) -> bool {
         matches!(self, Self::List(_))
     }
 
+    /// Returns `true` if the buffer is for MIDI signals.
     pub const fn is_midi(&self) -> bool {
         matches!(self, Self::Midi(_))
     }
 
-    pub fn is_kind(&self, type_: SignalType) -> bool {
+    /// Returns `true` if the buffer is of the given type.
+    pub fn is_type(&self, type_: SignalType) -> bool {
         self.type_() == type_
     }
 
+    /// Returns a reference to the buffer as a dynamic buffer, if it is dynamic.
     #[inline]
     pub fn as_dynamic(&self) -> Option<&Buffer<AnySignal>> {
         match self {
@@ -973,14 +1102,16 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a reference to the buffer as a buffer of floating-point signals, if it is a float buffer.
     #[inline]
-    pub fn as_sample(&self) -> Option<&Buffer<Float>> {
+    pub fn as_float(&self) -> Option<&Buffer<Float>> {
         match self {
             Self::Float(buffer) => Some(buffer),
             _ => None,
         }
     }
 
+    /// Returns a reference to the buffer as a buffer of integer signals, if it is an int buffer.
     #[inline]
     pub fn as_int(&self) -> Option<&Buffer<i64>> {
         match self {
@@ -989,6 +1120,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a reference to the buffer as a buffer of boolean signals, if it is a bool buffer.
     #[inline]
     pub fn as_bool(&self) -> Option<&Buffer<bool>> {
         match self {
@@ -997,6 +1129,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a reference to the buffer as a buffer of string signals, if it is a string buffer.
     #[inline]
     pub fn as_string(&self) -> Option<&Buffer<String>> {
         match self {
@@ -1005,6 +1138,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a reference to the buffer as a buffer of list signals, if it is a list buffer.
     #[inline]
     pub fn as_list(&self) -> Option<&Buffer<List>> {
         match self {
@@ -1013,6 +1147,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a reference to the buffer as a buffer of MIDI signals, if it is a MIDI buffer.
     #[inline]
     pub fn as_midi(&self) -> Option<&Buffer<MidiMessage>> {
         match self {
@@ -1021,11 +1156,13 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a reference to the buffer as a buffer of the given signal type, if it is of that type.
     #[inline]
-    pub fn as_kind<S: Signal>(&self) -> Option<&Buffer<S>> {
+    pub fn as_type<S: Signal>(&self) -> Option<&Buffer<S>> {
         S::try_convert_buffer(self)
     }
 
+    /// Returns a mutable reference to the buffer as a dynamic buffer, if it is dynamic.
     #[inline]
     pub fn as_dynamic_mut(&mut self) -> Option<&mut Buffer<AnySignal>> {
         match self {
@@ -1034,6 +1171,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a mutable reference to the buffer as a buffer of floating-point signals, if it is a float buffer.
     #[inline]
     pub fn as_sample_mut(&mut self) -> Option<&mut Buffer<Float>> {
         match self {
@@ -1042,6 +1180,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a mutable reference to the buffer as a buffer of integer signals, if it is an int buffer.
     #[inline]
     pub fn as_int_mut(&mut self) -> Option<&mut Buffer<i64>> {
         match self {
@@ -1050,6 +1189,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a mutable reference to the buffer as a buffer of boolean signals, if it is a bool buffer.
     #[inline]
     pub fn as_bool_mut(&mut self) -> Option<&mut Buffer<bool>> {
         match self {
@@ -1058,6 +1198,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a mutable reference to the buffer as a buffer of string signals, if it is a string buffer.
     #[inline]
     pub fn as_string_mut(&mut self) -> Option<&mut Buffer<String>> {
         match self {
@@ -1066,6 +1207,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a mutable reference to the buffer as a buffer of list signals, if it is a list buffer.
     #[inline]
     pub fn as_list_mut(&mut self) -> Option<&mut Buffer<List>> {
         match self {
@@ -1074,6 +1216,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a mutable reference to the buffer as a buffer of MIDI signals, if it is a MIDI buffer.
     #[inline]
     pub fn as_midi_mut(&mut self) -> Option<&mut Buffer<MidiMessage>> {
         match self {
@@ -1082,11 +1225,13 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns a mutable reference to the buffer as a buffer of the given signal type, if it is of that type.
     #[inline]
     pub fn as_kind_mut<S: Signal>(&mut self) -> Option<&mut Buffer<S>> {
         S::try_convert_buffer_mut(self)
     }
 
+    /// Returns the length of the buffer.
     #[inline]
     pub fn len(&self) -> usize {
         match self {
@@ -1100,11 +1245,17 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns `true` if the buffer is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Resizes the buffer to the given length, filling the new elements with the given value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value type does not match the buffer type.
     pub fn resize(&mut self, length: usize, value: impl Into<AnySignal>) {
         let value = value.into();
         match (self, value) {
@@ -1125,6 +1276,11 @@ impl SignalBuffer {
         }
     }
 
+    /// Fills the buffer with the given value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the value type does not match the buffer type.
     pub fn fill(&mut self, value: impl Into<AnySignal>) {
         let value = value.into();
         match (self, value) {
@@ -1139,6 +1295,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Resizes the buffer to the given length, filling the new elements with `None`.
     pub fn resize_default(&mut self, length: usize) {
         match self {
             Self::Dynamic(buffer) => buffer.buf.resize(length, None),
@@ -1151,6 +1308,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Fills the buffer with `None`.
     pub fn fill_default(&mut self) {
         match self {
             Self::Dynamic(buffer) => buffer.fill(None),
@@ -1163,6 +1321,7 @@ impl SignalBuffer {
         }
     }
 
+    /// Returns the signal at the given index as an [`AnySignal`].
     #[inline]
     pub fn clone_signal_at(&self, index: usize) -> AnySignal {
         match self {
@@ -1176,6 +1335,11 @@ impl SignalBuffer {
         }
     }
 
+    /// Copies the contents of the other buffer into this buffer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the buffer types do not match.
     pub fn copy_from(&mut self, other: &Self) {
         match (self, other) {
             (Self::Dynamic(this), Self::Dynamic(other)) => {

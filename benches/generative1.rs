@@ -24,7 +24,7 @@ pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Nod
 
     let msgs = options
         .iter()
-        .map(|_| graph.add(MessageSender::<Float>::new(0.0)))
+        .map(|_| graph.add(Message::<Float>::new(0.0)))
         .collect::<Vec<_>>();
 
     for (i, (option, msg)) in options.iter().zip(msgs.iter()).enumerate() {

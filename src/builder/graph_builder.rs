@@ -59,7 +59,7 @@ impl GraphBuilder {
     }
 
     /// Adds a parameter node to the graph.
-    pub fn add_param<S: Signal>(&self, value: Param<S>) -> Node {
+    pub fn add_param<S: Signal + Clone>(&self, value: Param<S>) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
             node_id: graph.add_param(value),

@@ -1,17 +1,35 @@
+//! Control flow processors.
+
 use std::marker::PhantomData;
 
 use crate::{prelude::*, signal::Signal};
 
+/// A processor that outputs the value of the second input if the first input is `true`, otherwise the value of the third input.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `cond` | `Bool` | The condition. |
+/// | `1` | `then` | `Any` | The value to output if the condition is `true`. |
+/// | `2` | `else` | `Any` | The value to output if the condition is `false`. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Any` | The output value. |
 #[derive(Debug, Clone, Default)]
-pub struct Cond<S: Signal>(PhantomData<S>);
+pub struct Cond<S: Signal + Clone>(PhantomData<S>);
 
-impl<S: Signal> Cond<S> {
+impl<S: Signal + Clone> Cond<S> {
+    /// Creates a new `Cond` processor.
     pub fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<S: Signal> Processor for Cond<S> {
+impl<S: Signal + Clone> Processor for Cond<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("cond", SignalType::Bool),
@@ -55,15 +73,16 @@ macro_rules! comparison_op {
     ($doc:literal, $name:ident, $invert:literal, $op:tt) => {
         #[derive(Debug, Clone, Default)]
         #[doc = $doc]
-        pub struct $name<S: Signal>(PhantomData<S>);
+        pub struct $name<S: Signal + Clone>(PhantomData<S>);
 
-        impl<S: Signal> $name<S> {
+        impl<S: Signal + Clone> $name<S> {
+            #[doc = concat!("Creates a new `", stringify!($name), "` processor.")]
             pub fn new() -> Self {
                 Self(PhantomData)
             }
         }
 
-        impl<S: Signal> Processor for $name<S> {
+        impl<S: Signal + Clone> Processor for $name<S> {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![SignalSpec::new("a", S::TYPE), SignalSpec::new("b", S::TYPE)]
             }
@@ -102,20 +121,18 @@ comparison_op!(
     r#"
 A processor that outputs `true` if `a` is less than `b`, otherwise `false`.
 
-The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
-
 # Inputs
 
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `a` | `Message` | | The first value to compare. |
-| `1` | `b` | `Message` | | The second value to compare. |
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `a` | `Any` | The first value to compare. |
+| `1` | `b` | `Any` | The second value to compare. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Message` | The result of the comparison. |
+| `0` | `out` | `Any` | The result of the comparison. |
 "#,
     Less,
     false,
@@ -126,20 +143,18 @@ comparison_op!(
     r#"
 A processor that outputs `true` if `a` is greater than `b`, otherwise `false`.
 
-The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
-
 # Inputs
 
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `a` | `Message` | | The first value to compare. |
-| `1` | `b` | `Message` | | The second value to compare. |
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `a` | `Any` | The first value to compare. |
+| `1` | `b` | `Any` | The second value to compare. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Message` | The result of the comparison. |
+| `0` | `out` | `Any` | The result of the comparison. |
 "#,
     Greater,
     false,
@@ -150,20 +165,18 @@ comparison_op!(
     r#"
 A processor that outputs `true` if `a` is equal to `b`, otherwise `false`.
 
-The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
-
 # Inputs
 
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `a` | `Message` | | The first value to compare. |
-| `1` | `b` | `Message` | | The second value to compare. |
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `a` | `Any` | The first value to compare. |
+| `1` | `b` | `Any` | The second value to compare. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Message` | The result of the comparison. |
+| `0` | `out` | `Any` | The result of the comparison. |
 "#,
     Equal,
     false,
@@ -174,20 +187,18 @@ comparison_op!(
     r#"
 A processor that outputs `true` if `a` is not equal to `b`, otherwise `false`.
 
-The comparison is done by casting the inputs to floats as implemented by the [`Message::cast_to_float`] method.
-
 # Inputs
 
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `a` | `Message` | | The first value to compare. |
-| `1` | `b` | `Message` | | The second value to compare. |
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `a` | `Any` | The first value to compare. |
+| `1` | `b` | `Any` | The second value to compare. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Message` | The result of the comparison. |
+| `0` | `out` | `Any` | The result of the comparison. |
 "#,
     NotEqual,
     true,
@@ -198,20 +209,18 @@ comparison_op!(
     r#"
 A processor that outputs `true` if `a` is less than or equal to `b`, otherwise `false`.
 
-The comparison is done by casting the inputs to floats as implemented by the [`Signal::cast_to_float`] method.
-
 # Inputs
 
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `a` | `Message` | | The first value to compare. |
-| `1` | `b` | `Message` | | The second value to compare. |
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `a` | `Any` | The first value to compare. |
+| `1` | `b` | `Any` | The second value to compare. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Message` | The result of the comparison. |
+| `0` | `out` | `Any` | The result of the comparison. |
 "#,
     LessOrEqual,
     true,
@@ -224,16 +233,16 @@ A processor that outputs `true` if `a` is greater than or equal to `b`, otherwis
 
 # Inputs
 
-| Index | Name | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `0` | `a` | `Message` | | The first value to compare. |
-| `1` | `b` | `Message` | | The second value to compare. |
+| Index | Name | Type | Description |
+| --- | --- | --- | --- |
+| `0` | `a` | `Any` | The first value to compare. |
+| `1` | `b` | `Any` | The second value to compare. |
 
 # Outputs
 
 | Index | Name | Type | Description |
 | --- | --- | --- | --- |
-| `0` | `out` | `Message` | The result of the comparison. |
+| `0` | `out` | `Any` | The result of the comparison. |
 "#,
     GreaterOrEqual,
     true,

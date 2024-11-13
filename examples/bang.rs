@@ -20,16 +20,13 @@ fn main() {
     sine.output(0).connect(&bang.input("period"));
 
     // add a print node
-    let print = graph.print("freq", None);
+    let print = graph.add(Print::<Float>::default());
 
     // connect the metronome to trigger the print
     bang.output(0).connect(&print.input("trig"));
 
-    let cast = graph.add(Cast::<Float, String>::default());
-    cast.input(0).connect(sine.output(0));
-
     // connect the sine oscillator to the print
-    cast.output(0).connect(&print.input("message"));
+    sine.output(0).connect(&print.input("message"));
 
     // build the graph
     let graph = graph.build();
