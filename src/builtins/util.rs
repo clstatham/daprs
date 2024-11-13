@@ -10,7 +10,7 @@ use crossbeam_channel::{Receiver, Sender};
 use crate::{
     prelude::{GraphBuilder, Node, Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
-    signal::{Float, SignalData, SignalKind},
+    signal::{Float, Signal, SignalType},
 };
 
 /// A processor that forwards its input to its output.
@@ -27,22 +27,22 @@ use crate::{
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The output signal. |
 #[derive(Clone, Debug, Default)]
-pub struct Passthrough<S: SignalData>(PhantomData<S>);
+pub struct Passthrough<S: Signal>(PhantomData<S>);
 
-impl<S: SignalData> Passthrough<S> {
+impl<S: Signal> Passthrough<S> {
     /// Creates a new `Passthrough`.
     pub fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<S: SignalData> Processor for Passthrough<S> {
+impl<S: Signal> Processor for Passthrough<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::KIND)]
+        vec![SignalSpec::new("in", S::TYPE)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::KIND)]
+        vec![SignalSpec::new("out", S::TYPE)]
     }
 
     fn process(
@@ -63,11 +63,11 @@ impl<S: SignalData> Processor for Passthrough<S> {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Cast<S: SignalData, T: SignalData> {
+pub struct Cast<S: Signal, T: Signal> {
     _phantom: PhantomData<(S, T)>,
 }
 
-impl<S: SignalData, T: SignalData> Cast<S, T> {
+impl<S: Signal, T: Signal> Cast<S, T> {
     pub fn new() -> Self {
         Self {
             _phantom: PhantomData,
@@ -75,13 +75,13 @@ impl<S: SignalData, T: SignalData> Cast<S, T> {
     }
 }
 
-impl<S: SignalData, T: SignalData> Processor for Cast<S, T> {
+impl<S: Signal, T: Signal> Processor for Cast<S, T> {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::KIND)]
+        vec![SignalSpec::new("in", S::TYPE)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", T::KIND)]
+        vec![SignalSpec::new("out", T::TYPE)]
     }
 
     fn process(
@@ -97,8 +97,8 @@ impl<S: SignalData, T: SignalData> Processor for Cast<S, T> {
             .as_kind::<S>()
             .ok_or(ProcessorError::InputSpecMismatch {
                 index: 0,
-                expected: S::KIND,
-                actual: in_signal.kind(),
+                expected: S::TYPE,
+                actual: in_signal.type_(),
             })?;
 
         let out_signal = outputs.output(0).as_kind_mut::<T>().unwrap();
@@ -129,27 +129,27 @@ impl<S: SignalData, T: SignalData> Processor for Cast<S, T> {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Message` | The message to send. |
 #[derive(Clone, Debug)]
-pub struct MessageSender<S: SignalData> {
+pub struct MessageSender<S: Signal> {
     message: S,
 }
 
-impl<S: SignalData> MessageSender<S> {
+impl<S: Signal> MessageSender<S> {
     /// Creates a new `MessageProc` with the given initial message.
     pub fn new(message: S) -> Self {
         Self { message }
     }
 }
 
-impl<S: SignalData> Processor for MessageSender<S> {
+impl<S: Signal> Processor for MessageSender<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("trig", SignalKind::Bool),
-            SignalSpec::new("message", S::KIND),
+            SignalSpec::new("trig", SignalType::Bool),
+            SignalSpec::new("message", S::TYPE),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::KIND)]
+        vec![SignalSpec::new("out", S::TYPE)]
     }
 
     fn process(
@@ -228,8 +228,8 @@ impl Print {
 impl Processor for Print {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("trig", SignalKind::Bool),
-            SignalSpec::new("message", SignalKind::String),
+            SignalSpec::new("trig", SignalType::Bool),
+            SignalSpec::new("message", SignalType::String),
         ]
     }
 
@@ -303,7 +303,7 @@ impl Processor for SampleRate {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("sample_rate", SignalKind::Float)]
+        vec![SignalSpec::new("sample_rate", SignalType::Float)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
@@ -359,13 +359,13 @@ pub struct Smooth {
 impl Processor for Smooth {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("target", SignalKind::Float),
-            SignalSpec::new("factor", SignalKind::Float),
+            SignalSpec::new("target", SignalType::Float),
+            SignalSpec::new("factor", SignalType::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn process(
@@ -427,13 +427,13 @@ impl Changed {
 impl Processor for Changed {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Float),
-            SignalSpec::new("threshold", SignalKind::Float),
+            SignalSpec::new("in", SignalType::Float),
+            SignalSpec::new("threshold", SignalType::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Bool)]
+        vec![SignalSpec::new("out", SignalType::Bool)]
     }
 
     fn process(
@@ -486,11 +486,11 @@ pub struct ZeroCrossing {
 
 impl Processor for ZeroCrossing {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", SignalKind::Float)]
+        vec![SignalSpec::new("in", SignalType::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Bool)]
+        vec![SignalSpec::new("out", SignalType::Bool)]
     }
 
     fn process(
@@ -522,11 +522,11 @@ impl Processor for ZeroCrossing {
 
 /// A signal sender, used for `Param` communication and breaking cycles in the graph.
 #[derive(Clone, Debug)]
-pub struct SignalTx<S: SignalData> {
+pub struct SignalTx<S: Signal> {
     tx: Sender<S>,
 }
 
-impl<S: SignalData> SignalTx<S> {
+impl<S: Signal> SignalTx<S> {
     pub(crate) fn new(tx: Sender<S>) -> Self {
         Self { tx }
     }
@@ -537,9 +537,9 @@ impl<S: SignalData> SignalTx<S> {
     }
 }
 
-impl<S: SignalData> Processor for SignalTx<S> {
+impl<S: Signal> Processor for SignalTx<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::KIND)]
+        vec![SignalSpec::new("in", S::TYPE)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -563,11 +563,11 @@ impl<S: SignalData> Processor for SignalTx<S> {
 
 /// A message receiver, used for `Param` communication and breaking cycles in the graph.
 #[derive(Clone, Debug)]
-pub struct SignalRx<S: SignalData> {
+pub struct SignalRx<S: Signal> {
     rx: Receiver<S>,
 }
 
-impl<S: SignalData> SignalRx<S> {
+impl<S: Signal> SignalRx<S> {
     pub(crate) fn new(rx: Receiver<S>) -> Self {
         Self { rx }
     }
@@ -578,13 +578,13 @@ impl<S: SignalData> SignalRx<S> {
     }
 }
 
-impl<S: SignalData> Processor for SignalRx<S> {
+impl<S: Signal> Processor for SignalRx<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::KIND)]
+        vec![SignalSpec::new("out", S::TYPE)]
     }
 
     fn process(
@@ -604,12 +604,12 @@ impl<S: SignalData> Processor for SignalRx<S> {
 
 /// A receiver for a `Param`.
 #[derive(Clone, Debug)]
-pub struct ParamRx<S: SignalData> {
+pub struct ParamRx<S: Signal> {
     rx: SignalRx<S>,
     last: Arc<Mutex<Option<S>>>,
 }
 
-impl<S: SignalData> ParamRx<S> {
+impl<S: Signal> ParamRx<S> {
     pub(crate) fn new(rx: SignalRx<S>) -> Self {
         Self {
             rx,
@@ -635,7 +635,7 @@ impl<S: SignalData> ParamRx<S> {
     }
 }
 
-pub(crate) fn param_channel<S: SignalData>() -> (SignalTx<S>, ParamRx<S>) {
+pub(crate) fn param_channel<S: Signal>() -> (SignalTx<S>, ParamRx<S>) {
     let (tx, rx) = crossbeam_channel::unbounded();
     (SignalTx::new(tx), ParamRx::new(SignalRx::new(rx)))
 }
@@ -654,12 +654,12 @@ pub(crate) fn param_channel<S: SignalData>() -> (SignalTx<S>, ParamRx<S>) {
 /// | --- | --- | --- | --- |
 /// | `0` | `get` | `Message` | The current value of the parameter. |
 #[derive(Clone, Debug)]
-pub struct Param<S: SignalData> {
+pub struct Param<S: Signal> {
     name: String,
     channels: (SignalTx<S>, ParamRx<S>),
 }
 
-impl<S: SignalData> Param<S> {
+impl<S: Signal> Param<S> {
     /// Creates a new `Param`.
     pub fn new(name: impl Into<String>, initial_value: impl Into<Option<S>>) -> Self {
         let this = Self {
@@ -709,13 +709,13 @@ impl<S: SignalData> Param<S> {
     }
 }
 
-impl<S: SignalData> Processor for Param<S> {
+impl<S: Signal> Processor for Param<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("set", S::KIND)]
+        vec![SignalSpec::new("set", S::TYPE)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("get", S::KIND)]
+        vec![SignalSpec::new("get", S::TYPE)]
     }
 
     fn process(
@@ -757,13 +757,13 @@ impl<S: SignalData> Processor for Param<S> {
 /// | `1` | `1` | `Message` | The message, if routed to output `1`. |
 /// | `...` | `...` | `...` | etc... |
 #[derive(Clone, Debug)]
-pub struct Select<S: SignalData> {
+pub struct Select<S: Signal> {
     num_outputs: usize,
     last_index: i64,
     _phantom: PhantomData<S>,
 }
 
-impl<S: SignalData> Select<S> {
+impl<S: Signal> Select<S> {
     /// Creates a new `Select` with the given number of outputs.
     pub fn new(num_outputs: usize) -> Self {
         Self {
@@ -774,23 +774,23 @@ impl<S: SignalData> Select<S> {
     }
 }
 
-impl<S: SignalData> Default for Select<S> {
+impl<S: Signal> Default for Select<S> {
     fn default() -> Self {
         Self::new(2)
     }
 }
 
-impl<S: SignalData> Processor for Select<S> {
+impl<S: Signal> Processor for Select<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", S::KIND),
-            SignalSpec::new("index", SignalKind::Int),
+            SignalSpec::new("in", S::TYPE),
+            SignalSpec::new("index", SignalType::Int),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         (0..self.num_outputs)
-            .map(|i| SignalSpec::new(format!("{}", i), S::KIND))
+            .map(|i| SignalSpec::new(format!("{}", i), S::TYPE))
             .collect()
     }
 
@@ -845,12 +845,12 @@ impl<S: SignalData> Processor for Select<S> {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Message` | The merged message. |
 #[derive(Clone, Debug)]
-pub struct Merge<S: SignalData> {
+pub struct Merge<S: Signal> {
     num_inputs: usize,
     _phantom: PhantomData<S>,
 }
 
-impl<S: SignalData> Merge<S> {
+impl<S: Signal> Merge<S> {
     /// Creates a new `Merge` with the given number of inputs.
     pub fn new(num_inputs: usize) -> Self {
         Self {
@@ -860,21 +860,21 @@ impl<S: SignalData> Merge<S> {
     }
 }
 
-impl<S: SignalData> Default for Merge<S> {
+impl<S: Signal> Default for Merge<S> {
     fn default() -> Self {
         Self::new(2)
     }
 }
 
-impl<S: SignalData> Processor for Merge<S> {
+impl<S: Signal> Processor for Merge<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         (0..self.num_inputs)
-            .map(|i| SignalSpec::new(i.to_string(), S::KIND))
+            .map(|i| SignalSpec::new(i.to_string(), S::TYPE))
             .collect()
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::KIND)]
+        vec![SignalSpec::new("out", S::TYPE)]
     }
 
     fn process(
@@ -890,8 +890,8 @@ impl<S: SignalData> Processor for Merge<S> {
                 .as_kind::<S>()
                 .ok_or(ProcessorError::InputSpecMismatch {
                     index: i,
-                    expected: S::KIND,
-                    actual: input.kind(),
+                    expected: S::TYPE,
+                    actual: input.type_(),
                 })?;
 
             let out_signal = outputs.iter_output_as::<S>(0)?;
@@ -929,13 +929,13 @@ pub struct Counter {
 impl Processor for Counter {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("trig", SignalKind::Bool),
-            SignalSpec::new("reset", SignalKind::Bool),
+            SignalSpec::new("trig", SignalType::Bool),
+            SignalSpec::new("reset", SignalType::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("count", SignalKind::Int)]
+        vec![SignalSpec::new("count", SignalType::Int)]
     }
 
     fn process(
@@ -987,13 +987,13 @@ pub struct SampleAndHold {
 impl Processor for SampleAndHold {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Float),
-            SignalSpec::new("trig", SignalKind::Bool),
+            SignalSpec::new("in", SignalType::Float),
+            SignalSpec::new("trig", SignalType::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn process(
@@ -1041,7 +1041,7 @@ impl CheckFinite {
 
 impl Processor for CheckFinite {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", SignalKind::Float)]
+        vec![SignalSpec::new("in", SignalType::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {

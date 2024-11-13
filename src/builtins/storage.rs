@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use crate::{prelude::*, signal::SignalData};
+use crate::{prelude::*, signal::Signal};
 
 /// A processor that reads and writes audio samples in a buffer.
 ///
@@ -47,15 +47,15 @@ impl AudioBuffer {
 impl Processor for AudioBuffer {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("index", SignalKind::Float),
-            SignalSpec::new("set", SignalKind::Float),
+            SignalSpec::new("index", SignalType::Float),
+            SignalSpec::new("set", SignalType::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("out", SignalKind::Float),
-            SignalSpec::new("length", SignalKind::Int),
+            SignalSpec::new("out", SignalType::Float),
+            SignalSpec::new("length", SignalType::Int),
         ]
     }
 
@@ -126,12 +126,12 @@ impl Processor for AudioBuffer {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Message` | The value stored in the register. |
 #[derive(Clone, Debug)]
-pub struct Register<S: SignalData> {
+pub struct Register<S: Signal> {
     value: Option<S>,
     _phantom: PhantomData<S>,
 }
 
-impl<S: SignalData> Register<S> {
+impl<S: Signal> Register<S> {
     /// Creates a new register processor.
     pub fn new() -> Self {
         Self {
@@ -141,22 +141,22 @@ impl<S: SignalData> Register<S> {
     }
 }
 
-impl<S: SignalData> Default for Register<S> {
+impl<S: Signal> Default for Register<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: SignalData> Processor for Register<S> {
+impl<S: Signal> Processor for Register<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("set", S::KIND),
-            SignalSpec::new("clear", SignalKind::Bool),
+            SignalSpec::new("set", S::TYPE),
+            SignalSpec::new("clear", SignalType::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::KIND)]
+        vec![SignalSpec::new("out", S::TYPE)]
     }
 
     fn process(

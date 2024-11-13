@@ -3,7 +3,7 @@
 use crate::{
     prelude::{Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
-    signal::{Buffer, Float, SignalBuffer, SignalKind},
+    signal::{Buffer, Float, SignalBuffer, SignalType},
 };
 
 /// A metronome that emits a bang at the given period.
@@ -66,13 +66,13 @@ impl Default for Metro {
 impl Processor for Metro {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("period", SignalKind::Float),
-            SignalSpec::new("reset", SignalKind::Bool),
+            SignalSpec::new("period", SignalType::Float),
+            SignalSpec::new("reset", SignalType::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Bool)]
+        vec![SignalSpec::new("out", SignalType::Bool)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
@@ -137,11 +137,11 @@ impl UnitDelay {
 
 impl Processor for UnitDelay {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", SignalKind::Float)]
+        vec![SignalSpec::new("in", SignalType::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn process(
@@ -197,13 +197,13 @@ impl SampleDelay {
 impl Processor for SampleDelay {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Float),
-            SignalSpec::new("delay", SignalKind::Int),
+            SignalSpec::new("in", SignalType::Float),
+            SignalSpec::new("delay", SignalType::Int),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn process(
@@ -287,13 +287,13 @@ impl Default for DecayEnv {
 impl Processor for DecayEnv {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("trig", SignalKind::Bool),
-            SignalSpec::new("tau", SignalKind::Float),
+            SignalSpec::new("trig", SignalType::Bool),
+            SignalSpec::new("tau", SignalType::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {

@@ -13,7 +13,7 @@ use crate::{
     graph::{Graph, GraphRunError, GraphRunErrorKind, NodeIndex},
     prelude::{ProcessorInputs, SignalSpec},
     processor::{ProcessorError, ProcessorOutputs},
-    signal::{Float, MidiMessage, SignalBuffer, SignalKind},
+    signal::{Float, MidiMessage, SignalBuffer, SignalType},
 };
 
 /// An error that occurred during runtime operations.
@@ -166,7 +166,7 @@ impl Runtime {
                 let mut outputs = Vec::with_capacity(output_spec.len());
 
                 for spec in output_spec {
-                    let buffer = SignalBuffer::new_of_kind(spec.kind, 0);
+                    let buffer = SignalBuffer::new_of_kind(spec.type_, 0);
                     outputs.push(buffer);
                 }
 
@@ -211,7 +211,7 @@ impl Runtime {
                 let mut outputs = Vec::with_capacity(output_spec.len());
 
                 for spec in output_spec {
-                    let buffer = SignalBuffer::new_of_kind(spec.kind, block_size);
+                    let buffer = SignalBuffer::new_of_kind(spec.type_, block_size);
                     outputs.push(buffer);
                 }
 
@@ -306,7 +306,7 @@ impl Runtime {
                 let error = GraphRunError {
                     node_index: node_id,
                     node_processor: node.name().to_string(),
-                    kind: GraphRunErrorKind::ProcessorError(err),
+                    type_: GraphRunErrorKind::ProcessorError(err),
                 };
                 return Err(RuntimeError::GraphRunError(error));
             }
@@ -405,8 +405,8 @@ impl Runtime {
                     return Err(RuntimeError::ProcessorError(
                         ProcessorError::OutputSpecMismatch {
                             index: i,
-                            expected: SignalKind::Float,
-                            actual: buffer.kind(),
+                            expected: SignalType::Float,
+                            actual: buffer.type_(),
                         },
                     ));
                 };

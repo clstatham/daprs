@@ -1,27 +1,27 @@
 use std::marker::PhantomData;
 
-use crate::{prelude::*, signal::SignalData};
+use crate::{prelude::*, signal::Signal};
 
 #[derive(Debug, Clone, Default)]
-pub struct Cond<S: SignalData>(PhantomData<S>);
+pub struct Cond<S: Signal>(PhantomData<S>);
 
-impl<S: SignalData> Cond<S> {
+impl<S: Signal> Cond<S> {
     pub fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<S: SignalData> Processor for Cond<S> {
+impl<S: Signal> Processor for Cond<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("cond", SignalKind::Bool),
-            SignalSpec::new("then", S::KIND),
-            SignalSpec::new("else", S::KIND),
+            SignalSpec::new("cond", SignalType::Bool),
+            SignalSpec::new("then", S::TYPE),
+            SignalSpec::new("else", S::TYPE),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::KIND)]
+        vec![SignalSpec::new("out", S::TYPE)]
     }
 
     fn process(
@@ -55,21 +55,21 @@ macro_rules! comparison_op {
     ($doc:literal, $name:ident, $invert:literal, $op:tt) => {
         #[derive(Debug, Clone, Default)]
         #[doc = $doc]
-        pub struct $name<S: SignalData>(PhantomData<S>);
+        pub struct $name<S: Signal>(PhantomData<S>);
 
-        impl<S: SignalData> $name<S> {
+        impl<S: Signal> $name<S> {
             pub fn new() -> Self {
                 Self(PhantomData)
             }
         }
 
-        impl<S: SignalData> Processor for $name<S> {
+        impl<S: Signal> Processor for $name<S> {
             fn input_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("a", S::KIND), SignalSpec::new("b", S::KIND)]
+                vec![SignalSpec::new("a", S::TYPE), SignalSpec::new("b", S::TYPE)]
             }
 
             fn output_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("out", SignalKind::Bool)]
+                vec![SignalSpec::new("out", SignalType::Bool)]
             }
 
             fn process(

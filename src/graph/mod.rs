@@ -11,7 +11,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     prelude::{Param, Passthrough},
     processor::{Processor, ProcessorError},
-    signal::{Float, MidiMessage, SignalData},
+    signal::{Float, MidiMessage, Signal},
 };
 
 pub mod edge;
@@ -24,17 +24,17 @@ pub(crate) type DiGraph = StableDiGraph<ProcessorNode, Edge, GraphIx>;
 
 /// An error that can occur during graph processing.
 #[derive(Debug, thiserror::Error)]
-#[error("Graph run error at node {} ({}): {kind:?}", node_index.index(), node_processor)]
+#[error("Graph run error at node {} ({}): {type_:?}", node_index.index(), node_processor)]
 pub struct GraphRunError {
     /// The index of the node that caused the error.
     pub node_index: NodeIndex,
     /// The name of the processor that caused the error.
     pub node_processor: String,
-    /// The kind of error that occurred.
-    pub kind: GraphRunErrorKind,
+    /// The type_ of error that occurred.
+    pub type_: GraphRunErrorKind,
 }
 
-/// The kind of error that occurred during graph processing.
+/// The type of error that occurred during graph processing.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum GraphRunErrorKind {
@@ -64,12 +64,12 @@ pub enum GraphConstructionError {
     MismatchedGraphs,
 
     /// An error for when an operation that expects a single output is attempted on a node that has multiple outputs.
-    #[error("Operation `{op}` invalid: Node type `{kind}` has multiple outputs")]
+    #[error("Operation `{op}` invalid: Node type `{type_}` has multiple outputs")]
     NodeHasMultipleOutputs {
         /// The operation that caused the error.
         op: String,
         /// The type of node that caused the error.
-        kind: String,
+        type_: String,
     },
 
     /// An error occurred while attempting to read or write to the filesystem.
@@ -161,7 +161,7 @@ impl Graph {
     }
 
     /// Adds a new [`Processor`] representing a [`Param`] to the graph.
-    pub fn add_param<S: SignalData>(&mut self, param: Param<S>) -> NodeIndex {
+    pub fn add_param<S: Signal>(&mut self, param: Param<S>) -> NodeIndex {
         let name = param.name().to_string();
         let index = self.add_processor(param);
         self.params.insert(name, index);

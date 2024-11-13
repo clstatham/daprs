@@ -32,7 +32,7 @@ fn main() {
 
     let print = graph.add(Print::new(None, None));
     print.input("trig").set(&metro);
-    print.input("message").set(get.cast(SignalKind::String));
+    print.input("message").set(get.cast(SignalType::String));
 
     let mut runtime = graph.build_runtime();
 

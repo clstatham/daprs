@@ -30,17 +30,17 @@ pub const TAU: Float = std::f64::consts::TAU;
 /// An owning array of signal data.
 /// This type implements [`Deref`] and [`DerefMut`], so it can be indexed and iterated over just like a normal slice.
 #[derive(PartialEq, Clone)]
-pub struct Buffer<T: SignalData> {
+pub struct Buffer<T: Signal> {
     buf: Vec<Option<T>>,
 }
 
-impl<T: SignalData> Debug for Buffer<T> {
+impl<T: Signal> Debug for Buffer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.buf.iter()).finish()
     }
 }
 
-impl<T: SignalData> Buffer<T> {
+impl<T: Signal> Buffer<T> {
     /// Creates a new buffer filled with `None`.
     #[inline]
     pub fn zeros(length: usize) -> Self {
@@ -168,7 +168,7 @@ impl Buffer<Float> {
     }
 }
 
-impl<T: SignalData> Deref for Buffer<T> {
+impl<T: Signal> Deref for Buffer<T> {
     type Target = [Option<T>];
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -176,21 +176,21 @@ impl<T: SignalData> Deref for Buffer<T> {
     }
 }
 
-impl<T: SignalData> DerefMut for Buffer<T> {
+impl<T: Signal> DerefMut for Buffer<T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.buf.as_mut()
     }
 }
 
-impl<T: SignalData> AsRef<[Option<T>]> for Buffer<T> {
+impl<T: Signal> AsRef<[Option<T>]> for Buffer<T> {
     #[inline]
     fn as_ref(&self) -> &[Option<T>] {
         self.buf.as_ref()
     }
 }
 
-impl<'a, T: SignalData> IntoIterator for &'a Buffer<T> {
+impl<'a, T: Signal> IntoIterator for &'a Buffer<T> {
     type Item = &'a Option<T>;
     type IntoIter = std::slice::Iter<'a, Option<T>>;
 
@@ -200,7 +200,7 @@ impl<'a, T: SignalData> IntoIterator for &'a Buffer<T> {
     }
 }
 
-impl<'a, T: SignalData> IntoIterator for &'a mut Buffer<T> {
+impl<'a, T: Signal> IntoIterator for &'a mut Buffer<T> {
     type Item = &'a mut Option<T>;
     type IntoIter = std::slice::IterMut<'a, Option<T>>;
 
@@ -212,45 +212,53 @@ impl<'a, T: SignalData> IntoIterator for &'a mut Buffer<T> {
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct List {
-    kind: SignalKind,
-    items: Vec<Signal>,
+    type_: SignalType,
+    items: Vec<AnySignal>,
 }
 
 impl List {
-    pub fn new(kind: SignalKind) -> Self {
+    pub fn new(type_: SignalType) -> Self {
         Self {
-            kind,
+            type_,
             items: Vec::new(),
         }
     }
 
-    pub fn kind(&self) -> SignalKind {
-        self.kind
+    pub fn type_(&self) -> SignalType {
+        self.type_
     }
 
-    pub fn items(&self) -> &[Signal] {
+    pub fn items(&self) -> &[AnySignal] {
         &self.items
     }
 
-    pub fn items_mut(&mut self) -> &mut [Signal] {
+    pub fn items_mut(&mut self) -> &mut [AnySignal] {
         &mut self.items
     }
 
-    pub fn push(&mut self, item: Signal) {
-        assert_eq!(item.kind(), self.kind, "Item kind does not match list kind");
+    pub fn push(&mut self, item: AnySignal) {
+        assert_eq!(
+            item.type_(),
+            self.type_,
+            "Item type does not match list type"
+        );
         self.items.push(item);
     }
 
-    pub fn pop(&mut self) -> Option<Signal> {
+    pub fn pop(&mut self) -> Option<AnySignal> {
         self.items.pop()
     }
 
-    pub fn insert(&mut self, index: usize, item: Signal) {
-        assert_eq!(item.kind(), self.kind, "Item kind does not match list kind");
+    pub fn insert(&mut self, index: usize, item: AnySignal) {
+        assert_eq!(
+            item.type_(),
+            self.type_,
+            "Item type does not match list type"
+        );
         self.items.insert(index, item);
     }
 
-    pub fn remove(&mut self, index: usize) -> Signal {
+    pub fn remove(&mut self, index: usize) -> AnySignal {
         self.items.remove(index)
     }
 
@@ -262,27 +270,27 @@ impl List {
         self.items.is_empty()
     }
 
-    pub fn get(&self, index: usize) -> Option<&Signal> {
+    pub fn get(&self, index: usize) -> Option<&AnySignal> {
         self.items.get(index)
     }
 
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut Signal> {
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut AnySignal> {
         self.items.get_mut(index)
     }
 }
 
-impl From<Vec<Signal>> for List {
-    fn from(items: Vec<Signal>) -> Self {
-        let kind = items.first().map_or(SignalKind::Dynamic, Signal::kind);
-        Self { kind, items }
+impl From<Vec<AnySignal>> for List {
+    fn from(items: Vec<AnySignal>) -> Self {
+        let type_ = items.first().map_or(SignalType::Dynamic, AnySignal::type_);
+        Self { type_, items }
     }
 }
 
 impl From<Vec<Float>> for List {
     fn from(items: Vec<Float>) -> Self {
-        let items = items.into_iter().map(Signal::new_sample).collect();
+        let items = items.into_iter().map(AnySignal::new_sample).collect();
         Self {
-            kind: SignalKind::Float,
+            type_: SignalType::Float,
             items,
         }
     }
@@ -290,9 +298,9 @@ impl From<Vec<Float>> for List {
 
 impl From<Vec<i64>> for List {
     fn from(items: Vec<i64>) -> Self {
-        let items = items.into_iter().map(Signal::new_int).collect();
+        let items = items.into_iter().map(AnySignal::new_int).collect();
         Self {
-            kind: SignalKind::Int,
+            type_: SignalType::Int,
             items,
         }
     }
@@ -300,9 +308,9 @@ impl From<Vec<i64>> for List {
 
 impl From<Vec<bool>> for List {
     fn from(items: Vec<bool>) -> Self {
-        let items = items.into_iter().map(Signal::new_bool).collect();
+        let items = items.into_iter().map(AnySignal::new_bool).collect();
         Self {
-            kind: SignalKind::Bool,
+            type_: SignalType::Bool,
             items,
         }
     }
@@ -310,9 +318,9 @@ impl From<Vec<bool>> for List {
 
 impl From<Vec<String>> for List {
     fn from(items: Vec<String>) -> Self {
-        let items = items.into_iter().map(Signal::new_string).collect();
+        let items = items.into_iter().map(AnySignal::new_string).collect();
         Self {
-            kind: SignalKind::String,
+            type_: SignalType::String,
             items,
         }
     }
@@ -320,9 +328,9 @@ impl From<Vec<String>> for List {
 
 impl From<Vec<List>> for List {
     fn from(items: Vec<List>) -> Self {
-        let items = items.into_iter().map(Signal::new_list).collect();
+        let items = items.into_iter().map(AnySignal::new_list).collect();
         Self {
-            kind: SignalKind::List,
+            type_: SignalType::List,
             items,
         }
     }
@@ -330,9 +338,9 @@ impl From<Vec<List>> for List {
 
 impl From<Vec<MidiMessage>> for List {
     fn from(items: Vec<MidiMessage>) -> Self {
-        let items = items.into_iter().map(Signal::new_midi).collect();
+        let items = items.into_iter().map(AnySignal::new_midi).collect();
         Self {
-            kind: SignalKind::Midi,
+            type_: SignalType::Midi,
             items,
         }
     }
@@ -379,15 +387,15 @@ impl DerefMut for MidiMessage {
 }
 
 /// A trait for types that can be used as signal data.
-pub trait SignalData: Clone + Debug + Send + Sync + PartialOrd + PartialEq + 'static {
-    /// The kind of signal this type represents.
-    const KIND: SignalKind;
+pub trait Signal: Clone + Debug + Send + Sync + PartialOrd + PartialEq + 'static {
+    /// The type of signal this type represents.
+    const TYPE: SignalType;
 
     /// Converts this value into a signal.
-    fn into_signal(this: Self) -> Signal;
+    fn into_signal(this: Self) -> AnySignal;
     /// Tries to convert a signal into this type.
-    /// This is not done by casting (see [`Signal::cast`] for that), but by checking if the signal is of the correct kind and returning `None` if it is not.
-    fn try_from_signal(signal: Signal) -> Option<Self>;
+    /// This is not done by casting (see [`AnySignal::cast`] for that), but by checking if the signal is of the correct type and returning `None` if it is not.
+    fn try_from_signal(signal: AnySignal) -> Option<Self>;
 
     /// Tries to convert a buffer into a buffer of this type.
     fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>>;
@@ -395,16 +403,16 @@ pub trait SignalData: Clone + Debug + Send + Sync + PartialOrd + PartialEq + 'st
     fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>>;
 }
 
-impl SignalData for Signal {
-    const KIND: SignalKind = SignalKind::Dynamic;
+impl Signal for AnySignal {
+    const TYPE: SignalType = SignalType::Dynamic;
 
     #[inline]
-    fn into_signal(this: Self) -> Signal {
+    fn into_signal(this: Self) -> AnySignal {
         this
     }
 
     #[inline]
-    fn try_from_signal(signal: Signal) -> Option<Self> {
+    fn try_from_signal(signal: AnySignal) -> Option<Self> {
         Some(signal)
     }
 
@@ -419,18 +427,18 @@ impl SignalData for Signal {
     }
 }
 
-impl SignalData for Float {
-    const KIND: SignalKind = SignalKind::Float;
+impl Signal for Float {
+    const TYPE: SignalType = SignalType::Float;
 
     #[inline]
-    fn into_signal(this: Self) -> Signal {
-        Signal::Float(this)
+    fn into_signal(this: Self) -> AnySignal {
+        AnySignal::Float(this)
     }
 
     #[inline]
-    fn try_from_signal(signal: Signal) -> Option<Self> {
+    fn try_from_signal(signal: AnySignal) -> Option<Self> {
         match signal {
-            Signal::Float(sample) => Some(sample),
+            AnySignal::Float(sample) => Some(sample),
             _ => None,
         }
     }
@@ -446,18 +454,18 @@ impl SignalData for Float {
     }
 }
 
-impl SignalData for bool {
-    const KIND: SignalKind = SignalKind::Bool;
+impl Signal for bool {
+    const TYPE: SignalType = SignalType::Bool;
 
     #[inline]
-    fn into_signal(this: Self) -> Signal {
-        Signal::Bool(this)
+    fn into_signal(this: Self) -> AnySignal {
+        AnySignal::Bool(this)
     }
 
     #[inline]
-    fn try_from_signal(signal: Signal) -> Option<Self> {
+    fn try_from_signal(signal: AnySignal) -> Option<Self> {
         match signal {
-            Signal::Bool(bool) => Some(bool),
+            AnySignal::Bool(bool) => Some(bool),
             _ => None,
         }
     }
@@ -473,18 +481,18 @@ impl SignalData for bool {
     }
 }
 
-impl SignalData for i64 {
-    const KIND: SignalKind = SignalKind::Int;
+impl Signal for i64 {
+    const TYPE: SignalType = SignalType::Int;
 
     #[inline]
-    fn into_signal(this: Self) -> Signal {
-        Signal::Int(this)
+    fn into_signal(this: Self) -> AnySignal {
+        AnySignal::Int(this)
     }
 
     #[inline]
-    fn try_from_signal(signal: Signal) -> Option<Self> {
+    fn try_from_signal(signal: AnySignal) -> Option<Self> {
         match signal {
-            Signal::Int(int) => Some(int),
+            AnySignal::Int(int) => Some(int),
             _ => None,
         }
     }
@@ -500,18 +508,18 @@ impl SignalData for i64 {
     }
 }
 
-impl SignalData for String {
-    const KIND: SignalKind = SignalKind::String;
+impl Signal for String {
+    const TYPE: SignalType = SignalType::String;
 
     #[inline]
-    fn into_signal(this: Self) -> Signal {
-        Signal::String(this)
+    fn into_signal(this: Self) -> AnySignal {
+        AnySignal::String(this)
     }
 
     #[inline]
-    fn try_from_signal(signal: Signal) -> Option<Self> {
+    fn try_from_signal(signal: AnySignal) -> Option<Self> {
         match signal {
-            Signal::String(string) => Some(string),
+            AnySignal::String(string) => Some(string),
             _ => None,
         }
     }
@@ -527,18 +535,18 @@ impl SignalData for String {
     }
 }
 
-impl SignalData for List {
-    const KIND: SignalKind = SignalKind::List;
+impl Signal for List {
+    const TYPE: SignalType = SignalType::List;
 
     #[inline]
-    fn into_signal(this: Self) -> Signal {
-        Signal::List(this)
+    fn into_signal(this: Self) -> AnySignal {
+        AnySignal::List(this)
     }
 
     #[inline]
-    fn try_from_signal(signal: Signal) -> Option<Self> {
+    fn try_from_signal(signal: AnySignal) -> Option<Self> {
         match signal {
-            Signal::List(list) => Some(list),
+            AnySignal::List(list) => Some(list),
             _ => None,
         }
     }
@@ -554,18 +562,18 @@ impl SignalData for List {
     }
 }
 
-impl SignalData for MidiMessage {
-    const KIND: SignalKind = SignalKind::Midi;
+impl Signal for MidiMessage {
+    const TYPE: SignalType = SignalType::Midi;
 
     #[inline]
-    fn into_signal(this: Self) -> Signal {
-        Signal::Midi(this)
+    fn into_signal(this: Self) -> AnySignal {
+        AnySignal::Midi(this)
     }
 
     #[inline]
-    fn try_from_signal(signal: Signal) -> Option<Self> {
+    fn try_from_signal(signal: AnySignal) -> Option<Self> {
         match signal {
-            Signal::Midi(midi) => Some(midi),
+            AnySignal::Midi(midi) => Some(midi),
             _ => None,
         }
     }
@@ -583,9 +591,9 @@ impl SignalData for MidiMessage {
 
 /// A signal that can be processed by the audio graph.
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum Signal {
-    /// A signal with no value. The inner [`SignalKind`] specifies the kind of signal this would be if it had a value.
-    None(SignalKind),
+pub enum AnySignal {
+    /// A signal with no value. The inner [`SignalKind`] specifies the type of signal this would be if it had a value.
+    None(SignalType),
     /// A single sample of audio.
     Float(Float),
     /// An integer.
@@ -600,10 +608,10 @@ pub enum Signal {
     Midi(MidiMessage),
 }
 
-impl Signal {
-    /// Creates a new signal with the given kind.
-    pub const fn new_none(kind: SignalKind) -> Self {
-        Self::None(kind)
+impl AnySignal {
+    /// Creates a new signal with the given type.
+    pub const fn new_none(type_: SignalType) -> Self {
+        Self::None(type_)
     }
 
     /// Creates a new sample signal with the given value.
@@ -642,9 +650,9 @@ impl Signal {
         matches!(self, Self::None(_))
     }
 
-    /// Returns `true` if the signal is a sample.
+    /// Returns `true` if the signal is a float.
     #[inline]
-    pub fn is_sample(&self) -> bool {
+    pub fn is_float(&self) -> bool {
         matches!(self, Self::Float(_))
     }
 
@@ -678,9 +686,9 @@ impl Signal {
         matches!(self, Self::Midi(_))
     }
 
-    /// Returns the inner [`Float`], if this is a sample signal.
+    /// Returns the inner [`Float`], if this is a float signal.
     #[inline]
-    pub fn as_sample(&self) -> Option<Float> {
+    pub fn as_float(&self) -> Option<Float> {
         match self {
             Self::Float(sample) => Some(*sample),
             _ => None,
@@ -732,9 +740,9 @@ impl Signal {
         }
     }
 
-    pub fn is_same_kind(&self, other: &Self) -> bool {
+    pub fn is_same_type(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::None(kind), Self::None(other_kind)) => kind == other_kind,
+            (Self::None(type_), Self::None(other_kind)) => type_ == other_kind,
             (Self::Float(_), Self::Float(_)) => true,
             (Self::Int(_), Self::Int(_)) => true,
             (Self::Bool(_), Self::Bool(_)) => true,
@@ -745,61 +753,63 @@ impl Signal {
         }
     }
 
-    pub fn kind(&self) -> SignalKind {
+    pub fn type_(&self) -> SignalType {
         match self {
-            Self::None(kind) => *kind,
-            Self::Float(_) => SignalKind::Float,
-            Self::Int(_) => SignalKind::Int,
-            Self::Bool(_) => SignalKind::Bool,
-            Self::String(_) => SignalKind::String,
-            Self::List(_) => SignalKind::List,
-            Self::Midi(_) => SignalKind::Midi,
+            Self::None(type_) => *type_,
+            Self::Float(_) => SignalType::Float,
+            Self::Int(_) => SignalType::Int,
+            Self::Bool(_) => SignalType::Bool,
+            Self::String(_) => SignalType::String,
+            Self::List(_) => SignalType::List,
+            Self::Midi(_) => SignalType::Midi,
         }
     }
 
-    pub fn cast<T: SignalData>(&self) -> Option<T> {
-        if self.kind() == T::KIND {
+    pub fn cast<T: Signal>(&self) -> Option<T> {
+        if self.type_() == T::TYPE {
             T::try_from_signal(self.clone())
         } else {
-            match (self, T::KIND) {
+            match (self, T::TYPE) {
                 (Self::None(_), _) => None,
 
                 // sample <-> int
-                (Self::Float(sample), SignalKind::Int) => {
-                    T::try_from_signal(Signal::Int(*sample as i64))
+                (Self::Float(sample), SignalType::Int) => {
+                    T::try_from_signal(AnySignal::Int(*sample as i64))
                 }
-                (Self::Int(int), SignalKind::Float) => {
-                    T::try_from_signal(Signal::Float(*int as Float))
+                (Self::Int(int), SignalType::Float) => {
+                    T::try_from_signal(AnySignal::Float(*int as Float))
                 }
 
                 // sample <-> bool
-                (Self::Float(sample), SignalKind::Bool) => {
-                    T::try_from_signal(Signal::Bool(*sample != 0.0))
+                (Self::Float(sample), SignalType::Bool) => {
+                    T::try_from_signal(AnySignal::Bool(*sample != 0.0))
                 }
-                (Self::Bool(bool), SignalKind::Float) => {
-                    T::try_from_signal(Signal::Float(if *bool { 1.0 } else { 0.0 }))
+                (Self::Bool(bool), SignalType::Float) => {
+                    T::try_from_signal(AnySignal::Float(if *bool { 1.0 } else { 0.0 }))
                 }
 
                 // int <-> bool
-                (Self::Int(int), SignalKind::Bool) => T::try_from_signal(Signal::Bool(*int != 0)),
-                (Self::Bool(bool), SignalKind::Int) => {
-                    T::try_from_signal(Signal::Int(if *bool { 1 } else { 0 }))
+                (Self::Int(int), SignalType::Bool) => {
+                    T::try_from_signal(AnySignal::Bool(*int != 0))
+                }
+                (Self::Bool(bool), SignalType::Int) => {
+                    T::try_from_signal(AnySignal::Int(if *bool { 1 } else { 0 }))
                 }
 
                 // string <-> sample
-                (Self::String(string), SignalKind::Float) => {
-                    T::try_from_signal(Signal::Float(string.parse().ok()?))
+                (Self::String(string), SignalType::Float) => {
+                    T::try_from_signal(AnySignal::Float(string.parse().ok()?))
                 }
-                (Self::Float(sample), SignalKind::String) => {
-                    T::try_from_signal(Signal::String(sample.to_string()))
+                (Self::Float(sample), SignalType::String) => {
+                    T::try_from_signal(AnySignal::String(sample.to_string()))
                 }
 
                 // string <-> int
-                (Self::String(string), SignalKind::Int) => {
-                    T::try_from_signal(Signal::Int(string.parse().ok()?))
+                (Self::String(string), SignalType::Int) => {
+                    T::try_from_signal(AnySignal::Int(string.parse().ok()?))
                 }
-                (Self::Int(int), SignalKind::String) => {
-                    T::try_from_signal(Signal::String(int.to_string()))
+                (Self::Int(int), SignalType::String) => {
+                    T::try_from_signal(AnySignal::String(int.to_string()))
                 }
 
                 _ => None,
@@ -808,37 +818,37 @@ impl Signal {
     }
 }
 
-impl From<Float> for Signal {
+impl From<Float> for AnySignal {
     fn from(sample: Float) -> Self {
         Self::Float(sample)
     }
 }
 
-impl From<i64> for Signal {
+impl From<i64> for AnySignal {
     fn from(int: i64) -> Self {
         Self::Int(int)
     }
 }
 
-impl From<bool> for Signal {
+impl From<bool> for AnySignal {
     fn from(bool: bool) -> Self {
         Self::Bool(bool)
     }
 }
 
-impl From<String> for Signal {
+impl From<String> for AnySignal {
     fn from(string: String) -> Self {
         Self::String(string)
     }
 }
 
-impl From<List> for Signal {
+impl From<List> for AnySignal {
     fn from(list: List) -> Self {
         Self::List(list)
     }
 }
 
-impl From<MidiMessage> for Signal {
+impl From<MidiMessage> for AnySignal {
     fn from(midi: MidiMessage) -> Self {
         Self::Midi(midi)
     }
@@ -846,8 +856,8 @@ impl From<MidiMessage> for Signal {
 
 /// Describes the type of data in a signal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum SignalKind {
-    /// A signal with any kind of value.
+pub enum SignalType {
+    /// A signal with any type of value.
     Dynamic,
     /// A floating-point value.
     Float,
@@ -863,10 +873,10 @@ pub enum SignalKind {
     Midi,
 }
 
-/// A buffer that can contain signals of any kind.
+/// A buffer that can contain signals of any type.
 #[derive(Debug, Clone)]
 pub enum SignalBuffer {
-    Dynamic(Buffer<Signal>),
+    Dynamic(Buffer<AnySignal>),
     /// A buffer of samples.
     Float(Buffer<Float>),
     /// A buffer of integers.
@@ -882,22 +892,22 @@ pub enum SignalBuffer {
 }
 
 impl SignalBuffer {
-    /// Creates a new signal buffer of the given kind and length, filled with zeros.
-    pub fn new_of_kind(kind: SignalKind, length: usize) -> Self {
-        match kind {
-            SignalKind::Dynamic => Self::Dynamic(Buffer::zeros(length)),
-            SignalKind::Float => Self::Float(Buffer::zeros(length)),
-            SignalKind::Int => Self::Int(Buffer::zeros(length)),
-            SignalKind::Bool => Self::Bool(Buffer::zeros(length)),
-            SignalKind::String => Self::String(Buffer::zeros(length)),
-            SignalKind::List => Self::List(Buffer::zeros(length)),
-            SignalKind::Midi => Self::Midi(Buffer::zeros(length)),
+    /// Creates a new signal buffer of the given type and length, filled with zeros.
+    pub fn new_of_kind(type_: SignalType, length: usize) -> Self {
+        match type_ {
+            SignalType::Dynamic => Self::Dynamic(Buffer::zeros(length)),
+            SignalType::Float => Self::Float(Buffer::zeros(length)),
+            SignalType::Int => Self::Int(Buffer::zeros(length)),
+            SignalType::Bool => Self::Bool(Buffer::zeros(length)),
+            SignalType::String => Self::String(Buffer::zeros(length)),
+            SignalType::List => Self::List(Buffer::zeros(length)),
+            SignalType::Midi => Self::Midi(Buffer::zeros(length)),
         }
     }
 
-    /// Creates a new signal buffer of the given data kind and length, filled with zeros.
-    pub fn new_of_data_kind<T: SignalData>(length: usize) -> Self {
-        Self::new_of_kind(T::KIND, length)
+    /// Creates a new signal buffer of the given data type and length, filled with zeros.
+    pub fn new_of_data_kind<T: Signal>(length: usize) -> Self {
+        Self::new_of_kind(T::TYPE, length)
     }
 
     /// Creates a new dynamic buffer of size `length`, filled with zeros.
@@ -935,16 +945,16 @@ impl SignalBuffer {
         Self::Midi(Buffer::zeros(length))
     }
 
-    /// Returns the kind of signal in the buffer.
-    pub fn kind(&self) -> SignalKind {
+    /// Returns the type of signal in the buffer.
+    pub fn type_(&self) -> SignalType {
         match self {
-            Self::Dynamic(_) => SignalKind::Dynamic,
-            Self::Float(_) => SignalKind::Float,
-            Self::Int(_) => SignalKind::Int,
-            Self::Bool(_) => SignalKind::Bool,
-            Self::String(_) => SignalKind::String,
-            Self::List(_) => SignalKind::List,
-            Self::Midi(_) => SignalKind::Midi,
+            Self::Dynamic(_) => SignalType::Dynamic,
+            Self::Float(_) => SignalType::Float,
+            Self::Int(_) => SignalType::Int,
+            Self::Bool(_) => SignalType::Bool,
+            Self::String(_) => SignalType::String,
+            Self::List(_) => SignalType::List,
+            Self::Midi(_) => SignalType::Midi,
         }
     }
 
@@ -978,14 +988,14 @@ impl SignalBuffer {
         matches!(self, Self::Midi(_))
     }
 
-    /// Returns `true` if the buffer contains the given kind of signal.
-    pub fn is_kind(&self, kind: SignalKind) -> bool {
-        self.kind() == kind
+    /// Returns `true` if the buffer contains the given type of signal.
+    pub fn is_kind(&self, type_: SignalType) -> bool {
+        self.type_() == type_
     }
 
     /// Returns a reference to the dynamic buffer, if this is a dynamic buffer.
     #[inline]
-    pub fn as_dynamic(&self) -> Option<&Buffer<Signal>> {
+    pub fn as_dynamic(&self) -> Option<&Buffer<AnySignal>> {
         match self {
             Self::Dynamic(buffer) => Some(buffer),
             _ => None,
@@ -1047,13 +1057,13 @@ impl SignalBuffer {
     }
 
     #[inline]
-    pub fn as_kind<S: SignalData>(&self) -> Option<&Buffer<S>> {
+    pub fn as_kind<S: Signal>(&self) -> Option<&Buffer<S>> {
         S::try_convert_buffer(self)
     }
 
     /// Returns a mutable reference to the dynamic buffer, if this is a dynamic buffer.
     #[inline]
-    pub fn as_dynamic_mut(&mut self) -> Option<&mut Buffer<Signal>> {
+    pub fn as_dynamic_mut(&mut self) -> Option<&mut Buffer<AnySignal>> {
         match self {
             Self::Dynamic(buffer) => Some(buffer),
             _ => None,
@@ -1115,7 +1125,7 @@ impl SignalBuffer {
     }
 
     #[inline]
-    pub fn as_kind_mut<S: SignalData>(&mut self) -> Option<&mut Buffer<S>> {
+    pub fn as_kind_mut<S: Signal>(&mut self) -> Option<&mut Buffer<S>> {
         S::try_convert_buffer_mut(self)
     }
 
@@ -1140,33 +1150,37 @@ impl SignalBuffer {
     }
 
     /// Resizes the buffer to the given length, filling any new elements with the given value.
-    pub fn resize(&mut self, length: usize, value: impl Into<Signal>) {
+    pub fn resize(&mut self, length: usize, value: impl Into<AnySignal>) {
         let value = value.into();
         match (self, value) {
             (Self::Dynamic(buffer), value) => {
                 buffer.buf.resize(length, Some(value));
             }
-            (Self::Float(buffer), Signal::Float(value)) => buffer.buf.resize(length, Some(value)),
-            (Self::Int(buffer), Signal::Int(value)) => buffer.buf.resize(length, Some(value)),
-            (Self::Bool(buffer), Signal::Bool(value)) => buffer.buf.resize(length, Some(value)),
-            (Self::String(buffer), Signal::String(value)) => buffer.buf.resize(length, Some(value)),
-            (Self::List(buffer), Signal::List(value)) => buffer.buf.resize(length, Some(value)),
-            (Self::Midi(buffer), Signal::Midi(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::Float(buffer), AnySignal::Float(value)) => {
+                buffer.buf.resize(length, Some(value))
+            }
+            (Self::Int(buffer), AnySignal::Int(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::Bool(buffer), AnySignal::Bool(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::String(buffer), AnySignal::String(value)) => {
+                buffer.buf.resize(length, Some(value))
+            }
+            (Self::List(buffer), AnySignal::List(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::Midi(buffer), AnySignal::Midi(value)) => buffer.buf.resize(length, Some(value)),
             _ => panic!("Cannot resize buffer with value of different type"),
         }
     }
 
     /// Fills the buffer with the given value.
-    pub fn fill(&mut self, value: impl Into<Signal>) {
+    pub fn fill(&mut self, value: impl Into<AnySignal>) {
         let value = value.into();
         match (self, value) {
             (Self::Dynamic(buffer), value) => buffer.fill(Some(value)),
-            (Self::Float(buffer), Signal::Float(value)) => buffer.fill(Some(value)),
-            (Self::Int(buffer), Signal::Int(value)) => buffer.fill(Some(value)),
-            (Self::Bool(buffer), Signal::Bool(value)) => buffer.fill(Some(value)),
-            (Self::String(buffer), Signal::String(value)) => buffer.fill(Some(value)),
-            (Self::List(buffer), Signal::List(value)) => buffer.fill(Some(value)),
-            (Self::Midi(buffer), Signal::Midi(value)) => buffer.fill(Some(value)),
+            (Self::Float(buffer), AnySignal::Float(value)) => buffer.fill(Some(value)),
+            (Self::Int(buffer), AnySignal::Int(value)) => buffer.fill(Some(value)),
+            (Self::Bool(buffer), AnySignal::Bool(value)) => buffer.fill(Some(value)),
+            (Self::String(buffer), AnySignal::String(value)) => buffer.fill(Some(value)),
+            (Self::List(buffer), AnySignal::List(value)) => buffer.fill(Some(value)),
+            (Self::Midi(buffer), AnySignal::Midi(value)) => buffer.fill(Some(value)),
             _ => panic!("Cannot fill buffer with value of different type"),
         }
     }
@@ -1199,15 +1213,15 @@ impl SignalBuffer {
 
     /// Clones the signal at the given index.
     #[inline]
-    pub fn clone_signal_at(&self, index: usize) -> Signal {
+    pub fn clone_signal_at(&self, index: usize) -> AnySignal {
         match self {
             Self::Dynamic(buffer) => buffer[index].clone().unwrap(),
-            Self::Float(buffer) => Signal::Float(buffer[index].unwrap()),
-            Self::Int(buffer) => Signal::Int(buffer[index].unwrap()),
-            Self::Bool(buffer) => Signal::Bool(buffer[index].unwrap()),
-            Self::String(buffer) => Signal::String(buffer[index].clone().unwrap()),
-            Self::List(buffer) => Signal::List(buffer[index].clone().unwrap()),
-            Self::Midi(buffer) => Signal::Midi(buffer[index].unwrap()),
+            Self::Float(buffer) => AnySignal::Float(buffer[index].unwrap()),
+            Self::Int(buffer) => AnySignal::Int(buffer[index].unwrap()),
+            Self::Bool(buffer) => AnySignal::Bool(buffer[index].unwrap()),
+            Self::String(buffer) => AnySignal::String(buffer[index].clone().unwrap()),
+            Self::List(buffer) => AnySignal::List(buffer[index].clone().unwrap()),
+            Self::Midi(buffer) => AnySignal::Midi(buffer[index].unwrap()),
         }
     }
 

@@ -20,11 +20,11 @@ pub struct MidiNote;
 
 impl Processor for MidiNote {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("midi", SignalKind::Midi)]
+        vec![SignalSpec::new("midi", SignalType::Midi)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("note", SignalKind::Float)]
+        vec![SignalSpec::new("note", SignalType::Float)]
     }
 
     fn process(
@@ -66,11 +66,11 @@ pub struct MidiVelocity;
 
 impl Processor for MidiVelocity {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("midi", SignalKind::Midi)]
+        vec![SignalSpec::new("midi", SignalType::Midi)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("velocity", SignalKind::Float)]
+        vec![SignalSpec::new("velocity", SignalType::Float)]
     }
 
     fn process(
@@ -112,11 +112,11 @@ pub struct MidiGate {
 
 impl Processor for MidiGate {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("midi", SignalKind::Midi)]
+        vec![SignalSpec::new("midi", SignalType::Midi)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("gate", SignalKind::Bool)]
+        vec![SignalSpec::new("gate", SignalType::Bool)]
     }
 
     fn process(
@@ -163,11 +163,11 @@ pub struct MidiTrigger;
 
 impl Processor for MidiTrigger {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("midi", SignalKind::Midi)]
+        vec![SignalSpec::new("midi", SignalType::Midi)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("trigger", SignalKind::Bool)]
+        vec![SignalSpec::new("trigger", SignalType::Bool)]
     }
 
     fn process(
@@ -208,11 +208,11 @@ pub struct MidiChannel;
 
 impl Processor for MidiChannel {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("midi", SignalKind::Midi)]
+        vec![SignalSpec::new("midi", SignalType::Midi)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("channel", SignalKind::Float)]
+        vec![SignalSpec::new("channel", SignalType::Float)]
     }
 
     fn process(

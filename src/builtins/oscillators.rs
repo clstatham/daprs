@@ -36,13 +36,13 @@ pub struct PhaseAccumulator {
 impl Processor for PhaseAccumulator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("increment", SignalKind::Float),
-            SignalSpec::new("reset", SignalKind::Bool),
+            SignalSpec::new("increment", SignalType::Float),
+            SignalSpec::new("reset", SignalType::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn process(
@@ -128,14 +128,14 @@ impl Default for SineOscillator {
 impl Processor for SineOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("frequency", SignalKind::Float),
-            SignalSpec::new("phase", SignalKind::Float),
-            SignalSpec::new("reset", SignalKind::Bool),
+            SignalSpec::new("frequency", SignalType::Float),
+            SignalSpec::new("phase", SignalType::Float),
+            SignalSpec::new("reset", SignalType::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
@@ -233,14 +233,14 @@ impl SawOscillator {
 impl Processor for SawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("frequency", SignalKind::Float),
-            SignalSpec::new("phase", SignalKind::Float),
-            SignalSpec::new("reset", SignalKind::Bool),
+            SignalSpec::new("frequency", SignalType::Float),
+            SignalSpec::new("phase", SignalType::Float),
+            SignalSpec::new("reset", SignalType::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
@@ -322,7 +322,7 @@ impl Processor for NoiseOscillator {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn process(
@@ -390,11 +390,11 @@ impl BlSawOscillator {
 
 impl Processor for BlSawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("frequency", SignalKind::Float)]
+        vec![SignalSpec::new("frequency", SignalType::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
@@ -487,13 +487,13 @@ impl BlSquareOscillator {
 impl Processor for BlSquareOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("frequency", SignalKind::Float),
-            SignalSpec::new("pulse_width", SignalKind::Float),
+            SignalSpec::new("frequency", SignalType::Float),
+            SignalSpec::new("pulse_width", SignalType::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {

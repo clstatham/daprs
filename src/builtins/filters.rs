@@ -65,14 +65,14 @@ impl MoogLadder {
 impl Processor for MoogLadder {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Float),
-            SignalSpec::new("cutoff", SignalKind::Float),
-            SignalSpec::new("resonance", SignalKind::Float),
+            SignalSpec::new("in", SignalType::Float),
+            SignalSpec::new("cutoff", SignalType::Float),
+            SignalSpec::new("resonance", SignalType::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
@@ -219,17 +219,17 @@ impl Biquad {
 impl Processor for Biquad {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Float),
-            SignalSpec::new("a0", SignalKind::Float),
-            SignalSpec::new("a1", SignalKind::Float),
-            SignalSpec::new("a2", SignalKind::Float),
-            SignalSpec::new("b1", SignalKind::Float),
-            SignalSpec::new("b2", SignalKind::Float),
+            SignalSpec::new("in", SignalType::Float),
+            SignalSpec::new("a0", SignalType::Float),
+            SignalSpec::new("a1", SignalType::Float),
+            SignalSpec::new("a2", SignalType::Float),
+            SignalSpec::new("b1", SignalType::Float),
+            SignalSpec::new("b2", SignalType::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
@@ -579,15 +579,15 @@ impl AutoBiquad {
 impl Processor for AutoBiquad {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("in", SignalKind::Float),
-            SignalSpec::new("frequency", SignalKind::Float),
-            SignalSpec::new("q", SignalKind::Float),
-            SignalSpec::new("gain", SignalKind::Float),
+            SignalSpec::new("in", SignalType::Float),
+            SignalSpec::new("frequency", SignalType::Float),
+            SignalSpec::new("q", SignalType::Float),
+            SignalSpec::new("gain", SignalType::Float),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {

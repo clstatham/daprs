@@ -15,12 +15,12 @@ use std::ops::{
 #[derive(Clone, Debug)]
 
 pub struct Constant {
-    value: Signal,
+    value: AnySignal,
 }
 
 impl Constant {
     /// Creates a new constant processor with the given value.
-    pub fn new(value: impl Into<Signal>) -> Self {
+    pub fn new(value: impl Into<AnySignal>) -> Self {
         Self {
             value: value.into(),
         }
@@ -33,7 +33,7 @@ impl Processor for Constant {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", self.value.kind())]
+        vec![SignalSpec::new("out", self.value.type_())]
     }
 
     fn process(
@@ -42,29 +42,29 @@ impl Processor for Constant {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         match (outputs.output(0), &self.value) {
-            (SignalBuffer::Float(out), Signal::Float(value)) => {
+            (SignalBuffer::Float(out), AnySignal::Float(value)) => {
                 out.fill(Some(*value));
             }
-            (SignalBuffer::Int(out), Signal::Int(value)) => {
+            (SignalBuffer::Int(out), AnySignal::Int(value)) => {
                 out.fill(Some(*value));
             }
-            (SignalBuffer::Bool(out), Signal::Bool(value)) => {
+            (SignalBuffer::Bool(out), AnySignal::Bool(value)) => {
                 out.fill(Some(*value));
             }
-            (SignalBuffer::List(out), Signal::List(value)) => {
+            (SignalBuffer::List(out), AnySignal::List(value)) => {
                 out.fill(Some(value.clone()));
             }
-            (SignalBuffer::String(out), Signal::String(value)) => {
+            (SignalBuffer::String(out), AnySignal::String(value)) => {
                 out.fill(Some(value.clone()));
             }
-            (SignalBuffer::Midi(out), Signal::Midi(value)) => {
+            (SignalBuffer::Midi(out), AnySignal::Midi(value)) => {
                 out.fill(Some(*value));
             }
             (out, _) => {
                 return Err(ProcessorError::OutputSpecMismatch {
                     index: 0,
-                    expected: self.value.kind(),
-                    actual: out.kind(),
+                    expected: self.value.type_(),
+                    actual: out.type_(),
                 })
             }
         }
@@ -77,7 +77,7 @@ impl GraphBuilder {
     /// A processor that outputs a constant value.
     ///
     /// See also: [`Constant`].
-    pub fn constant(&self, value: impl Into<Signal>) -> Node {
+    pub fn constant(&self, value: impl Into<AnySignal>) -> Node {
         self.add(Constant::new(value))
     }
 }
@@ -100,11 +100,11 @@ pub struct MidiToFreq;
 
 impl Processor for MidiToFreq {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("note", SignalKind::Float)]
+        vec![SignalSpec::new("note", SignalType::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("freq", SignalKind::Float)]
+        vec![SignalSpec::new("freq", SignalType::Float)]
     }
 
     fn process(
@@ -145,11 +145,11 @@ pub struct FreqToMidi;
 
 impl Processor for FreqToMidi {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("freq", SignalKind::Float)]
+        vec![SignalSpec::new("freq", SignalType::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("note", SignalKind::Float)]
+        vec![SignalSpec::new("note", SignalType::Float)]
     }
 
     fn process(
@@ -235,12 +235,12 @@ impl Processor for Expr {
     fn input_spec(&self) -> Vec<SignalSpec> {
         self.inputs
             .iter()
-            .map(|name| SignalSpec::new(name, SignalKind::Float))
+            .map(|name| SignalSpec::new(name, SignalType::Float))
             .collect()
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn process(
@@ -259,8 +259,8 @@ impl Processor for Expr {
                     .as_sample()
                     .ok_or(ProcessorError::InputSpecMismatch {
                         index: inp_idx,
-                        expected: SignalKind::Float,
-                        actual: buffer.kind(),
+                        expected: SignalType::Float,
+                        actual: buffer.type_(),
                     })?;
 
                 self.input_values
@@ -278,15 +278,15 @@ macro_rules! impl_binary_proc {
     ($name:ident, $method:ident, ($($data:ty),*), $shortdoc:literal, $doc:literal) => {
         #[derive(Clone, Debug)]
         #[doc = $doc]
-        pub struct $name<S: SignalData>(std::marker::PhantomData<S>);
+        pub struct $name<S: Signal>(std::marker::PhantomData<S>);
 
-        impl<S: SignalData> $name<S> {
+        impl<S: Signal> $name<S> {
             pub fn new() -> Self {
                 Self(std::marker::PhantomData)
             }
         }
 
-        impl<S: SignalData> Default for $name<S> {
+        impl<S: Signal> Default for $name<S> {
             fn default() -> Self {
                 Self::new()
             }
@@ -296,13 +296,13 @@ macro_rules! impl_binary_proc {
         impl Processor for $name<$data> {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![
-                    SignalSpec::new("a", <$data as SignalData>::KIND),
-                    SignalSpec::new("b", <$data as SignalData>::KIND),
+                    SignalSpec::new("a", <$data as Signal>::TYPE),
+                    SignalSpec::new("b", <$data as Signal>::TYPE),
                 ]
             }
 
             fn output_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("out", <$data as SignalData>::KIND)]
+                vec![SignalSpec::new("out", <$data as Signal>::TYPE)]
             }
 
             fn process(
@@ -603,15 +603,15 @@ macro_rules! impl_unary_proc {
     ($name:ident, $method:ident, ($($data:ty),*), $shortdoc:literal, $doc:literal) => {
         #[derive(Clone, Debug)]
         #[doc = $doc]
-        pub struct $name<S: SignalData>(std::marker::PhantomData<S>);
+        pub struct $name<S: Signal>(std::marker::PhantomData<S>);
 
-        impl<S: SignalData> $name<S> {
+        impl<S: Signal> $name<S> {
             pub fn new() -> Self {
                 Self(std::marker::PhantomData)
             }
         }
 
-        impl<S: SignalData> Default for $name<S> {
+        impl<S: Signal> Default for $name<S> {
             fn default() -> Self {
                 Self::new()
             }
@@ -620,11 +620,11 @@ macro_rules! impl_unary_proc {
         $(
         impl Processor for $name<$data> {
             fn input_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("in", <$data as SignalData>::KIND)]
+                vec![SignalSpec::new("in", <$data as Signal>::TYPE)]
             }
 
             fn output_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("out", <$data as SignalData>::KIND)]
+                vec![SignalSpec::new("out", <$data as Signal>::TYPE)]
             }
 
             fn process(

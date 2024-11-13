@@ -7,11 +7,11 @@ struct GainProc {
 
 impl Processor for GainProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", SignalKind::Float)]
+        vec![SignalSpec::new("in", SignalType::Float)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Float)]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn process(

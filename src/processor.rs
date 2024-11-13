@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use downcast_rs::{impl_downcast, DowncastSync};
 use thiserror::Error;
 
-use crate::signal::{Buffer, Float, List, MidiMessage, SignalBuffer, SignalData, SignalKind};
+use crate::signal::{Buffer, Float, List, MidiMessage, Signal, SignalBuffer, SignalType};
 
 /// An error that can occur when processing signals.
 #[derive(Debug, Clone, Error)]
@@ -23,10 +23,10 @@ pub enum ProcessorError {
     InputSpecMismatch {
         /// The index of the input signal.
         index: usize,
-        /// The expected signal kind.
-        expected: SignalKind,
-        /// The actual signal kind.
-        actual: SignalKind,
+        /// The expected signal type.
+        expected: SignalType,
+        /// The actual signal type.
+        actual: SignalType,
     },
 
     /// The output signal type at the given index does not match the expected type.
@@ -34,10 +34,10 @@ pub enum ProcessorError {
     OutputSpecMismatch {
         /// The index of the output signal.
         index: usize,
-        /// The expected signal kind.
-        expected: SignalKind,
-        /// The actual signal kind.
-        actual: SignalKind,
+        /// The expected signal type.
+        expected: SignalType,
+        /// The actual signal type.
+        actual: SignalType,
     },
 
     /// The signal value is invalid for the given reason.
@@ -51,7 +51,7 @@ pub struct SignalSpec {
     /// The name of the signal.
     pub name: String,
     /// The type of the signal.
-    pub kind: SignalKind,
+    pub type_: SignalType,
 }
 
 impl Default for SignalSpec {
@@ -59,17 +59,17 @@ impl Default for SignalSpec {
     fn default() -> Self {
         Self {
             name: "".into(),
-            kind: SignalKind::Float,
+            type_: SignalType::Float,
         }
     }
 }
 
 impl SignalSpec {
     /// Creates a new bounded [`SignalSpec`] with the given name, minimum, maximum, and default value.
-    pub fn new(name: impl Into<String>, kind: SignalKind) -> Self {
+    pub fn new(name: impl Into<String>, type_: SignalType) -> Self {
         Self {
             name: name.into(),
-            kind,
+            type_,
         }
     }
 }
@@ -97,7 +97,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     }
 
     #[inline]
-    pub fn iter_input_as<S: SignalData>(
+    pub fn iter_input_as<S: Signal>(
         &self,
         index: usize,
     ) -> Result<impl Iterator<Item = &Option<S>> + '_, ProcessorError> {
@@ -108,8 +108,8 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
                 .as_kind::<S>()
                 .ok_or(ProcessorError::InputSpecMismatch {
                     index,
-                    expected: S::KIND,
-                    actual: input.kind(),
+                    expected: S::TYPE,
+                    actual: input.type_(),
                 })?;
 
             Ok(itertools::Either::Left(input.iter()))
@@ -189,16 +189,13 @@ impl<'a> ProcessorOutputs<'a> {
     }
 
     #[inline]
-    pub fn output_as<S: SignalData>(
-        &mut self,
-        index: usize,
-    ) -> Result<&mut Buffer<S>, ProcessorError> {
-        let actual = self.output(index).kind();
+    pub fn output_as<S: Signal>(&mut self, index: usize) -> Result<&mut Buffer<S>, ProcessorError> {
+        let actual = self.output(index).type_();
         self.output(index)
             .as_kind_mut::<S>()
             .ok_or(ProcessorError::OutputSpecMismatch {
                 index,
-                expected: S::KIND,
+                expected: S::TYPE,
                 actual,
             })
     }
@@ -255,7 +252,7 @@ impl<'a> ProcessorOutputs<'a> {
     }
 
     #[inline]
-    pub fn iter_output_as<S: SignalData>(
+    pub fn iter_output_as<S: Signal>(
         &mut self,
         index: usize,
     ) -> Result<impl Iterator<Item = &mut Option<S>> + '_, ProcessorError> {

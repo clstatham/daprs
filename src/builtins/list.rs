@@ -20,11 +20,11 @@ pub struct Len;
 
 impl Processor for Len {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("list", SignalKind::List)]
+        vec![SignalSpec::new("list", SignalType::List)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::Int)]
+        vec![SignalSpec::new("out", SignalType::Int)]
     }
 
     fn process(
@@ -63,24 +63,24 @@ impl Processor for Len {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Signal` | The element at the given index. |
 #[derive(Default, Debug, Clone)]
-pub struct Get<S: SignalData>(PhantomData<S>);
+pub struct Get<S: Signal>(PhantomData<S>);
 
-impl<S: SignalData> Get<S> {
+impl<S: Signal> Get<S> {
     pub fn new() -> Self {
         Self(PhantomData)
     }
 }
 
-impl<S: SignalData> Processor for Get<S> {
+impl<S: Signal> Processor for Get<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("list", SignalKind::List),
-            SignalSpec::new("index", SignalKind::Int),
+            SignalSpec::new("list", SignalType::List),
+            SignalSpec::new("index", SignalType::Int),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::KIND)]
+        vec![SignalSpec::new("out", S::TYPE)]
     }
 
     fn process(
@@ -98,11 +98,11 @@ impl<S: SignalData> Processor for Get<S> {
                 continue;
             };
 
-            if list.kind() != S::KIND {
+            if list.type_() != S::TYPE {
                 return Err(ProcessorError::InputSpecMismatch {
                     index: 0,
-                    expected: S::KIND,
-                    actual: list.kind(),
+                    expected: S::TYPE,
+                    actual: list.type_(),
                 });
             }
 
@@ -137,15 +137,15 @@ impl<S: SignalData> Processor for Get<S> {
 /// | `0` | `out` | `List` | The list containing the input signals. |
 #[derive(Debug, Clone)]
 pub struct Pack {
-    kind: SignalKind,
-    inputs: Vec<Signal>,
+    type_: SignalType,
+    inputs: Vec<AnySignal>,
 }
 
 impl Pack {
-    pub fn new(kind: SignalKind, num_inputs: usize) -> Self {
+    pub fn new(type_: SignalType, num_inputs: usize) -> Self {
         Self {
-            kind,
-            inputs: vec![Signal::None(kind); num_inputs],
+            type_,
+            inputs: vec![AnySignal::None(type_); num_inputs],
         }
     }
 }
@@ -153,12 +153,12 @@ impl Pack {
 impl Processor for Pack {
     fn input_spec(&self) -> Vec<SignalSpec> {
         (0..self.inputs.len())
-            .map(|i| SignalSpec::new(i.to_string(), self.kind))
+            .map(|i| SignalSpec::new(i.to_string(), self.type_))
             .collect()
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalKind::List)]
+        vec![SignalSpec::new("out", SignalType::List)]
     }
 
     fn process(
@@ -171,11 +171,11 @@ impl Processor for Pack {
         for (sample_index, out) in out.into_iter().enumerate() {
             for (input_index, input) in inputs.inputs.iter().enumerate() {
                 if let Some(buf) = input.as_ref() {
-                    if buf.kind() != self.kind {
+                    if buf.type_() != self.type_ {
                         return Err(ProcessorError::InputSpecMismatch {
                             index: input_index,
-                            expected: self.kind,
-                            actual: buf.kind(),
+                            expected: self.type_,
+                            actual: buf.type_(),
                         });
                     }
 
@@ -205,24 +205,24 @@ impl Processor for Pack {
 /// | `0..N` | `0..N` | `Signal` | The unpacked signals. |
 #[derive(Debug, Clone)]
 pub struct Unpack {
-    kind: SignalKind,
+    type_: SignalType,
     num_outputs: usize,
 }
 
 impl Unpack {
-    pub fn new(kind: SignalKind, num_outputs: usize) -> Self {
-        Self { kind, num_outputs }
+    pub fn new(type_: SignalType, num_outputs: usize) -> Self {
+        Self { type_, num_outputs }
     }
 }
 
 impl Processor for Unpack {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("list", SignalKind::List)]
+        vec![SignalSpec::new("list", SignalType::List)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         (0..self.num_outputs)
-            .map(|i| SignalSpec::new(i.to_string(), self.kind))
+            .map(|i| SignalSpec::new(i.to_string(), self.type_))
             .collect()
     }
 
@@ -240,46 +240,46 @@ impl Processor for Unpack {
                 .filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
             {
                 for (output_index, output_buf) in outputs.outputs.iter_mut().enumerate() {
-                    if output_buf.kind() != self.kind {
+                    if output_buf.type_() != self.type_ {
                         return Err(ProcessorError::OutputSpecMismatch {
                             index: output_index,
-                            expected: self.kind,
-                            actual: output_buf.kind(),
+                            expected: self.type_,
+                            actual: output_buf.type_(),
                         });
                     }
 
-                    match self.kind {
-                        SignalKind::Bool => {
+                    match self.type_ {
+                        SignalType::Bool => {
                             let output_buf = output_buf.as_bool_mut().unwrap();
                             let value = list.get(output_index).and_then(|s| s.as_bool());
                             output_buf[sample_index] = value;
                         }
-                        SignalKind::Int => {
+                        SignalType::Int => {
                             let output_buf = output_buf.as_int_mut().unwrap();
                             let value = list.get(output_index).and_then(|s| s.as_int());
                             output_buf[sample_index] = value;
                         }
-                        SignalKind::Float => {
+                        SignalType::Float => {
                             let output_buf = output_buf.as_sample_mut().unwrap();
-                            let value = list.get(output_index).and_then(|s| s.as_sample());
+                            let value = list.get(output_index).and_then(|s| s.as_float());
                             output_buf[sample_index] = value;
                         }
-                        SignalKind::String => {
+                        SignalType::String => {
                             let output_buf = output_buf.as_string_mut().unwrap();
                             let value = list.get(output_index).and_then(|s| s.as_string());
                             output_buf[sample_index] = value.cloned();
                         }
-                        SignalKind::List => {
+                        SignalType::List => {
                             let output_buf = output_buf.as_list_mut().unwrap();
                             let value = list.get(output_index).and_then(|s| s.as_list());
                             output_buf[sample_index] = value.cloned();
                         }
-                        SignalKind::Midi => {
+                        SignalType::Midi => {
                             let output_buf = output_buf.as_midi_mut().unwrap();
                             let value = list.get(output_index).and_then(|s| s.as_midi());
                             output_buf[sample_index] = value.copied();
                         }
-                        SignalKind::Dynamic => {
+                        SignalType::Dynamic => {
                             let output_buf = output_buf.as_dynamic_mut().unwrap();
                             let value = list.get(output_index);
                             output_buf[sample_index] = value.cloned();

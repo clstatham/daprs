@@ -4,7 +4,7 @@ use petgraph::prelude::*;
 
 use crate::{
     prelude::*,
-    signal::{SignalData, SignalKind},
+    signal::{Signal, SignalType},
 };
 
 use super::graph_builder::GraphBuilder;
@@ -69,10 +69,10 @@ impl Node {
 
     /// Returns the signal type of the output at the given index.
     #[inline]
-    pub fn output_kind(&self, index: impl IntoOutputIdx) -> SignalKind {
+    pub fn output_kind(&self, index: impl IntoOutputIdx) -> SignalType {
         let index = index.into_output_idx(self);
         self.graph
-            .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].kind)
+            .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].type_)
     }
 
     /// Connects the given input of this node to the given output of another node.
@@ -83,12 +83,13 @@ impl Node {
         source: impl IntoNode,
         source_output: impl IntoOutputIdx,
         target_input: impl IntoInputIdx,
-    ) {
+    ) -> Node {
         let output = source.into_node(&self.graph);
         let source_output = source_output.into_output_idx(&output);
         let target_input = target_input.into_input_idx(self);
         self.graph
             .connect(output.id(), source_output, self.id(), target_input);
+        self.clone()
     }
 
     /// Connects the given output of this node to the given input of another node.
@@ -99,12 +100,13 @@ impl Node {
         output: impl IntoOutputIdx,
         target: impl IntoNode,
         target_input: impl IntoInputIdx,
-    ) {
+    ) -> Node {
         let target = target.into_node(&self.graph);
         let output_index = output.into_output_idx(self);
         let target_input = target_input.into_input_idx(&target);
         self.graph
             .connect(self.id(), output_index, target.id(), target_input);
+        self.clone()
     }
 
     /// Smooths the output signal.
@@ -180,9 +182,9 @@ impl Node {
     }
 
     #[inline]
-    pub fn cast(&self, kind: SignalKind) -> Node {
+    pub fn cast(&self, type_: SignalType) -> Node {
         self.assert_single_output();
-        self.output(0).cast(kind)
+        self.output(0).cast(type_)
     }
 }
 
@@ -196,23 +198,24 @@ pub struct Input {
 impl Input {
     /// Returns the signal type of the input.
     #[inline]
-    pub fn kind(&self) -> SignalKind {
+    pub fn type_(&self) -> SignalType {
         self.node.graph.with_graph(|graph| {
-            graph.digraph()[self.node.id()].input_spec()[self.input_index as usize].kind
+            graph.digraph()[self.node.id()].input_spec()[self.input_index as usize].type_
         })
     }
 
     /// Sets the value of the input.
     #[inline]
-    pub fn set(&self, value: impl IntoNode) {
+    pub fn set(&self, value: impl IntoNode) -> Node {
         let value = value.into_node(self.node.graph());
         value.assert_single_output();
         assert_eq!(
-            self.kind(),
+            self.type_(),
             value.output_kind(0),
             "output and input signals must have the same type"
         );
         self.node.connect_input(&value, 0, self.input_index);
+        self.node.clone()
     }
 
     /// Returns the node that the input belongs to.
@@ -224,19 +227,20 @@ impl Input {
     /// Connects the input to the given output.
     #[inline]
     #[track_caller]
-    pub fn connect(&self, output: &Output) {
+    pub fn connect(&self, output: &Output) -> Node {
         assert_eq!(
-            self.kind(),
-            output.kind(),
+            self.type_(),
+            output.type_(),
             "output and input signals must have the same type"
         );
         self.node
             .connect_input(&output.node, output.output_index, self.input_index);
+        self.node.clone()
     }
 
     /// Creates a parameter for the input.
     #[inline]
-    pub fn param<S: SignalData>(
+    pub fn param<S: Signal>(
         &self,
         name: impl Into<String>,
         initial_value: impl Into<Option<S>>,
@@ -260,14 +264,15 @@ impl Output {
     /// Connects the output to the given input.
     #[inline]
     #[track_caller]
-    pub fn connect(&self, input: &Input) {
+    pub fn connect(&self, input: &Input) -> Node {
         assert_eq!(
-            self.kind(),
-            input.kind(),
+            self.type_(),
+            input.type_(),
             "output and input signals must have the same type"
         );
         self.node
             .connect_output(self.output_index, &input.node, input.input_index);
+        self.node.clone()
     }
 
     /// Returns the node that the output belongs to.
@@ -278,54 +283,54 @@ impl Output {
 
     /// Returns the signal type of the output.
     #[inline]
-    pub fn kind(&self) -> SignalKind {
+    pub fn type_(&self) -> SignalType {
         self.node.output_kind(self.output_index)
     }
 
     #[inline]
-    pub fn cast(&self, kind: SignalKind) -> Node {
-        let current_kind = self.kind();
-        if current_kind == kind {
+    pub fn cast(&self, type_: SignalType) -> Node {
+        let current_kind = self.type_();
+        if current_kind == type_ {
             return self.node.clone();
         }
-        let cast = match (current_kind, kind) {
+        let cast = match (current_kind, type_) {
             // bool <-> int
-            (SignalKind::Bool, SignalKind::Int) => self.node.graph().add(Cast::<bool, i64>::new()),
-            (SignalKind::Int, SignalKind::Bool) => self.node.graph().add(Cast::<i64, bool>::new()),
+            (SignalType::Bool, SignalType::Int) => self.node.graph().add(Cast::<bool, i64>::new()),
+            (SignalType::Int, SignalType::Bool) => self.node.graph().add(Cast::<i64, bool>::new()),
 
             // bool <-> sample
-            (SignalKind::Bool, SignalKind::Float) => {
+            (SignalType::Bool, SignalType::Float) => {
                 self.node.graph().add(Cast::<bool, Float>::new())
             }
-            (SignalKind::Float, SignalKind::Bool) => {
+            (SignalType::Float, SignalType::Bool) => {
                 self.node.graph().add(Cast::<Float, bool>::new())
             }
 
             // int <-> sample
-            (SignalKind::Int, SignalKind::Float) => {
+            (SignalType::Int, SignalType::Float) => {
                 self.node.graph().add(Cast::<i64, Float>::new())
             }
-            (SignalKind::Float, SignalKind::Int) => {
+            (SignalType::Float, SignalType::Int) => {
                 self.node.graph().add(Cast::<Float, i64>::new())
             }
 
             // string <-> sample
-            (SignalKind::String, SignalKind::Float) => {
+            (SignalType::String, SignalType::Float) => {
                 self.node.graph().add(Cast::<String, Float>::new())
             }
-            (SignalKind::Float, SignalKind::String) => {
+            (SignalType::Float, SignalType::String) => {
                 self.node.graph().add(Cast::<Float, String>::new())
             }
 
             // string <-> int
-            (SignalKind::String, SignalKind::Int) => {
+            (SignalType::String, SignalType::Int) => {
                 self.node.graph().add(Cast::<String, i64>::new())
             }
-            (SignalKind::Int, SignalKind::String) => {
+            (SignalType::Int, SignalType::String) => {
                 self.node.graph().add(Cast::<i64, String>::new())
             }
 
-            _ => panic!("cannot cast from {:?} to {:?}", current_kind, kind),
+            _ => panic!("cannot cast from {:?} to {:?}", current_kind, type_),
         };
 
         cast.input(0).connect(self);
@@ -335,15 +340,15 @@ impl Output {
     /// Creates a new, single-output node that passes the value of this output through.
     #[inline]
     pub fn make_node(&self) -> Node {
-        let kind = self.kind();
-        let node = match kind {
-            SignalKind::Dynamic => self.node.graph().add(Passthrough::<Signal>::new()),
-            SignalKind::Bool => self.node.graph().add(Passthrough::<bool>::new()),
-            SignalKind::Int => self.node.graph().add(Passthrough::<i64>::new()),
-            SignalKind::Float => self.node.graph().add(Passthrough::<Float>::new()),
-            SignalKind::String => self.node.graph().add(Passthrough::<String>::new()),
-            SignalKind::List => self.node.graph().add(Passthrough::<List>::new()),
-            SignalKind::Midi => self.node.graph().add(Passthrough::<MidiMessage>::new()),
+        let type_ = self.type_();
+        let node = match type_ {
+            SignalType::Dynamic => self.node.graph().add(Passthrough::<AnySignal>::new()),
+            SignalType::Bool => self.node.graph().add(Passthrough::<bool>::new()),
+            SignalType::Int => self.node.graph().add(Passthrough::<i64>::new()),
+            SignalType::Float => self.node.graph().add(Passthrough::<Float>::new()),
+            SignalType::String => self.node.graph().add(Passthrough::<String>::new()),
+            SignalType::List => self.node.graph().add(Passthrough::<List>::new()),
+            SignalType::Midi => self.node.graph().add(Passthrough::<MidiMessage>::new()),
         };
         node.input(0).connect(self);
         node
@@ -352,15 +357,15 @@ impl Output {
     /// Creates a new, single-output node that holds and continuously outputs the last value of this output.
     #[inline]
     pub fn make_register(&self) -> Node {
-        let kind = self.kind();
-        let node = match kind {
-            SignalKind::Dynamic => self.node.graph().add(Register::<Signal>::new()),
-            SignalKind::Bool => self.node.graph().add(Register::<bool>::new()),
-            SignalKind::Int => self.node.graph().add(Register::<i64>::new()),
-            SignalKind::Float => self.node.graph().add(Register::<Float>::new()),
-            SignalKind::String => self.node.graph().add(Register::<String>::new()),
-            SignalKind::List => self.node.graph().add(Register::<List>::new()),
-            SignalKind::Midi => self.node.graph().add(Register::<MidiMessage>::new()),
+        let type_ = self.type_();
+        let node = match type_ {
+            SignalType::Dynamic => self.node.graph().add(Register::<AnySignal>::new()),
+            SignalType::Bool => self.node.graph().add(Register::<bool>::new()),
+            SignalType::Int => self.node.graph().add(Register::<i64>::new()),
+            SignalType::Float => self.node.graph().add(Register::<Float>::new()),
+            SignalType::String => self.node.graph().add(Register::<String>::new()),
+            SignalType::List => self.node.graph().add(Register::<List>::new()),
+            SignalType::Midi => self.node.graph().add(Register::<MidiMessage>::new()),
         };
         node.input(0).connect(self);
         node
@@ -398,20 +403,20 @@ impl Output {
         let else_ = else_.into_node(self.node.graph());
         then.assert_single_output();
         else_.assert_single_output();
-        let kind = then.output_kind(0);
+        let type_ = then.output_kind(0);
         assert_eq!(
-            kind,
+            type_,
             else_.output_kind(0),
             "output signals must have the same type"
         );
-        let cond = match kind {
-            SignalKind::Dynamic => self.node.graph().add(Cond::<Signal>::new()),
-            SignalKind::Bool => self.node.graph().add(Cond::<bool>::new()),
-            SignalKind::Int => self.node.graph().add(Cond::<i64>::new()),
-            SignalKind::Float => self.node.graph().add(Cond::<Float>::new()),
-            SignalKind::String => self.node.graph().add(Cond::<String>::new()),
-            SignalKind::List => self.node.graph().add(Cond::<List>::new()),
-            SignalKind::Midi => self.node.graph().add(Cond::<MidiMessage>::new()),
+        let cond = match type_ {
+            SignalType::Dynamic => self.node.graph().add(Cond::<AnySignal>::new()),
+            SignalType::Bool => self.node.graph().add(Cond::<bool>::new()),
+            SignalType::Int => self.node.graph().add(Cond::<i64>::new()),
+            SignalType::Float => self.node.graph().add(Cond::<Float>::new()),
+            SignalType::String => self.node.graph().add(Cond::<String>::new()),
+            SignalType::List => self.node.graph().add(Cond::<List>::new()),
+            SignalType::Midi => self.node.graph().add(Cond::<MidiMessage>::new()),
         };
         cond.input("cond").connect(self);
         cond.input("then").connect(&then.output(0));
@@ -424,6 +429,11 @@ impl Output {
     /// The output signal must be a list.
     #[inline]
     pub fn len(&self) -> Node {
+        assert_eq!(
+            self.type_(),
+            SignalType::List,
+            "output signal must be a list"
+        );
         let proc = self.node.graph().add(Len);
         proc.input(0).connect(self);
         proc
@@ -431,14 +441,14 @@ impl Output {
 }
 
 mod sealed {
-    use crate::signal::SignalData;
+    use crate::signal::Signal;
 
     pub trait Sealed {}
     impl Sealed for crate::graph::NodeIndex {}
     impl Sealed for super::Node {}
     impl Sealed for &super::Node {}
-    impl Sealed for super::Signal {}
-    impl<S: SignalData> Sealed for super::Param<S> {}
+    impl Sealed for super::AnySignal {}
+    impl<S: Signal> Sealed for super::Param<S> {}
     impl Sealed for crate::signal::Float {}
     impl Sealed for i64 {}
     impl Sealed for u32 {}
@@ -469,7 +479,7 @@ impl IntoNode for &Node {
     }
 }
 
-impl<S: SignalData> IntoNode for Param<S> {
+impl<S: Signal> IntoNode for Param<S> {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.add(self)
     }
@@ -490,7 +500,7 @@ impl IntoNode for Float {
     }
 }
 
-impl IntoNode for Signal {
+impl IntoNode for AnySignal {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.constant(self)
     }
@@ -498,13 +508,13 @@ impl IntoNode for Signal {
 
 impl IntoNode for i64 {
     fn into_node(self, graph: &GraphBuilder) -> Node {
-        graph.constant(Signal::Int(self))
+        graph.constant(AnySignal::Int(self))
     }
 }
 
 impl IntoNode for u32 {
     fn into_node(self, graph: &GraphBuilder) -> Node {
-        graph.constant(Signal::Int(self as i64))
+        graph.constant(AnySignal::Int(self as i64))
     }
 }
 
@@ -572,7 +582,7 @@ impl IntoOutputIdx for &str {
 }
 
 macro_rules! impl_binary_node_ops {
-    ($name:ident, $proc:ident, ($($kind:ident => $data:ty),*), $doc:literal) => {
+    ($name:ident, $proc:ident, ($($type_:ident => $data:ty),*), $doc:literal) => {
         impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
@@ -587,10 +597,10 @@ macro_rules! impl_binary_node_ops {
                     "output signals must have the same type"
                 );
 
-                let kind = self.output_kind(0);
-                let node = match kind {
-                    $(SignalKind::$kind => self.graph().add(<math::$proc<$data>>::default()),)*
-                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), kind),
+                let type_ = self.output_kind(0);
+                let node = match type_ {
+                    $(SignalType::$type_ => self.graph().add(<math::$proc<$data>>::default()),)*
+                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), type_),
                 };
 
                 node.input(0).connect(&self.output(0));
@@ -600,7 +610,7 @@ macro_rules! impl_binary_node_ops {
             }
         }
     };
-    ($name:ident, $std_op:ident, $proc:ident, ($($kind:ident => $data:ty),*), $doc:literal) => {
+    ($name:ident, $std_op:ident, $proc:ident, ($($type_:ident => $data:ty),*), $doc:literal) => {
         impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
@@ -615,11 +625,11 @@ macro_rules! impl_binary_node_ops {
                     "output signals must have the same type"
                 );
 
-                let kind = self.output_kind(0);
+                let type_ = self.output_kind(0);
 
-                let node = match kind {
-                    $(SignalKind::$kind => self.graph().add(<math::$proc<$data>>::default()),)*
-                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), kind),
+                let node = match type_ {
+                    $(SignalType::$type_ => self.graph().add(<math::$proc<$data>>::default()),)*
+                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), type_),
                 };
 
                 node.input(0).connect(&self.output(0));
@@ -701,19 +711,19 @@ macro_rules! impl_comparison_node_ops {
                 self.assert_single_output();
                 other.assert_single_output();
 
-                let kind = self.output_kind(0);
+                let type_ = self.output_kind(0);
                 assert_eq!(
-                    kind,
+                    type_,
                     other.output_kind(0),
                     "output signals must have the same type"
                 );
 
-                let node = match kind {
-                    SignalKind::Dynamic => self.graph().add(control::$proc::<Signal>::new()),
-                    SignalKind::Bool => self.graph().add(control::$proc::<bool>::default()),
-                    SignalKind::Int => self.graph().add(control::$proc::<i64>::default()),
-                    SignalKind::Float => self.graph().add(control::$proc::<Float>::default()),
-                    SignalKind::String => self.graph().add(control::$proc::<String>::default()),
+                let node = match type_ {
+                    SignalType::Dynamic => self.graph().add(control::$proc::<AnySignal>::new()),
+                    SignalType::Bool => self.graph().add(control::$proc::<bool>::default()),
+                    SignalType::Int => self.graph().add(control::$proc::<i64>::default()),
+                    SignalType::Float => self.graph().add(control::$proc::<Float>::default()),
+                    SignalType::String => self.graph().add(control::$proc::<String>::default()),
                     _ => panic!("unsupported signal type"),
                 };
 
@@ -754,18 +764,18 @@ impl_comparison_node_ops!(
 );
 
 macro_rules! impl_unary_node_ops {
-    ($name:ident, $proc:ident, ($($kind:ident => $data:ty),*), $doc:literal) => {
+    ($name:ident, $proc:ident, ($($type_:ident => $data:ty),*), $doc:literal) => {
         impl Node {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
             pub fn $name(&self) -> Node {
                 self.assert_single_output();
 
-                let kind = self.output_kind(0);
+                let type_ = self.output_kind(0);
 
-                let node = match kind {
-                    $(SignalKind::$kind => self.graph().add(<math::$proc<$data>>::default()),)*
-                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), kind),
+                let node = match type_ {
+                    $(SignalType::$type_ => self.graph().add(<math::$proc<$data>>::default()),)*
+                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), type_),
                 };
 
                 node.input(0).connect(&self.output(0));
