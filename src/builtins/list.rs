@@ -36,7 +36,7 @@ impl Processor for Len {
     ) -> Result<(), ProcessorError> {
         for (out, list) in itertools::izip!(
             outputs.iter_output_mut_as_ints(0)?,
-            inputs.iter_input_as_lists(0)?
+            inputs.iter_input_as_buffers(0)?
         ) {
             let Some(list) = list else {
                 *out = None;
@@ -93,7 +93,7 @@ impl<S: Signal + Clone> Processor for Get<S> {
     ) -> Result<(), ProcessorError> {
         for (out, list, index) in itertools::izip!(
             outputs.iter_output_as::<S>(0)?,
-            inputs.iter_input_as_lists(0)?,
+            inputs.iter_input_as_buffers(0)?,
             inputs.iter_input_as_ints(1)?
         ) {
             let Some(list) = list else {
@@ -115,8 +115,11 @@ impl<S: Signal + Clone> Processor for Get<S> {
             };
 
             *out = list
+                .as_type::<S>()
+                .unwrap()
                 .get(index as usize)
-                .and_then(|s| S::try_from_signal(s.clone()));
+                .cloned()
+                .flatten();
         }
 
         Ok(())
@@ -168,7 +171,7 @@ impl<S: Signal + Clone + Default> Processor for Pack<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let out = outputs.output_as_lists(0)?;
+        let out = outputs.output_as_buffers(0)?;
 
         for (sample_index, out) in out.into_iter().enumerate() {
             for (input_index, input) in inputs.inputs.iter().enumerate() {
@@ -189,17 +192,27 @@ impl<S: Signal + Clone + Default> Processor for Pack<S> {
 
             if let Some(out) = out {
                 // avoid reallocation if the list is already initialized with the correct length
+                let out = out.as_type_mut::<S>().unwrap();
                 if out.len() == self.inputs.len() {
                     for (i, item) in self.inputs.iter().enumerate() {
-                        out.items_mut()[i] = item.clone().into_signal();
+                        out[i] = Some(item.clone());
                     }
                 } else {
                     // reallocate the list *sigh*
                     // FIXME: how do we avoid this?
-                    *out = List::from_iter(self.inputs.iter().cloned());
+                    *out = Buffer::from_slice(&self.inputs);
                 }
             } else {
-                *out = Some(List::from_iter(self.inputs.iter().cloned()));
+                // FIXME: see above
+                let mut buf = SignalBuffer::new_of_kind(S::TYPE, self.inputs.len());
+                {
+                    let buf = buf.as_type_mut::<S>().unwrap();
+                    for (i, item) in self.inputs.iter().enumerate() {
+                        buf[i] = Some(item.clone());
+                    }
+                }
+
+                *out = Some(buf);
             }
         }
 
@@ -223,26 +236,29 @@ impl<S: Signal + Clone + Default> Processor for Pack<S> {
 /// | --- | --- | --- | --- |
 /// | `0..n` | `0..n` | `Any` | The unpacked signals. |
 #[derive(Debug, Clone)]
-pub struct Unpack {
-    type_: SignalType,
+pub struct Unpack<S: Signal + Clone> {
     num_outputs: usize,
+    _phantom: PhantomData<S>,
 }
 
-impl Unpack {
+impl<S: Signal + Clone> Unpack<S> {
     /// Creates a new `Unpack` processor with the specified type and number of outputs.
-    pub fn new(type_: SignalType, num_outputs: usize) -> Self {
-        Self { type_, num_outputs }
+    pub fn new(num_outputs: usize) -> Self {
+        Self {
+            num_outputs,
+            _phantom: PhantomData,
+        }
     }
 }
 
-impl Processor for Unpack {
+impl<S: Signal + Clone> Processor for Unpack<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("list", SignalType::List)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         (0..self.num_outputs)
-            .map(|i| SignalSpec::new(i.to_string(), self.type_))
+            .map(|i| SignalSpec::new(i.to_string(), S::TYPE))
             .collect()
     }
 
@@ -251,7 +267,7 @@ impl Processor for Unpack {
         inputs: ProcessorInputs,
         outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let list_buf = inputs.inputs[0].as_ref().and_then(|s| s.as_list());
+        let list_buf = inputs.inputs[0].as_ref().and_then(|s| s.as_buffer());
 
         if let Some(list_buf) = list_buf {
             for (sample_index, list) in list_buf
@@ -260,50 +276,12 @@ impl Processor for Unpack {
                 .filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
             {
                 for (output_index, output_buf) in outputs.outputs.iter_mut().enumerate() {
-                    if output_buf.type_() != self.type_ {
-                        return Err(ProcessorError::OutputSpecMismatch {
-                            index: output_index,
-                            expected: self.type_,
-                            actual: output_buf.type_(),
-                        });
-                    }
-
-                    match self.type_ {
-                        SignalType::Bool => {
-                            let output_buf = output_buf.as_bool_mut().unwrap();
-                            let value = list.get(output_index).and_then(|s| s.as_bool());
-                            output_buf[sample_index] = value;
-                        }
-                        SignalType::Int => {
-                            let output_buf = output_buf.as_int_mut().unwrap();
-                            let value = list.get(output_index).and_then(|s| s.as_int());
-                            output_buf[sample_index] = value;
-                        }
-                        SignalType::Float => {
-                            let output_buf = output_buf.as_sample_mut().unwrap();
-                            let value = list.get(output_index).and_then(|s| s.as_float());
-                            output_buf[sample_index] = value;
-                        }
-                        SignalType::String => {
-                            let output_buf = output_buf.as_string_mut().unwrap();
-                            let value = list.get(output_index).and_then(|s| s.as_string());
-                            output_buf[sample_index] = value.cloned();
-                        }
-                        SignalType::List => {
-                            let output_buf = output_buf.as_list_mut().unwrap();
-                            let value = list.get(output_index).and_then(|s| s.as_list());
-                            output_buf[sample_index] = value.cloned();
-                        }
-                        SignalType::Midi => {
-                            let output_buf = output_buf.as_midi_mut().unwrap();
-                            let value = list.get(output_index).and_then(|s| s.as_midi());
-                            output_buf[sample_index] = value.copied();
-                        }
-                        SignalType::Dynamic => {
-                            let output_buf = output_buf.as_dynamic_mut().unwrap();
-                            let value = list.get(output_index);
-                            output_buf[sample_index] = value.cloned();
-                        }
+                    let output_buf = output_buf.as_type_mut::<S>().unwrap();
+                    let list = list.as_type::<S>().unwrap();
+                    if output_index < list.len() {
+                        output_buf[sample_index] = list[output_index].clone();
+                    } else {
+                        output_buf[sample_index] = None;
                     }
                 }
             }

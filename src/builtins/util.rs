@@ -10,7 +10,7 @@ use crossbeam_channel::{Receiver, Sender};
 use crate::{
     prelude::{GraphBuilder, Node, Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
-    signal::{Float, List, Signal, SignalType},
+    signal::{Float, Signal, SignalType},
 };
 
 /// A processor that passes its input to its output unchanged.
@@ -115,7 +115,7 @@ impl<S: Signal + Clone, T: Signal + Clone> Processor for Cast<S, T> {
                 actual: in_signal.type_(),
             })?;
 
-        let out_signal = outputs.output(0).as_kind_mut::<T>().unwrap();
+        let out_signal = outputs.output(0).as_type_mut::<T>().unwrap();
 
         for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
             if let Some(in_signal) = in_signal {
@@ -238,13 +238,6 @@ impl Print<bool> {
 impl Print<i64> {
     /// Create a new `Print` processor that prints an integer.
     pub fn new(msg: impl Into<i64>) -> Self {
-        Self { msg: msg.into() }
-    }
-}
-
-impl Print<List> {
-    /// Create a new `Print` processor that prints a list.
-    pub fn new(msg: impl Into<List>) -> Self {
         Self { msg: msg.into() }
     }
 }

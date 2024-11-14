@@ -506,7 +506,7 @@ impl Output {
             SignalType::Int => self.node.graph().add(Passthrough::<i64>::new()),
             SignalType::Float => self.node.graph().add(Passthrough::<Float>::new()),
             SignalType::String => self.node.graph().add(Passthrough::<String>::new()),
-            SignalType::List => self.node.graph().add(Passthrough::<List>::new()),
+            SignalType::List => self.node.graph().add(Passthrough::<SignalBuffer>::new()),
             SignalType::Midi => self.node.graph().add(Passthrough::<MidiMessage>::new()),
         };
         node.input(0).connect(self);
@@ -526,7 +526,7 @@ impl Output {
             SignalType::Int => self.node.graph().add(Register::<i64>::new()),
             SignalType::Float => self.node.graph().add(Register::<Float>::new()),
             SignalType::String => self.node.graph().add(Register::<String>::new()),
-            SignalType::List => self.node.graph().add(Register::<List>::new()),
+            SignalType::List => self.node.graph().add(Register::<SignalBuffer>::new()),
             SignalType::Midi => self.node.graph().add(Register::<MidiMessage>::new()),
         };
         node.input(0).connect(self);
@@ -586,7 +586,7 @@ impl Output {
             SignalType::Int => self.node.graph().add(Cond::<i64>::new()),
             SignalType::Float => self.node.graph().add(Cond::<Float>::new()),
             SignalType::String => self.node.graph().add(Cond::<String>::new()),
-            SignalType::List => self.node.graph().add(Cond::<List>::new()),
+            SignalType::List => self.node.graph().add(Cond::<SignalBuffer>::new()),
             SignalType::Midi => self.node.graph().add(Cond::<MidiMessage>::new()),
         };
         cond.input("cond").connect(self);
@@ -947,9 +947,6 @@ macro_rules! impl_comparison_node_ops {
                 let type_ = self.type_();
 
                 let node = match type_ {
-                    SignalType::Dynamic => {
-                        self.node().graph().add(control::$proc::<AnySignal>::new())
-                    }
                     SignalType::Bool => self.node().graph().add(control::$proc::<bool>::default()),
                     SignalType::Int => self.node().graph().add(control::$proc::<i64>::default()),
                     SignalType::Float => {

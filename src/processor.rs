@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use downcast_rs::{impl_downcast, DowncastSync};
 use thiserror::Error;
 
-use crate::signal::{Buffer, Float, List, MidiMessage, Signal, SignalBuffer, SignalType};
+use crate::signal::{Buffer, Float, MidiMessage, Signal, SignalBuffer, SignalType};
 
 /// Error type for [`Processor`] operations.
 #[derive(Debug, Clone, Error)]
@@ -161,13 +161,13 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         Self::iter_input_as::<String>(self, index).map(|iter| iter.map(Option::as_ref))
     }
 
-    /// Returns an iterator over the input signal at the given index, if it is a [`List`] signal.
+    /// Returns an iterator over the input signal at the given index, if it is a [`Buffer`] signal.
     #[inline]
-    pub fn iter_input_as_lists(
+    pub fn iter_input_as_buffers(
         &self,
         index: usize,
-    ) -> Result<impl Iterator<Item = Option<&List>> + '_, ProcessorError> {
-        Self::iter_input_as::<List>(self, index).map(|iter| iter.map(Option::as_ref))
+    ) -> Result<impl Iterator<Item = Option<&SignalBuffer>> + '_, ProcessorError> {
+        Self::iter_input_as::<SignalBuffer>(self, index).map(|iter| iter.map(Option::as_ref))
     }
 
     /// Returns an iterator over the input signal at the given index, if it is a [`MidiMessage`] signal.
@@ -201,7 +201,7 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn output_as<S: Signal>(&mut self, index: usize) -> Result<&mut Buffer<S>, ProcessorError> {
         let actual = self.output(index).type_();
         self.output(index)
-            .as_kind_mut::<S>()
+            .as_type_mut::<S>()
             .ok_or(ProcessorError::OutputSpecMismatch {
                 index,
                 expected: S::TYPE,
@@ -238,8 +238,11 @@ impl<'a> ProcessorOutputs<'a> {
 
     /// Returns the output signal at the given index, if it is a [`List`] signal.
     #[inline]
-    pub fn output_as_lists(&mut self, index: usize) -> Result<&mut Buffer<List>, ProcessorError> {
-        self.output_as::<List>(index)
+    pub fn output_as_buffers(
+        &mut self,
+        index: usize,
+    ) -> Result<&mut Buffer<SignalBuffer>, ProcessorError> {
+        self.output_as::<SignalBuffer>(index)
     }
 
     /// Returns the output signal at the given index, if it is a [`MidiMessage`] signal.
@@ -302,13 +305,13 @@ impl<'a> ProcessorOutputs<'a> {
         Ok(self.output_as_strings(index)?.iter_mut())
     }
 
-    /// Returns an iterator over the output signal at the given index, if it is a [`List`] signal.
+    /// Returns an iterator over the output signal at the given index, if it is a [`Buffer`] signal.
     #[inline]
     pub fn iter_output_mut_as_lists(
         &mut self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &mut Option<List>> + '_, ProcessorError> {
-        Ok(self.output_as_lists(index)?.iter_mut())
+    ) -> Result<impl Iterator<Item = &mut Option<SignalBuffer>> + '_, ProcessorError> {
+        Ok(self.output_as_buffers(index)?.iter_mut())
     }
 
     /// Returns an iterator over the output signal at the given index, if it is a [`MidiMessage`] signal.

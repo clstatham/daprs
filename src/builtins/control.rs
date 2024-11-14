@@ -73,16 +73,16 @@ macro_rules! comparison_op {
     ($doc:literal, $name:ident, $invert:literal, $op:tt) => {
         #[derive(Debug, Clone, Default)]
         #[doc = $doc]
-        pub struct $name<S: Signal + Clone>(PhantomData<S>);
+        pub struct $name<S: Signal + Clone + PartialEq + PartialOrd>(PhantomData<S>);
 
-        impl<S: Signal + Clone> $name<S> {
+        impl<S: Signal + Clone + PartialEq + PartialOrd> $name<S> {
             #[doc = concat!("Creates a new `", stringify!($name), "` processor.")]
             pub fn new() -> Self {
                 Self(PhantomData)
             }
         }
 
-        impl<S: Signal + Clone> Processor for $name<S> {
+        impl<S: Signal + Clone + PartialEq + PartialOrd> Processor for $name<S> {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![SignalSpec::new("a", S::TYPE), SignalSpec::new("b", S::TYPE)]
             }

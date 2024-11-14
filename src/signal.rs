@@ -232,104 +232,6 @@ impl<'a, T: Signal> IntoIterator for &'a mut Buffer<T> {
     }
 }
 
-/// A list of signals that are all of the same type.
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct List {
-    type_: SignalType,
-    items: Vec<AnySignal>,
-}
-
-impl List {
-    /// Creates an empty list of the given type.
-    pub fn new(type_: SignalType) -> Self {
-        Self {
-            type_,
-            items: Vec::new(),
-        }
-    }
-
-    /// Returns the type of the list.
-    pub fn type_(&self) -> SignalType {
-        self.type_
-    }
-
-    /// Returns a slice of the items in the list.
-    pub fn items(&self) -> &[AnySignal] {
-        &self.items
-    }
-
-    /// Returns a mutable slice of the items in the list.
-    pub fn items_mut(&mut self) -> &mut [AnySignal] {
-        &mut self.items
-    }
-
-    /// Appends an item to the end of the list.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the item type does not match the list type.
-    pub fn push(&mut self, item: AnySignal) {
-        assert_eq!(
-            item.type_(),
-            self.type_,
-            "Item type does not match list type"
-        );
-        self.items.push(item);
-    }
-
-    /// Removes the last item from the list and returns it.
-    pub fn pop(&mut self) -> Option<AnySignal> {
-        self.items.pop()
-    }
-
-    /// Inserts an item at the given index.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the item type does not match the list type.
-    pub fn insert(&mut self, index: usize, item: AnySignal) {
-        assert_eq!(
-            item.type_(),
-            self.type_,
-            "Item type does not match list type"
-        );
-        self.items.insert(index, item);
-    }
-
-    /// Removes the item at the given index and returns it.
-    pub fn remove(&mut self, index: usize) -> AnySignal {
-        self.items.remove(index)
-    }
-
-    /// Returns the number of items in the list.
-    pub fn len(&self) -> usize {
-        self.items.len()
-    }
-
-    /// Returns `true` if the list is empty.
-    pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
-    }
-
-    /// Returns a reference to the item at the given index.
-    pub fn get(&self, index: usize) -> Option<&AnySignal> {
-        self.items.get(index)
-    }
-
-    /// Returns a mutable reference to the item at the given index.
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut AnySignal> {
-        self.items.get_mut(index)
-    }
-}
-
-impl<T: Signal> FromIterator<T> for List {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let type_ = T::TYPE;
-        let items = iter.into_iter().map(T::into_signal).collect();
-        Self { type_, items }
-    }
-}
-
 /// A 3-byte MIDI message.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub struct MidiMessage {
@@ -378,7 +280,7 @@ impl DerefMut for MidiMessage {
 }
 
 /// A trait for types that can be stored in a [`Buffer`] and processed by a [`Processor`](crate::processor::Processor).
-pub trait Signal: Debug + Send + Sync + PartialOrd + PartialEq + 'static {
+pub trait Signal: Debug + Send + Sync + PartialEq + 'static {
     /// The type of the signal.
     const TYPE: SignalType;
 
@@ -542,30 +444,30 @@ impl Signal for String {
     }
 }
 
-impl Signal for List {
+impl Signal for SignalBuffer {
     const TYPE: SignalType = SignalType::List;
 
     #[inline]
     fn into_signal(self) -> AnySignal {
-        AnySignal::List(self)
+        AnySignal::Buffer(self)
     }
 
     #[inline]
     fn try_from_signal(signal: AnySignal) -> Option<Self> {
         match signal {
-            AnySignal::List(list) => Some(list),
+            AnySignal::Buffer(list) => Some(list),
             _ => None,
         }
     }
 
     #[inline]
     fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>> {
-        buffer.as_list()
+        buffer.as_buffer()
     }
 
     #[inline]
     fn try_convert_buffer_mut(buffer: &mut SignalBuffer) -> Option<&mut Buffer<Self>> {
-        buffer.as_list_mut()
+        buffer.as_buffer_mut()
     }
 }
 
@@ -597,7 +499,7 @@ impl Signal for MidiMessage {
 }
 
 /// A type that can hold any signal type.
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AnySignal {
     /// No signal. The inner value is the expected signal type.
     None(SignalType),
@@ -614,8 +516,8 @@ pub enum AnySignal {
     /// A string.
     String(String),
 
-    /// A list of signals.
-    List(List),
+    /// A buffer of signals.
+    Buffer(SignalBuffer),
 
     /// A MIDI message.
     Midi(MidiMessage),
@@ -647,9 +549,9 @@ impl AnySignal {
         Self::String(value.into())
     }
 
-    /// Creates a new list signal.
-    pub fn new_list(value: impl Into<List>) -> Self {
-        Self::List(value.into())
+    /// Creates a new buffer signal.
+    pub fn new_buffer(value: impl Into<SignalBuffer>) -> Self {
+        Self::Buffer(value.into())
     }
 
     /// Creates a new MIDI signal.
@@ -690,7 +592,7 @@ impl AnySignal {
     /// Returns `true` if the signal is a list.
     #[inline]
     pub fn is_list(&self) -> bool {
-        matches!(self, Self::List(_))
+        matches!(self, Self::Buffer(_))
     }
 
     /// Returns `true` if the signal is a MIDI message.
@@ -735,11 +637,11 @@ impl AnySignal {
         }
     }
 
-    /// Returns the list value if the signal is a list, without casting.
+    /// Returns the buffer value if the signal is a buffer, without casting.
     #[inline]
-    pub fn as_list(&self) -> Option<&List> {
+    pub fn as_buffer(&self) -> Option<&SignalBuffer> {
         match self {
-            Self::List(list) => Some(list),
+            Self::Buffer(buf) => Some(buf),
             _ => None,
         }
     }
@@ -761,7 +663,7 @@ impl AnySignal {
             (Self::Int(_), Self::Int(_)) => true,
             (Self::Bool(_), Self::Bool(_)) => true,
             (Self::String(_), Self::String(_)) => true,
-            (Self::List(_), Self::List(_)) => true,
+            (Self::Buffer(_), Self::Buffer(_)) => true,
             (Self::Midi(_), Self::Midi(_)) => true,
             _ => false,
         }
@@ -775,7 +677,7 @@ impl AnySignal {
             Self::Int(_) => SignalType::Int,
             Self::Bool(_) => SignalType::Bool,
             Self::String(_) => SignalType::String,
-            Self::List(_) => SignalType::List,
+            Self::Buffer(_) => SignalType::List,
             Self::Midi(_) => SignalType::Midi,
         }
     }
@@ -870,9 +772,9 @@ impl From<String> for AnySignal {
     }
 }
 
-impl From<List> for AnySignal {
-    fn from(list: List) -> Self {
-        Self::List(list)
+impl From<SignalBuffer> for AnySignal {
+    fn from(buf: SignalBuffer) -> Self {
+        Self::Buffer(buf)
     }
 }
 
@@ -908,7 +810,7 @@ pub enum SignalType {
 }
 
 /// A buffer of signals that can hold any signal type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SignalBuffer {
     /// A dynamic buffer that can hold any type of signal.
     Dynamic(Buffer<AnySignal>),
@@ -925,8 +827,8 @@ pub enum SignalBuffer {
     /// A buffer of string signals.
     String(Buffer<String>),
 
-    /// A buffer of list signals.
-    List(Buffer<List>),
+    /// A buffer of buffer signals.
+    Buffer(Buffer<SignalBuffer>),
 
     /// A buffer of MIDI signals.
     Midi(Buffer<MidiMessage>),
@@ -941,7 +843,7 @@ impl SignalBuffer {
             SignalType::Int => Self::Int(Buffer::zeros(length)),
             SignalType::Bool => Self::Bool(Buffer::zeros(length)),
             SignalType::String => Self::String(Buffer::zeros(length)),
-            SignalType::List => Self::List(Buffer::zeros(length)),
+            SignalType::List => Self::Buffer(Buffer::zeros(length)),
             SignalType::Midi => Self::Midi(Buffer::zeros(length)),
         }
     }
@@ -973,7 +875,7 @@ impl SignalBuffer {
 
     /// Creates a new buffer of list signals with the given length filled with `None`.
     pub fn new_list(length: usize) -> Self {
-        Self::List(Buffer::zeros(length))
+        Self::Buffer(Buffer::zeros(length))
     }
 
     /// Creates a new buffer of MIDI signals with the given length filled with `None`.
@@ -989,7 +891,7 @@ impl SignalBuffer {
             Self::Int(_) => SignalType::Int,
             Self::Bool(_) => SignalType::Bool,
             Self::String(_) => SignalType::String,
-            Self::List(_) => SignalType::List,
+            Self::Buffer(_) => SignalType::List,
             Self::Midi(_) => SignalType::Midi,
         }
     }
@@ -1021,7 +923,7 @@ impl SignalBuffer {
 
     /// Returns `true` if the buffer is for list signals.
     pub const fn is_list(&self) -> bool {
-        matches!(self, Self::List(_))
+        matches!(self, Self::Buffer(_))
     }
 
     /// Returns `true` if the buffer is for MIDI signals.
@@ -1079,11 +981,13 @@ impl SignalBuffer {
         }
     }
 
-    /// Returns a reference to the buffer as a buffer of list signals, if it is a list buffer.
+    /// Returns a reference to the buffer as a buffer of buffer signals, if it is a buffer buffer.
+    ///
+    /// This is not a typo.
     #[inline]
-    pub fn as_list(&self) -> Option<&Buffer<List>> {
+    pub fn as_buffer(&self) -> Option<&Buffer<SignalBuffer>> {
         match self {
-            Self::List(buffer) => Some(buffer),
+            Self::Buffer(buffer) => Some(buffer),
             _ => None,
         }
     }
@@ -1148,11 +1052,13 @@ impl SignalBuffer {
         }
     }
 
-    /// Returns a mutable reference to the buffer as a buffer of list signals, if it is a list buffer.
+    /// Returns a mutable reference to the buffer as a buffer of buffer signals, if it is a buffer buffer.
+    ///
+    /// This is not a typo.
     #[inline]
-    pub fn as_list_mut(&mut self) -> Option<&mut Buffer<List>> {
+    pub fn as_buffer_mut(&mut self) -> Option<&mut Buffer<SignalBuffer>> {
         match self {
-            Self::List(buffer) => Some(buffer),
+            Self::Buffer(buffer) => Some(buffer),
             _ => None,
         }
     }
@@ -1168,7 +1074,7 @@ impl SignalBuffer {
 
     /// Returns a mutable reference to the buffer as a buffer of the given signal type, if it is of that type.
     #[inline]
-    pub fn as_kind_mut<S: Signal>(&mut self) -> Option<&mut Buffer<S>> {
+    pub fn as_type_mut<S: Signal>(&mut self) -> Option<&mut Buffer<S>> {
         S::try_convert_buffer_mut(self)
     }
 
@@ -1181,7 +1087,7 @@ impl SignalBuffer {
             Self::Int(buffer) => buffer.len(),
             Self::Bool(buffer) => buffer.len(),
             Self::String(buffer) => buffer.len(),
-            Self::List(buffer) => buffer.len(),
+            Self::Buffer(buffer) => buffer.len(),
             Self::Midi(buffer) => buffer.len(),
         }
     }
@@ -1211,7 +1117,9 @@ impl SignalBuffer {
             (Self::String(buffer), AnySignal::String(value)) => {
                 buffer.buf.resize(length, Some(value))
             }
-            (Self::List(buffer), AnySignal::List(value)) => buffer.buf.resize(length, Some(value)),
+            (Self::Buffer(buffer), AnySignal::Buffer(value)) => {
+                buffer.buf.resize(length, Some(value))
+            }
             (Self::Midi(buffer), AnySignal::Midi(value)) => buffer.buf.resize(length, Some(value)),
             _ => panic!("Cannot resize buffer with value of different type"),
         }
@@ -1230,7 +1138,7 @@ impl SignalBuffer {
             (Self::Int(buffer), AnySignal::Int(value)) => buffer.fill(Some(value)),
             (Self::Bool(buffer), AnySignal::Bool(value)) => buffer.fill(Some(value)),
             (Self::String(buffer), AnySignal::String(value)) => buffer.fill(Some(value)),
-            (Self::List(buffer), AnySignal::List(value)) => buffer.fill(Some(value)),
+            (Self::Buffer(buffer), AnySignal::Buffer(value)) => buffer.fill(Some(value)),
             (Self::Midi(buffer), AnySignal::Midi(value)) => buffer.fill(Some(value)),
             _ => panic!("Cannot fill buffer with value of different type"),
         }
@@ -1244,7 +1152,7 @@ impl SignalBuffer {
             Self::Int(buffer) => buffer.buf.resize(length, None),
             Self::Bool(buffer) => buffer.buf.resize(length, None),
             Self::String(buffer) => buffer.buf.resize(length, None),
-            Self::List(buffer) => buffer.buf.resize(length, None),
+            Self::Buffer(buffer) => buffer.buf.resize(length, None),
             Self::Midi(buffer) => buffer.buf.resize(length, None),
         }
     }
@@ -1257,7 +1165,7 @@ impl SignalBuffer {
             Self::Int(buffer) => buffer.fill(None),
             Self::Bool(buffer) => buffer.fill(None),
             Self::String(buffer) => buffer.fill(None),
-            Self::List(buffer) => buffer.fill(None),
+            Self::Buffer(buffer) => buffer.fill(None),
             Self::Midi(buffer) => buffer.fill(None),
         }
     }
@@ -1271,7 +1179,7 @@ impl SignalBuffer {
             Self::Int(buffer) => AnySignal::Int(buffer[index].unwrap()),
             Self::Bool(buffer) => AnySignal::Bool(buffer[index].unwrap()),
             Self::String(buffer) => AnySignal::String(buffer[index].clone().unwrap()),
-            Self::List(buffer) => AnySignal::List(buffer[index].clone().unwrap()),
+            Self::Buffer(buffer) => AnySignal::Buffer(buffer[index].clone().unwrap()),
             Self::Midi(buffer) => AnySignal::Midi(buffer[index].unwrap()),
         }
     }
@@ -1298,7 +1206,7 @@ impl SignalBuffer {
             (Self::String(this), Self::String(other)) => {
                 this.clone_from_slice(other);
             }
-            (Self::List(this), Self::List(other)) => {
+            (Self::Buffer(this), Self::Buffer(other)) => {
                 this.clone_from_slice(other);
             }
             (Self::Midi(this), Self::Midi(other)) => {
@@ -1306,5 +1214,59 @@ impl SignalBuffer {
             }
             _ => panic!("Cannot copy buffer of different type"),
         }
+    }
+}
+
+impl FromIterator<Float> for SignalBuffer {
+    fn from_iter<T: IntoIterator<Item = Float>>(iter: T) -> Self {
+        let iter = iter.into_iter().map(Some);
+        Self::Float(Buffer {
+            buf: iter.collect(),
+        })
+    }
+}
+
+impl FromIterator<i64> for SignalBuffer {
+    fn from_iter<T: IntoIterator<Item = i64>>(iter: T) -> Self {
+        let iter = iter.into_iter().map(Some);
+        Self::Int(Buffer {
+            buf: iter.collect(),
+        })
+    }
+}
+
+impl FromIterator<bool> for SignalBuffer {
+    fn from_iter<T: IntoIterator<Item = bool>>(iter: T) -> Self {
+        let iter = iter.into_iter().map(Some);
+        Self::Bool(Buffer {
+            buf: iter.collect(),
+        })
+    }
+}
+
+impl FromIterator<String> for SignalBuffer {
+    fn from_iter<T: IntoIterator<Item = String>>(iter: T) -> Self {
+        let iter = iter.into_iter().map(Some);
+        Self::String(Buffer {
+            buf: iter.collect(),
+        })
+    }
+}
+
+impl FromIterator<SignalBuffer> for SignalBuffer {
+    fn from_iter<T: IntoIterator<Item = SignalBuffer>>(iter: T) -> Self {
+        let iter = iter.into_iter().map(Some);
+        Self::Buffer(Buffer {
+            buf: iter.collect(),
+        })
+    }
+}
+
+impl FromIterator<MidiMessage> for SignalBuffer {
+    fn from_iter<T: IntoIterator<Item = MidiMessage>>(iter: T) -> Self {
+        let iter = iter.into_iter().map(Some);
+        Self::Midi(Buffer {
+            buf: iter.collect(),
+        })
     }
 }
