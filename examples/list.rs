@@ -5,7 +5,7 @@ fn main() {
 
     let graph = GraphBuilder::new();
 
-    let list = graph.constant(List::from(vec![
+    let list = graph.constant(List::from_iter([
         "Hello".to_string(),
         "World".to_string(),
         "!".to_string(),

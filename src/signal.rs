@@ -322,10 +322,10 @@ impl List {
     }
 }
 
-impl<T: Signal> From<Vec<T>> for List {
-    fn from(items: Vec<T>) -> Self {
+impl<T: Signal> FromIterator<T> for List {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let type_ = T::TYPE;
-        let items = items.into_iter().map(T::into_signal).collect();
+        let items = iter.into_iter().map(T::into_signal).collect();
         Self { type_, items }
     }
 }

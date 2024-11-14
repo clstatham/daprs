@@ -187,7 +187,20 @@ impl<S: Signal + Clone + Default> Processor for Pack<S> {
                 }
             }
 
-            *out = Some(List::from(self.inputs.clone()));
+            if let Some(out) = out {
+                // avoid reallocation if the list is already initialized with the correct length
+                if out.len() == self.inputs.len() {
+                    for (i, item) in self.inputs.iter().enumerate() {
+                        out.items_mut()[i] = item.clone().into_signal();
+                    }
+                } else {
+                    // reallocate the list *sigh*
+                    // FIXME: how do we avoid this?
+                    *out = List::from_iter(self.inputs.iter().cloned());
+                }
+            } else {
+                *out = Some(List::from_iter(self.inputs.iter().cloned()));
+            }
         }
 
         Ok(())
