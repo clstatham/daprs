@@ -87,7 +87,7 @@ impl Processor for MoogLadder {
     ) -> Result<(), ProcessorError> {
         // based on: https://github.com/ddiakopoulos/MoogLadders/blob/fd147415573e723ba102dfc63dc46af0b7fe55b9/src/HuovilainenModel.h
         for (out, in_signal, cutoff, resonance) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_floats(1)?,
             inputs.iter_input_as_floats(2)?
@@ -248,7 +248,7 @@ impl Processor for Biquad {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, in_signal, a0, a1, a2, b1, b2) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_floats(1)?,
             inputs.iter_input_as_floats(2)?,
@@ -580,7 +580,7 @@ impl Processor for AutoBiquad {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, in_signal, frequency, q, gain) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_floats(1)?,
             inputs.iter_input_as_floats(2)?,

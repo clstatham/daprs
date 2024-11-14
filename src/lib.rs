@@ -33,6 +33,80 @@ pub mod prelude {
     pub use std::time::Duration;
 }
 
+mod logging {
+    use std::{
+        collections::HashSet,
+        sync::{LazyLock, Mutex},
+    };
+
+    pub(crate) static LOGGED: LazyLock<Mutex<HashSet<String>>> =
+        LazyLock::new(|| Mutex::new(HashSet::with_capacity(16)));
+
+    #[macro_export]
+    macro_rules! log_once {
+        ($val:expr => error $($msg:tt)*) => {{
+            if log::max_level() >= log::LevelFilter::Error && $crate::logging::LOGGED.lock().unwrap().insert($val.to_string()) {
+                log::error!($($msg)*);
+            }
+        }};
+        ($val:expr => warn $($msg:tt)*) => {{
+            if log::max_level() >= log::LevelFilter::Warn && $crate::logging::LOGGED.lock().unwrap().insert($val.to_string()) {
+                log::warn!($($msg)*);
+            }
+        }};
+        ($val:expr => info $($msg:tt)*) => {{
+            if log::max_level() >= log::LevelFilter::Info && $crate::logging::LOGGED.lock().unwrap().insert($val.to_string()) {
+                log::info!($($msg)*);
+            }
+        }};
+        ($val:expr => debug $($msg:tt)*) => {{
+            if log::max_level() >= log::LevelFilter::Debug && $crate::logging::LOGGED.lock().unwrap().insert($val.to_string()) {
+                log::debug!($($msg)*);
+            }
+        }};
+        ($val:expr => trace $($msg:tt)*) => {{
+            if log::max_level() >= log::LevelFilter::Trace && $crate::logging::LOGGED.lock().unwrap().insert($val.to_string()) {
+                log::trace!($($msg)*);
+            }
+        }};
+    }
+
+    #[macro_export]
+    macro_rules! error_once {
+        ($val:expr => $($msg:tt)*) => {
+            $crate::log_once!($val => error $($msg)*);
+        };
+    }
+
+    #[macro_export]
+    macro_rules! warn_once {
+        ($val:expr => $($msg:tt)*) => {
+            $crate::log_once!($val => warn $($msg)*);
+        };
+    }
+
+    #[macro_export]
+    macro_rules! info_once {
+        ($val:expr => $($msg:tt)*) => {
+            $crate::log_once!($val => info $($msg)*);
+        };
+    }
+
+    #[macro_export]
+    macro_rules! debug_once {
+        ($val:expr => $($msg:tt)*) => {
+            $crate::log_once!($val => debug $($msg)*);
+        };
+    }
+
+    #[macro_export]
+    macro_rules! trace_once {
+        ($val:expr => $($msg:tt)*) => {
+            $crate::log_once!($val => trace $($msg)*);
+        };
+    }
+}
+
 /// Returns a list of available audio backends, as exposed by the `cpal` crate.
 pub fn available_audio_backends() -> Vec<AudioBackend> {
     let mut backends = vec![];

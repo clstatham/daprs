@@ -115,7 +115,7 @@ impl Processor for MidiToFreq {
     ) -> Result<(), ProcessorError> {
         for (note, freq) in itertools::izip!(
             inputs.iter_input_as_floats(0)?,
-            outputs.iter_output_mut_as_samples(0)?
+            outputs.iter_output_mut_as_floats(0)?
         ) {
             let Some(note) = note else {
                 *freq = None;
@@ -160,7 +160,7 @@ impl Processor for FreqToMidi {
     ) -> Result<(), ProcessorError> {
         for (freq, note) in itertools::izip!(
             inputs.iter_input_as_floats(0)?,
-            outputs.iter_output_mut_as_samples(0)?
+            outputs.iter_output_mut_as_floats(0)?
         ) {
             let Some(freq) = freq else {
                 *note = None;
@@ -218,12 +218,12 @@ impl Expr {
         self.context.clear_variables();
         for (name, value) in self.input_values.iter() {
             self.context
-                .set_value(name.to_string(), evalexpr::Value::from_float(*value))
+                .set_value(name.to_string(), evalexpr::Value::from_float(*value as f64))
                 .unwrap();
         }
         self.expr
             .eval_float_with_context_mut(&mut self.context)
-            .unwrap()
+            .unwrap() as Float
     }
 }
 
@@ -251,7 +251,7 @@ impl Processor for Expr {
             self.input_values.clear();
 
             for (inp_idx, name) in self.inputs.iter().enumerate() {
-                let buffer = &inputs.inputs[inp_idx].unwrap();
+                let buffer = &inputs.input(inp_idx).unwrap();
                 let buffer = buffer.as_float().ok_or(ProcessorError::InputSpecMismatch {
                     index: inp_idx,
                     expected: SignalType::Float,

@@ -21,7 +21,7 @@ impl Processor for GainProc {
     ) -> Result<(), ProcessorError> {
         for (input, output) in itertools::izip!(
             inputs.iter_input_as_floats(0)?,
-            outputs.iter_output_mut_as_samples(0)?
+            outputs.iter_output_mut_as_floats(0)?
         ) {
             let Some(input) = input else {
                 *output = None;

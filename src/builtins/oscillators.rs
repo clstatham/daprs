@@ -50,11 +50,11 @@ impl Processor for PhaseAccumulator {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, increment, reset) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_bools(1)?
         ) {
-            if let Some(true) = reset {
+            if reset.unwrap_or(false) {
                 self.t = 0.0;
             }
 
@@ -118,7 +118,7 @@ impl Default for SineOscillator {
             t: 0.0,
             t_step: 0.0,
             sample_rate: 0.0,
-            frequency: 440.0,
+            frequency: 0.0,
             phase: 0.0,
         }
     }
@@ -147,7 +147,7 @@ impl Processor for SineOscillator {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, frequency, phase, reset) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_floats(1)?,
             inputs.iter_input_as_bools(2)?
@@ -165,12 +165,13 @@ impl Processor for SineOscillator {
             }
 
             // calculate the sine wave using the phase accumulator
-            let sine = (self.t * TAU + self.phase).sin();
+            let sine = (self.t / self.sample_rate * TAU + self.phase).sin();
             *out = Some(sine);
 
             // increment the phase accumulator
-            self.t_step = self.frequency / self.sample_rate;
+            self.t_step = self.frequency;
             self.t += self.t_step;
+            self.t %= self.sample_rate;
         }
 
         Ok(())
@@ -215,7 +216,7 @@ impl Default for SawOscillator {
             t: 0.0,
             t_step: 0.0,
             sample_rate: 0.0,
-            frequency: 440.0,
+            frequency: 0.0,
             phase: 0.0,
         }
     }
@@ -254,7 +255,7 @@ impl Processor for SawOscillator {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, frequency, phase, reset) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_floats(1)?,
             inputs.iter_input_as_bools(2)?
@@ -272,11 +273,12 @@ impl Processor for SawOscillator {
             }
 
             // calculate the sawtooth wave using the phase accumulator
-            *out = Some((self.t + self.phase) % 1.0);
+            *out = Some((self.t / self.sample_rate + self.phase) % 1.0);
 
             // increment the phase accumulator
-            self.t_step = self.frequency / self.sample_rate;
+            self.t_step = self.frequency;
             self.t += self.t_step;
+            self.t %= self.sample_rate;
         }
 
         Ok(())
@@ -329,7 +331,7 @@ impl Processor for NoiseOscillator {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let mut rng = rand::thread_rng();
-        for out in outputs.iter_output_mut_as_samples(0)? {
+        for out in outputs.iter_output_mut_as_floats(0)? {
             // generate a random number
             *out = Some(self.distribution.sample(&mut rng) as Float);
         }
@@ -369,7 +371,7 @@ impl Default for BlSawOscillator {
             dp: 1.0,
             saw: 0.0,
             sample_rate: 0.0,
-            frequency: 440.0,
+            frequency: 0.0,
         }
     }
 }
@@ -404,7 +406,7 @@ impl Processor for BlSawOscillator {
     ) -> Result<(), ProcessorError> {
         // algorithm courtesy of https://www.musicdsp.org/en/latest/Synthesis/12-bandlimited-waveforms.html
         for (out, frequency) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?
         ) {
             self.frequency = frequency.unwrap_or(self.frequency);
@@ -476,7 +478,7 @@ pub struct BlSquareOscillator {
 
 impl Default for BlSquareOscillator {
     fn default() -> Self {
-        Self::new(440.0, 0.5)
+        Self::new(0.0, 0.5)
     }
 }
 
@@ -516,7 +518,7 @@ impl Processor for BlSquareOscillator {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, frequency, pulse_width) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_floats(1)?
         ) {

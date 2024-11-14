@@ -1019,6 +1019,7 @@ dependencies = [
  "petgraph",
  "rand",
  "rustc-hash 2.0.0",
+ "smallvec",
  "thiserror",
 ]
 

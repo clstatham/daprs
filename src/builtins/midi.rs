@@ -34,7 +34,7 @@ impl Processor for MidiNote {
     ) -> Result<(), ProcessorError> {
         for (midi, out) in itertools::izip!(
             inputs.iter_input_as_midi(0)?,
-            outputs.iter_output_mut_as_samples(0)?
+            outputs.iter_output_mut_as_floats(0)?
         ) {
             *out = None;
             if let Some(msg) = midi {
@@ -80,7 +80,7 @@ impl Processor for MidiVelocity {
     ) -> Result<(), ProcessorError> {
         for (midi, out) in itertools::izip!(
             inputs.iter_input_as_midi(0)?,
-            outputs.iter_output_mut_as_samples(0)?
+            outputs.iter_output_mut_as_floats(0)?
         ) {
             *out = None;
             if let Some(msg) = midi {
@@ -220,7 +220,7 @@ impl Processor for MidiChannel {
     ) -> Result<(), ProcessorError> {
         for (midi, out) in itertools::izip!(
             inputs.iter_input_as_midi(0)?,
-            outputs.iter_output_mut_as_samples(0)?
+            outputs.iter_output_mut_as_floats(0)?
         ) {
             *out = None;
             if let Some(msg) = midi {

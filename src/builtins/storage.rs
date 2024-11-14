@@ -64,7 +64,7 @@ impl Processor for AudioBuffer {
         let (mut outputs0, mut outputs1) = outputs.split_at_mut(1);
 
         for (out, length, index, write) in itertools::izip!(
-            outputs0.iter_output_mut_as_samples(0)?,
+            outputs0.iter_output_mut_as_floats(0)?,
             outputs1.iter_output_mut_as_ints(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_floats(1)?,

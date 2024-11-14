@@ -458,7 +458,10 @@ impl Signal for String {
 }
 
 impl Signal for SignalBuffer {
-    const TYPE: SignalType = SignalType::List;
+    const TYPE: SignalType = SignalType::List {
+        size: None,
+        element_type: None,
+    };
 
     #[inline]
     fn into_signal(self) -> AnySignal {
@@ -685,12 +688,20 @@ impl AnySignal {
     /// Returns the type of the signal.
     pub fn type_(&self) -> SignalType {
         match self {
-            Self::None(type_) => *type_,
+            Self::None(type_) => type_.clone(),
             Self::Float(_) => SignalType::Float,
             Self::Int(_) => SignalType::Int,
             Self::Bool(_) => SignalType::Bool,
             Self::String(_) => SignalType::String,
-            Self::List(_) => SignalType::List,
+            Self::List(l) => SignalType::List {
+                size: l
+                    .as_buffer()
+                    .and_then(|b| b.iter().find_map(|s| s.as_ref()).map(|s| s.len())),
+                element_type: l
+                    .as_buffer()
+                    .and_then(|b| b.iter().find_map(|s| s.as_ref()).map(|s| s.type_()))
+                    .map(Box::new),
+            },
             Self::Midi(_) => SignalType::Midi,
         }
     }
@@ -798,7 +809,7 @@ impl From<MidiMessage> for AnySignal {
 }
 
 /// A signal type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SignalType {
     /// A dynamic signal that can hold any type.
     Dynamic,
@@ -816,10 +827,48 @@ pub enum SignalType {
     String,
 
     /// A list signal.
-    List,
+    List {
+        size: Option<usize>,
+        element_type: Option<Box<SignalType>>,
+    },
 
     /// A MIDI signal.
     Midi,
+}
+
+impl SignalType {
+    pub fn is_compatible_with(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Dynamic, _) => true,
+            (_, Self::Dynamic) => true,
+            (Self::Float, Self::Float) => true,
+            (Self::Int, Self::Int) => true,
+            (Self::Bool, Self::Bool) => true,
+            (Self::String, Self::String) => true,
+            (
+                Self::List {
+                    size: None,
+                    element_type: None,
+                },
+                Self::List {
+                    size: None,
+                    element_type: None,
+                },
+            ) => true,
+            (Self::Midi, Self::Midi) => true,
+            (
+                Self::List {
+                    element_type: Some(element_type),
+                    ..
+                },
+                Self::List {
+                    element_type: Some(other_element_type),
+                    ..
+                },
+            ) => element_type.is_compatible_with(other_element_type),
+            _ => false,
+        }
+    }
 }
 
 /// A buffer of signals that can hold any signal type.
@@ -849,14 +898,25 @@ pub enum SignalBuffer {
 
 impl SignalBuffer {
     /// Creates a new buffer of the given type with the given length filled with `None`.
-    pub fn new_of_kind(type_: SignalType, length: usize) -> Self {
+    pub fn new_of_type(type_: &SignalType, length: usize) -> Self {
         match type_ {
             SignalType::Dynamic => Self::Dynamic(Buffer::zeros(length)),
             SignalType::Float => Self::Float(Buffer::zeros(length)),
             SignalType::Int => Self::Int(Buffer::zeros(length)),
             SignalType::Bool => Self::Bool(Buffer::zeros(length)),
             SignalType::String => Self::String(Buffer::zeros(length)),
-            SignalType::List => Self::List(Buffer::zeros(length)),
+            SignalType::List { size, element_type } => match (size, element_type) {
+                (Some(size), Some(element_type)) => {
+                    let element_type = *element_type.clone();
+                    let buf =
+                        Buffer::from_slice(&vec![
+                            SignalBuffer::new_of_type(&element_type, *size);
+                            length
+                        ]);
+                    Self::List(buf)
+                }
+                _ => Self::List(Buffer::zeros(length)),
+            },
             SignalType::Midi => Self::Midi(Buffer::zeros(length)),
         }
     }
@@ -904,7 +964,15 @@ impl SignalBuffer {
             Self::Int(_) => SignalType::Int,
             Self::Bool(_) => SignalType::Bool,
             Self::String(_) => SignalType::String,
-            Self::List(_) => SignalType::List,
+            Self::List(l) => {
+                let size = l.iter().find_map(|s| s.as_ref()).map(|s| s.len());
+                let element_type = l
+                    .iter()
+                    .find_map(|s| s.as_ref())
+                    .map(|s| s.type_())
+                    .map(Box::new);
+                SignalType::List { size, element_type }
+            }
             Self::Midi(_) => SignalType::Midi,
         }
     }
@@ -1168,6 +1236,16 @@ impl SignalBuffer {
         }
     }
 
+    /// Resizes the buffer based on the given type hint.
+    pub fn resize_with_hint(&mut self, length: usize, type_hint: &SignalType) {
+        let type_ = self.type_();
+        if type_.is_compatible_with(type_hint) {
+            self.resize_default(length);
+        } else {
+            *self = Self::new_of_type(type_hint, length);
+        }
+    }
+
     /// Fills the buffer with `None`.
     pub fn fill_default(&mut self) {
         match self {
@@ -1178,6 +1256,16 @@ impl SignalBuffer {
             Self::String(buffer) => buffer.fill(None),
             Self::List(buffer) => buffer.fill(None),
             Self::Midi(buffer) => buffer.fill(None),
+        }
+    }
+
+    /// Fills the buffer based on the given type hint.
+    pub fn fill_with_hint(&mut self, type_hint: &SignalType) {
+        let type_ = self.type_();
+        if type_.is_compatible_with(type_hint) {
+            self.fill_default();
+        } else {
+            *self = Self::new_of_type(type_hint, self.len());
         }
     }
 

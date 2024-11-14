@@ -163,7 +163,9 @@ pub fn generative1(num_tones: usize) -> GraphBuilder {
     let out1 = graph.add_audio_output();
     let out2 = graph.add_audio_output();
 
-    let amp = graph.add_param(Param::<Float>::new("amp", Some(0.5)));
+    let amp = graph
+        .add_param(Param::<Float>::new("amp", Some(0.5)))
+        .make_register();
 
     let mut tones = vec![];
     for i in 0..num_tones {

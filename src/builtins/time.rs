@@ -1,5 +1,7 @@
 //! Time-related processors.
 
+use std::collections::VecDeque;
+
 use crate::{
     prelude::{Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
@@ -23,9 +25,9 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Metro {
     period: Float,
-    last_time: Float,
-    next_time: Float,
-    time: Float,
+    last_time: u64,
+    next_time: u64,
+    time: u64,
     sample_rate: Float,
 }
 
@@ -34,9 +36,9 @@ impl Metro {
     pub fn new(period: Float) -> Self {
         Self {
             period,
-            last_time: 0.0,
-            next_time: 0.0,
-            time: 0.0,
+            last_time: 0,
+            next_time: 0,
+            time: 0,
             sample_rate: 0.0,
         }
     }
@@ -44,13 +46,13 @@ impl Metro {
     fn next_sample(&mut self) -> bool {
         let out = if self.time >= self.next_time {
             self.last_time = self.time;
-            self.next_time = self.time + self.period;
+            self.next_time = self.time + (self.period * self.sample_rate) as u64;
             true
         } else {
             false
         };
 
-        self.time += self.sample_rate.recip();
+        self.time += 1;
 
         out
     }
@@ -89,9 +91,9 @@ impl Processor for Metro {
             outputs.iter_output_mut_as_bools(0)?
         ) {
             if reset.unwrap_or(false) {
-                self.time = 0.0;
-                self.last_time = 0.0;
-                self.next_time = 0.0;
+                self.time = 0;
+                self.last_time = 0;
+                self.next_time = 0;
             }
 
             self.period = period.unwrap_or(self.period);
@@ -149,7 +151,7 @@ impl Processor for UnitDelay {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, in_signal) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?
         ) {
             *out = self.value;
@@ -176,17 +178,15 @@ impl Processor for UnitDelay {
 /// | `0` | `out` | `Float` | The delayed signal. |
 #[derive(Debug, Clone)]
 pub struct SampleDelay {
-    play_head: usize,
-    buffer: Buffer<Float>,
+    buffer: VecDeque<Float>,
 }
 
 impl SampleDelay {
     /// Creates a new `SampleDelay` processor with the given maximum delay.
     pub fn new(max_delay: usize) -> Self {
-        let buffer = Buffer::zeros(max_delay + 1);
+        let buffer = Vec::with_capacity(max_delay + 1);
         Self {
-            buffer,
-            play_head: 0,
+            buffer: buffer.into(),
         }
     }
 }
@@ -209,7 +209,7 @@ impl Processor for SampleDelay {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, in_signal, delay) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_ints(1)?
         ) {
@@ -217,15 +217,13 @@ impl Processor for SampleDelay {
             let delay = delay.unwrap_or_default() as usize;
             let delay = delay.min(buffer_len - 1);
 
-            self.buffer[self.play_head] = in_signal;
+            if buffer_len != delay + 1 {
+                self.buffer.resize(delay + 1, 0.0);
+            }
 
-            self.play_head = (self.play_head + 1) % buffer_len;
+            *out = Some(self.buffer.pop_front().unwrap_or(0.0));
 
-            let delay_head = (self.play_head + buffer_len - delay) % buffer_len;
-
-            let delayed = self.buffer[delay_head];
-
-            *out = delayed;
+            self.buffer.push_back(in_signal.unwrap_or(0.0));
         }
 
         Ok(())
@@ -306,7 +304,7 @@ impl Processor for DecayEnv {
         for (trig, tau, out) in itertools::izip!(
             inputs.iter_input_as_bools(0)?,
             inputs.iter_input_as_floats(1)?,
-            outputs.iter_output_mut_as_samples(0)?
+            outputs.iter_output_mut_as_floats(0)?
         ) {
             self.tau = tau.unwrap_or(self.tau);
             let trig = trig.unwrap_or(false);

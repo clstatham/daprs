@@ -84,7 +84,7 @@ impl Processor for PeakLimiter {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (out, in_signal, threshold, attack, release) in itertools::izip!(
-            outputs.iter_output_mut_as_samples(0)?,
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_floats(1)?,
             inputs.iter_input_as_floats(2)?,

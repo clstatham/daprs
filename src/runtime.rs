@@ -10,6 +10,7 @@ use petgraph::prelude::*;
 use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::{
+    debug_once,
     graph::{Graph, GraphRunError, GraphRunErrorType, NodeIndex},
     prelude::{ProcessorInputs, SignalSpec},
     processor::{ProcessorError, ProcessorOutputs},
@@ -123,8 +124,8 @@ pub(crate) struct NodeBuffers {
 
 impl NodeBuffers {
     pub fn resize(&mut self, block_size: usize) {
-        for output in &mut self.outputs {
-            output.resize_default(block_size);
+        for (output, output_spec) in self.outputs.iter_mut().zip(&self.output_spec) {
+            output.resize_with_hint(block_size, &output_spec.type_);
         }
     }
 }
@@ -151,7 +152,7 @@ impl Runtime {
                 let mut outputs = Vec::with_capacity(output_spec.len());
 
                 for spec in output_spec {
-                    let buffer = SignalBuffer::new_of_kind(spec.type_, 0);
+                    let buffer = SignalBuffer::new_of_type(&spec.type_, 0);
                     outputs.push(buffer);
                 }
 
@@ -195,7 +196,7 @@ impl Runtime {
                 let mut outputs = Vec::with_capacity(output_spec.len());
 
                 for spec in output_spec {
-                    let buffer = SignalBuffer::new_of_kind(spec.type_, block_size);
+                    let buffer = SignalBuffer::new_of_type(&spec.type_, block_size);
                     outputs.push(buffer);
                 }
 
@@ -257,7 +258,15 @@ impl Runtime {
         for i in 0..path_len {
             let node_id = self.graph.visit_path()[i];
 
-            let mut inputs = [None; 64]; // FIXME: magic number
+            let num_inputs = self.buffer_cache[&node_id].input_spec.len();
+
+            // Note on the choice of SmallVec array size:
+            // Some processors can have arbitrarily large numbers of inputs, such as the `Pack`
+            // processor. However, in practice, most processors have a small number of inputs.
+            // We choose a small array size here to optimize for the common case, and fall back to
+            // the heap for larger numbers of inputs as a trade-off that's kind of on the user to
+            // make if they want to make really long lists or something. Couldn't be me.
+            let mut inputs: smallvec::SmallVec<[_; 8]> = smallvec::smallvec![None; num_inputs];
 
             let mut buffers = self.buffer_cache.remove(&node_id).unwrap();
 
@@ -274,15 +283,13 @@ impl Runtime {
 
             let node = self.graph.digraph_mut().node_weight_mut(node_id).unwrap();
 
+            if inputs.spilled() {
+                debug_once!(format!("{}_spilled", node_id.index()) => "Input array for {} ({}) spilled over to the heap (has {} inputs > 8)", node.name(), node_id.index(), num_inputs);
+            }
+
             let result = node.process(
-                ProcessorInputs {
-                    input_specs: &buffers.input_spec,
-                    inputs: &inputs[..],
-                },
-                ProcessorOutputs {
-                    output_spec: &buffers.output_spec,
-                    outputs: &mut buffers.outputs,
-                },
+                ProcessorInputs::new(&buffers.input_spec, &inputs[..]),
+                ProcessorOutputs::new(&buffers.output_spec, &mut buffers.outputs),
             );
 
             if let Err(err) = result {
@@ -295,6 +302,8 @@ impl Runtime {
                 };
                 return Err(RuntimeError::GraphRunError(error));
             }
+
+            drop(inputs);
 
             self.buffer_cache.insert(node_id, buffers);
         }
@@ -642,16 +651,19 @@ impl Runtime {
         let channels = config.channels as usize;
         let audio_rate = config.sample_rate.0 as Float;
 
+        let mut last_block_size = 0;
         let stream = device
             .build_output_stream(
                 config,
                 move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
+                    let block_size = data.len() / channels;
                     if let Ok(graph) = graph_rx.try_recv() {
                         self.graph = graph;
-                        self.reset(audio_rate, data.len() / channels).unwrap();
+                        self.reset(audio_rate, block_size).unwrap();
                         self.prepare().unwrap();
-                    } else {
-                        self.reset(audio_rate, data.len() / channels).unwrap();
+                    } else if block_size != last_block_size {
+                        self.reset(audio_rate, block_size).unwrap();
+                        last_block_size = block_size;
                     }
 
                     self.process().unwrap();

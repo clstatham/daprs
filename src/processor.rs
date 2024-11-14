@@ -77,29 +77,49 @@ impl SignalSpec {
 #[derive(Debug, Clone, Copy)]
 pub struct ProcessorInputs<'a, 'b> {
     /// The specifications of the input signals.
-    pub input_specs: &'a [SignalSpec],
+    input_specs: &'a [SignalSpec],
 
     /// The input signals.
-    pub inputs: &'a [Option<&'b SignalBuffer>],
+    inputs: &'a [Option<&'b SignalBuffer>],
 }
 
 impl<'a, 'b> ProcessorInputs<'a, 'b> {
+    #[inline]
+    pub(crate) fn new(
+        input_specs: &'a [SignalSpec],
+        inputs: &'a [Option<&'b SignalBuffer>],
+    ) -> Self {
+        Self {
+            input_specs,
+            inputs,
+        }
+    }
+
     /// Returns the number of input signals.
     #[inline]
     pub fn num_inputs(&self) -> usize {
         self.input_specs.len()
     }
 
+    /// Returns the specification of the input signal at the given index.
+    #[inline]
+    pub fn input_spec(&self, index: usize) -> &SignalSpec {
+        &self.input_specs[index]
+    }
+
     /// Returns the input signal at the given index. Unconnected inputs are represented as `None`.
     #[inline]
     pub fn input(&self, index: usize) -> Option<&'b SignalBuffer> {
+        if index >= self.num_inputs() {
+            return None;
+        }
         self.inputs[index]
     }
 
     /// Returns an iterator over the input signals. Unconnected inputs are represented as `None`.
     #[inline]
     pub fn iter(&self) -> impl Iterator<Item = Option<&'b SignalBuffer>> + '_ {
-        self.inputs.iter().copied()
+        self.inputs.iter().take(self.num_inputs()).copied()
     }
 
     /// Returns an iterator over the input signal at the given index, if it is of the given type.
@@ -113,7 +133,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         if let Some(input) = buffer {
             let input = input
                 .as_type::<S>()
-                .ok_or(ProcessorError::InputSpecMismatch {
+                .ok_or_else(|| ProcessorError::InputSpecMismatch {
                     index,
                     expected: S::TYPE,
                     actual: input.type_(),
@@ -183,17 +203,31 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
 /// A collection of output signals for a [`Processor`] and their specifications.
 pub struct ProcessorOutputs<'a> {
     /// The specifications of the output signals.
-    pub output_spec: &'a [SignalSpec],
+    output_spec: &'a [SignalSpec],
 
     /// The output signals.
-    pub outputs: &'a mut [SignalBuffer],
+    outputs: &'a mut [SignalBuffer],
 }
 
 impl<'a> ProcessorOutputs<'a> {
+    #[inline]
+    pub(crate) fn new(output_spec: &'a [SignalSpec], outputs: &'a mut [SignalBuffer]) -> Self {
+        Self {
+            output_spec,
+            outputs,
+        }
+    }
+
     /// Returns the output signal at the given index.
     #[inline]
     pub fn output(&mut self, index: usize) -> &mut SignalBuffer {
         &mut self.outputs[index]
+    }
+
+    /// Returns the specification of the output signal at the given index.
+    #[inline]
+    pub fn output_spec(&self, index: usize) -> &SignalSpec {
+        &self.output_spec[index]
     }
 
     /// Returns the output signal at the given index, if it is of the given type.
@@ -271,7 +305,7 @@ impl<'a> ProcessorOutputs<'a> {
 
     /// Returns an iterator over the output signal at the given index, if it is a [`Float`] signal.
     #[inline]
-    pub fn iter_output_mut_as_samples(
+    pub fn iter_output_mut_as_floats(
         &mut self,
         index: usize,
     ) -> Result<impl Iterator<Item = &mut Option<Float>> + '_, ProcessorError> {

@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use crate::prelude::*;
+use crate::{error_once, prelude::*};
 
 /// A processor that computes the length of a list.
 ///
@@ -22,7 +22,13 @@ pub struct Len;
 
 impl Processor for Len {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("list", SignalType::List)]
+        vec![SignalSpec::new(
+            "list",
+            SignalType::List {
+                size: None,
+                element_type: None,
+            },
+        )]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -77,7 +83,13 @@ impl<S: Signal + Copy> Get<S> {
 impl<S: Signal + Copy> Processor for Get<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("list", SignalType::List),
+            SignalSpec::new(
+                "list",
+                SignalType::List {
+                    size: None,
+                    element_type: Some(Box::new(S::TYPE)),
+                },
+            ),
             SignalSpec::new("index", SignalType::Int),
         ]
     }
@@ -163,7 +175,13 @@ impl<S: Signal + Copy> Processor for Pack<S> {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalType::List)]
+        vec![SignalSpec::new(
+            "out",
+            SignalType::List {
+                size: Some(self.inputs.len()),
+                element_type: Some(Box::new(S::TYPE)),
+            },
+        )]
     }
 
     fn process(
@@ -175,7 +193,8 @@ impl<S: Signal + Copy> Processor for Pack<S> {
 
         for (sample_index, out) in out.into_iter().enumerate() {
             let mut any_some = false;
-            for (input_index, input) in inputs.inputs.iter().enumerate() {
+
+            for (input_index, input) in inputs.iter().enumerate() {
                 if let Some(buf) = input.as_ref() {
                     let buf =
                         buf.as_type::<S>()
@@ -193,25 +212,24 @@ impl<S: Signal + Copy> Processor for Pack<S> {
                 }
             }
 
-            if any_some {
-                if let Some(out) = out {
-                    // avoid reallocation if the list is already initialized with the correct length
-                    if out.len() == self.inputs.len() {
-                        let out = out.as_type_mut::<S>().unwrap();
-                        out.copy_from(&self.inputs);
-
-                        continue;
-                    }
-                }
-
-                // we need to reallocate the list
-                let mut buf = SignalBuffer::new_of_kind(S::TYPE, self.inputs.len());
-                {
-                    let buf = buf.as_type_mut::<S>().unwrap();
-                    buf.copy_from(&self.inputs);
-                }
-                *out = Some(buf);
+            if !any_some {
+                // be lazy if all inputs are None
+                // this saves us from allocating a list or cloning the inputs
+                continue;
             }
+
+            if let Some(out) = out {
+                // avoid reallocation if the list is already initialized with the correct length
+                if out.len() == self.inputs.len() {
+                    let out = out.as_type_mut::<S>().unwrap();
+                    out.copy_from(&self.inputs);
+
+                    continue;
+                }
+            }
+
+            // we should only get here if the list is not initialized or has the wrong length
+            error_once!("pack_list" => "list is not initialized or has the wrong length");
         }
 
         Ok(())
@@ -251,7 +269,13 @@ impl<S: Signal + Copy> Unpack<S> {
 
 impl<S: Signal + Copy> Processor for Unpack<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("list", SignalType::List)]
+        vec![SignalSpec::new(
+            "list",
+            SignalType::List {
+                size: Some(self.num_outputs),
+                element_type: Some(Box::new(S::TYPE)),
+            },
+        )]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -263,9 +287,9 @@ impl<S: Signal + Copy> Processor for Unpack<S> {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        outputs: ProcessorOutputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let list_buf = inputs.inputs[0].as_ref().and_then(|s| s.as_buffer());
+        let list_buf = inputs.input(0).as_ref().and_then(|s| s.as_buffer());
 
         if let Some(list_buf) = list_buf {
             for (sample_index, list) in list_buf
@@ -273,7 +297,7 @@ impl<S: Signal + Copy> Processor for Unpack<S> {
                 .enumerate()
                 .filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
             {
-                for (output_index, output_buf) in outputs.outputs.iter_mut().enumerate() {
+                for (output_index, output_buf) in outputs.iter_mut().enumerate() {
                     let list =
                         list.as_type::<S>()
                             .ok_or_else(|| ProcessorError::InputSpecMismatch {

@@ -10,6 +10,18 @@ use crate::{
 
 use super::graph_builder::GraphBuilder;
 
+#[inline]
+#[track_caller]
+fn assert_signals_compatible(a: &SignalType, b: &SignalType, op: impl Into<String>) {
+    assert!(
+        a.is_compatible_with(b),
+        "{}: signal types are not compatible: {:?} and {:?}",
+        op.into(),
+        a,
+        b
+    );
+}
+
 /// Represents a node in the audio graph. This type is used to build connections between nodes.
 #[derive(Clone)]
 pub struct Node {
@@ -134,8 +146,11 @@ impl Node {
             index,
             self.name()
         );
-        self.graph
-            .with_graph(|graph| graph.digraph()[self.id()].input_spec()[index as usize].type_)
+        self.graph.with_graph(|graph| {
+            graph.digraph()[self.id()].input_spec()[index as usize]
+                .type_
+                .clone()
+        })
     }
 
     /// Returns the signal type of the output at the given index.
@@ -153,8 +168,11 @@ impl Node {
             index,
             self.name()
         );
-        self.graph
-            .with_graph(|graph| graph.digraph()[self.id()].output_spec()[index as usize].type_)
+        self.graph.with_graph(|graph| {
+            graph.digraph()[self.id()].output_spec()[index as usize]
+                .type_
+                .clone()
+        })
     }
 
     /// Connects the output of another node to the input of this node.
@@ -176,10 +194,10 @@ impl Node {
         let source_output = source_output.into_output_idx(&output);
         let target_input = target_input.into_input_idx(self);
 
-        assert_eq!(
-            output.output_type(source_output),
-            self.input_type(target_input),
-            "output and input signals must have the same type"
+        assert_signals_compatible(
+            &output.output_type(source_output),
+            &self.input_type(target_input),
+            "connect_input",
         );
         assert!(
             target_input < self.num_inputs() as u32,
@@ -218,10 +236,10 @@ impl Node {
         let output_index = output.into_output_idx(self);
         let target_input = target_input.into_input_idx(&target);
 
-        assert_eq!(
-            self.output_type(output_index),
-            target.input_type(target_input),
-            "output and input signals must have the same type"
+        assert_signals_compatible(
+            &self.output_type(output_index),
+            &target.input_type(target_input),
+            "connect_output",
         );
         assert!(
             output_index < self.num_outputs() as u32,
@@ -380,11 +398,7 @@ impl Input {
     #[track_caller]
     pub fn connect(&self, output: impl IntoOutput) -> Node {
         let output = output.into_output(self.node.graph());
-        assert_eq!(
-            self.type_(),
-            output.type_(),
-            "output and input signals must have the same type"
-        );
+        assert_signals_compatible(&output.type_(), &self.type_(), "connect");
         self.node
             .connect_input(&output.node, output.output_index, self.input_index);
         self.node.clone()
@@ -439,11 +453,7 @@ impl Output {
     #[inline]
     #[track_caller]
     pub fn connect(&self, input: &Input) -> Node {
-        assert_eq!(
-            self.type_(),
-            input.type_(),
-            "output and input signals must have the same type"
-        );
+        assert_signals_compatible(&self.type_(), &input.type_(), "connect");
         self.node
             .connect_output(self.output_index, &input.node, input.input_index);
         self.node.clone()
@@ -499,7 +509,7 @@ impl Output {
                 self.node.graph().add(Cast::<i64, String>::new())
             }
 
-            _ => panic!("cannot cast from {:?} to {:?}", current_type, type_),
+            (current_type, type_) => panic!("cannot cast from {:?} to {:?}", current_type, type_),
         };
 
         cast.input(0).connect(self);
@@ -518,7 +528,7 @@ impl Output {
             SignalType::Int => self.node.graph().add(Passthrough::<i64>::new()),
             SignalType::Float => self.node.graph().add(Passthrough::<Float>::new()),
             SignalType::String => self.node.graph().add(Passthrough::<String>::new()),
-            SignalType::List => self.node.graph().add(Passthrough::<SignalBuffer>::new()),
+            SignalType::List { .. } => self.node.graph().add(Passthrough::<SignalBuffer>::new()),
             SignalType::Midi => self.node.graph().add(Passthrough::<MidiMessage>::new()),
         };
         node.input(0).connect(self);
@@ -538,7 +548,7 @@ impl Output {
             SignalType::Int => self.node.graph().add(Register::<i64>::new()),
             SignalType::Float => self.node.graph().add(Register::<Float>::new()),
             SignalType::String => self.node.graph().add(Register::<String>::new()),
-            SignalType::List => self.node.graph().add(Register::<SignalBuffer>::new()),
+            SignalType::List { .. } => self.node.graph().add(Register::<SignalBuffer>::new()),
             SignalType::Midi => self.node.graph().add(Register::<MidiMessage>::new()),
         };
         node.input(0).connect(self);
@@ -587,18 +597,14 @@ impl Output {
         let then = then.into_output(self.node.graph());
         let else_ = else_.into_output(self.node.graph());
         let type_ = then.type_();
-        assert_eq!(
-            type_,
-            else_.type_(),
-            "output signals must have the same type"
-        );
+        assert_signals_compatible(&type_, &else_.type_(), "cond");
         let cond = match type_ {
             SignalType::Dynamic => self.node.graph().add(Cond::<AnySignal>::new()),
             SignalType::Bool => self.node.graph().add(Cond::<bool>::new()),
             SignalType::Int => self.node.graph().add(Cond::<i64>::new()),
             SignalType::Float => self.node.graph().add(Cond::<Float>::new()),
             SignalType::String => self.node.graph().add(Cond::<String>::new()),
-            SignalType::List => self.node.graph().add(Cond::<SignalBuffer>::new()),
+            SignalType::List { .. } => self.node.graph().add(Cond::<SignalBuffer>::new()),
             SignalType::Midi => self.node.graph().add(Cond::<MidiMessage>::new()),
         };
         cond.input("cond").connect(self);
@@ -610,9 +616,8 @@ impl Output {
     /// Creates a [`Len`] processor and connects it to the output.
     #[inline]
     pub fn len(&self) -> Node {
-        assert_eq!(
-            self.type_(),
-            SignalType::List,
+        assert!(
+            matches!(self.type_(), SignalType::List { .. }),
             "output signal must be a list"
         );
         let proc = self.node.graph().add(Len);
@@ -629,9 +634,41 @@ impl Output {
             SignalType::Int => self.node.graph().add(Dedup::<i64>::new()),
             SignalType::Float => self.node.graph().add(Dedup::<Float>::new()),
             SignalType::String => self.node.graph().add(Dedup::<String>::new()),
-            SignalType::List => self.node.graph().add(Dedup::<SignalBuffer>::new()),
+            SignalType::List { .. } => self.node.graph().add(Dedup::<SignalBuffer>::new()),
             SignalType::Midi => self.node.graph().add(Dedup::<MidiMessage>::new()),
         };
+        proc.input(0).connect(self);
+        proc
+    }
+
+    /// Creates a [`Print`] processor and connects it to the output.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the output signal is not a float.
+    #[inline]
+    #[track_caller]
+    pub fn print(&self) -> Node {
+        assert!(
+            matches!(self.type_(), SignalType::Float),
+            "output signal must be a float"
+        );
+        let proc = self.node.graph().add(Print::<String>::default());
+        let changed = self.node().graph().add(Changed::new(0.0));
+        changed.input(0).connect(self);
+        proc.input("trig").connect(changed);
+        proc.input("message").connect(self.cast(SignalType::String));
+        proc
+    }
+
+    /// Creates a [`CheckFinite`] processor and connects it to the output.
+    #[inline]
+    pub fn check_finite(&self) -> Node {
+        assert!(
+            matches!(self.type_(), SignalType::Float),
+            "output signal must be a float"
+        );
+        let proc = self.node.graph().add(CheckFinite::default());
         proc.input(0).connect(self);
         proc
     }
@@ -825,10 +862,10 @@ macro_rules! impl_binary_node_ops {
             pub fn $name(&self, other: impl IntoOutput) -> Node {
                 let other = other.into_output(self.node().graph());
 
-                assert_eq!(
-                    self.type_(),
-                    other.type_(),
-                    "output signals must have the same type"
+                assert_signals_compatible(
+                    &self.type_(),
+                    &other.type_(),
+                    stringify!($name),
                 );
 
                 let type_ = self.type_();
@@ -860,10 +897,10 @@ macro_rules! impl_binary_node_ops {
             pub fn $name(&self, other: impl IntoOutput) -> Node {
                 let other = other.into_output(self.node().graph());
 
-                assert_eq!(
-                    self.type_(),
-                    other.type_(),
-                    "output signals must have the same type"
+                assert_signals_compatible(
+                    &self.type_(),
+                    &other.type_(),
+                    stringify!($name),
                 );
 
                 let type_ = self.type_();
@@ -966,11 +1003,7 @@ macro_rules! impl_comparison_node_ops {
             pub fn $name(&self, other: impl IntoOutput) -> Node {
                 let other = other.into_output(self.node().graph());
 
-                assert_eq!(
-                    self.type_(),
-                    other.type_(),
-                    "output signals must have the same type"
-                );
+                assert_signals_compatible(&self.type_(), &other.type_(), stringify!($name));
 
                 let type_ = self.type_();
 

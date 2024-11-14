@@ -50,7 +50,7 @@ impl<S: Signal + Clone> Processor for Passthrough<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let Some(in_signal) = inputs.inputs[0] else {
+        let Some(in_signal) = inputs.input(0) else {
             return Ok(());
         };
 
@@ -103,7 +103,7 @@ impl<S: Signal + Clone, T: Signal + Clone> Processor for Cast<S, T> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let Some(in_signal) = inputs.inputs[0] else {
+        let Some(in_signal) = inputs.input(0) else {
             return Ok(());
         };
 
@@ -373,7 +373,7 @@ impl Processor for Smooth {
         for (target, factor, out) in itertools::izip!(
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_floats(1)?,
-            outputs.iter_output_mut_as_samples(0)?
+            outputs.iter_output_mut_as_floats(0)?
         ) {
             self.factor = factor.unwrap_or(self.factor).clamp(0.0, 1.0);
 
@@ -857,7 +857,7 @@ impl Processor for SampleAndHold {
         for (in_signal, trig, out_signal) in itertools::izip!(
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_bools(1)?,
-            outputs.iter_output_mut_as_samples(0)?
+            outputs.iter_output_mut_as_floats(0)?
         ) {
             if let Some(true) = trig {
                 self.last = in_signal;
@@ -876,11 +876,13 @@ impl Processor for SampleAndHold {
 ///
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
-/// | `0` | `in` | `Float` | The input signal.
+/// | `0` | `in` | `Float` | The input signal. |
 ///
 /// # Outputs
 ///
-/// None.
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The input signal passed through. |
 #[derive(Clone, Debug, Default)]
 pub struct CheckFinite {
     context: String,
@@ -901,22 +903,27 @@ impl Processor for CheckFinite {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        _outputs: ProcessorOutputs,
+        mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let in_signal = inputs.iter_input_as_floats(0)?;
-        for in_signal in in_signal.flatten() {
-            if in_signal.is_nan() {
-                panic!("{}: signal is NaN: {:?}", self.context, in_signal);
+        let out_signal = outputs.iter_output_mut_as_floats(0)?;
+        for (in_signal, out_signal) in in_signal.zip(out_signal) {
+            if let Some(in_signal) = in_signal {
+                if in_signal.is_nan() {
+                    panic!("{}: signal is NaN: {:?}", self.context, in_signal);
+                }
+                if in_signal.is_infinite() {
+                    panic!("{}: signal is infinite: {:?}", self.context, in_signal);
+                }
             }
-            if in_signal.is_infinite() {
-                panic!("{}: signal is infinite: {:?}", self.context, in_signal);
-            }
+
+            *out_signal = in_signal;
         }
 
         Ok(())
@@ -951,6 +958,12 @@ impl<S: Signal + Clone> Dedup<S> {
     /// Create a new `Dedup` processor.
     pub fn new() -> Self {
         Self { last: None }
+    }
+}
+
+impl<S: Signal + Clone> Default for Dedup<S> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
