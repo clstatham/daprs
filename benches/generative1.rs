@@ -14,26 +14,18 @@ pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Nod
     let index = index % options.len() as Float;
     let index = index.cast(SignalType::Int);
 
-    let select = graph.add(Select::<bool>::new(options.len()));
-    select
-        .input("in")
-        .connect(graph.constant(AnySignal::new_bool(true)));
-    select.input("index").connect(index);
+    let pack = graph.add(Pack::<Float>::new(options.len()));
 
-    let merge = graph.add(Merge::<Float>::new(options.len()));
-
-    let msgs = options
-        .iter()
-        .map(|_| graph.add(Message::<Float>::new(0.0)))
-        .collect::<Vec<_>>();
-
-    for (i, (option, msg)) in options.iter().zip(msgs.iter()).enumerate() {
-        msg.input(0).connect(select.output(i as u32));
-        msg.input(1).connect(option.output(0));
-        merge.input(i as u32).connect(msg.output(0));
+    for (i, option) in options.iter().enumerate() {
+        pack.input(i as u32).connect(option.output(0));
     }
 
-    merge
+    let get = graph.add(Get::<Float>::default());
+
+    get.input("list").connect(pack.output(0));
+    get.input("index").connect(index.output(0));
+
+    get
 }
 
 pub fn fm_sine_osc(graph: &GraphBuilder, freq: &Node, mod_freq: &Node) -> Node {

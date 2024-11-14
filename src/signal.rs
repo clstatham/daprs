@@ -322,70 +322,11 @@ impl List {
     }
 }
 
-impl From<Vec<AnySignal>> for List {
-    fn from(items: Vec<AnySignal>) -> Self {
-        let type_ = items.first().map_or(SignalType::Dynamic, AnySignal::type_);
+impl<T: Signal> From<Vec<T>> for List {
+    fn from(items: Vec<T>) -> Self {
+        let type_ = T::TYPE;
+        let items = items.into_iter().map(T::into_signal).collect();
         Self { type_, items }
-    }
-}
-
-impl From<Vec<Float>> for List {
-    fn from(items: Vec<Float>) -> Self {
-        let items = items.into_iter().map(AnySignal::new_float).collect();
-        Self {
-            type_: SignalType::Float,
-            items,
-        }
-    }
-}
-
-impl From<Vec<i64>> for List {
-    fn from(items: Vec<i64>) -> Self {
-        let items = items.into_iter().map(AnySignal::new_int).collect();
-        Self {
-            type_: SignalType::Int,
-            items,
-        }
-    }
-}
-
-impl From<Vec<bool>> for List {
-    fn from(items: Vec<bool>) -> Self {
-        let items = items.into_iter().map(AnySignal::new_bool).collect();
-        Self {
-            type_: SignalType::Bool,
-            items,
-        }
-    }
-}
-
-impl From<Vec<String>> for List {
-    fn from(items: Vec<String>) -> Self {
-        let items = items.into_iter().map(AnySignal::new_string).collect();
-        Self {
-            type_: SignalType::String,
-            items,
-        }
-    }
-}
-
-impl From<Vec<List>> for List {
-    fn from(items: Vec<List>) -> Self {
-        let items = items.into_iter().map(AnySignal::new_list).collect();
-        Self {
-            type_: SignalType::List,
-            items,
-        }
-    }
-}
-
-impl From<Vec<MidiMessage>> for List {
-    fn from(items: Vec<MidiMessage>) -> Self {
-        let items = items.into_iter().map(AnySignal::new_midi).collect();
-        Self {
-            type_: SignalType::Midi,
-            items,
-        }
     }
 }
 

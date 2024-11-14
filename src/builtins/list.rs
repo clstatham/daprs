@@ -139,25 +139,23 @@ impl<S: Signal + Clone> Processor for Get<S> {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `List` | The packed list. |
 #[derive(Debug, Clone)]
-pub struct Pack {
-    type_: SignalType,
-    inputs: Vec<AnySignal>,
+pub struct Pack<S: Signal + Clone + Default> {
+    inputs: Vec<S>,
 }
 
-impl Pack {
+impl<S: Signal + Clone + Default> Pack<S> {
     /// Creates a new `Pack` processor with the specified type and number of inputs.
-    pub fn new(type_: SignalType, num_inputs: usize) -> Self {
+    pub fn new(num_inputs: usize) -> Self {
         Self {
-            type_,
-            inputs: vec![AnySignal::None(type_); num_inputs],
+            inputs: vec![S::default(); num_inputs],
         }
     }
 }
 
-impl Processor for Pack {
+impl<S: Signal + Clone + Default> Processor for Pack<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         (0..self.inputs.len())
-            .map(|i| SignalSpec::new(i.to_string(), self.type_))
+            .map(|i| SignalSpec::new(i.to_string(), S::TYPE))
             .collect()
     }
 
@@ -175,15 +173,17 @@ impl Processor for Pack {
         for (sample_index, out) in out.into_iter().enumerate() {
             for (input_index, input) in inputs.inputs.iter().enumerate() {
                 if let Some(buf) = input.as_ref() {
-                    if buf.type_() != self.type_ {
-                        return Err(ProcessorError::InputSpecMismatch {
-                            index: input_index,
-                            expected: self.type_,
-                            actual: buf.type_(),
-                        });
-                    }
+                    let buf =
+                        buf.as_type::<S>()
+                            .ok_or_else(|| ProcessorError::InputSpecMismatch {
+                                index: input_index,
+                                expected: S::TYPE,
+                                actual: buf.type_(),
+                            })?;
 
-                    self.inputs[input_index] = buf.clone_signal_at(sample_index);
+                    if let Some(item) = &buf[sample_index] {
+                        self.inputs[input_index] = item.clone();
+                    }
                 }
             }
 
