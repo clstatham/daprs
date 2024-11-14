@@ -236,7 +236,7 @@ impl<'a> ProcessorOutputs<'a> {
         self.output_as::<String>(index)
     }
 
-    /// Returns the output signal at the given index, if it is a [`List`] signal.
+    /// Returns the output signal at the given index, if it is a list signal.
     #[inline]
     pub fn output_as_buffers(
         &mut self,

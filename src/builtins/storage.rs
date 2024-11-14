@@ -163,14 +163,18 @@ impl<S: Signal + Clone> Processor for Register<S> {
             outputs.iter_output_as::<S>(0)?,
         ) {
             if let Some(set) = set {
-                self.value = Some(set.clone());
+                if let Some(value) = self.value.as_mut() {
+                    value.clone_from(set);
+                } else {
+                    self.value = Some(set.clone());
+                }
             }
 
             if clear.is_some() {
                 self.value = None;
             }
 
-            *out = self.value.clone();
+            out.clone_from(&self.value);
         }
 
         Ok(())

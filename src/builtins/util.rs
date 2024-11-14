@@ -56,7 +56,7 @@ impl<S: Signal + Clone> Processor for Passthrough<S> {
 
         let out_signal = outputs.output(0);
 
-        out_signal.copy_from(in_signal);
+        out_signal.clone_from(in_signal);
 
         Ok(())
     }
@@ -177,11 +177,15 @@ impl<S: Signal + Clone> Processor for Message<S> {
             outputs.iter_output_as::<S>(0)?
         ) {
             if let Some(message) = message {
-                self.message = message.clone();
+                self.message.clone_from(message);
             }
 
             if let Some(true) = bang {
-                *out = Some(self.message.clone());
+                if let Some(out) = out {
+                    out.clone_from(&self.message);
+                } else {
+                    *out = Some(self.message.clone());
+                }
             } else {
                 *out = None;
             }
@@ -264,7 +268,7 @@ impl<S: Signal + Clone> Processor for Print<S> {
             inputs.iter_input_as::<S>(1)?
         ) {
             if let Some(message) = message {
-                self.msg = message.clone();
+                self.msg.clone_from(message);
             }
 
             if bang.unwrap_or(false) {
@@ -634,7 +638,11 @@ impl<S: Signal + Clone> ParamRx<S> {
     pub fn recv(&mut self) -> Option<S> {
         let mut last = self.last.try_lock().ok()?;
         if let Some(msg) = self.rx.recv() {
-            *last = Some(msg.clone());
+            if let Some(last) = &mut *last {
+                last.clone_from(&msg);
+            } else {
+                *last = Some(msg.clone());
+            }
             Some(msg)
         } else {
             None
@@ -908,6 +916,71 @@ impl Processor for CheckFinite {
             }
             if in_signal.is_infinite() {
                 panic!("{}: signal is infinite: {:?}", self.context, in_signal);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// A processor that deduplicates a signal by only outputting a new value when it changes.
+///
+/// This can be thought of as the opposite of the [`Register`](crate::builtins::storage::Register) processor, and will effectively undo its effect.
+///
+/// The output signal will likely be much sparser than the input signal, reducing the amount of data that needs to be processed downstream.
+///
+/// This processor can be useful when placed before an expensive processor (such as those dealing with lists) to reduce the amount of work it needs to do.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `in` | `Any` | The input signal. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Any` | The deduplicated output signal. |
+#[derive(Clone, Debug)]
+pub struct Dedup<S: Signal + Clone> {
+    last: Option<S>,
+}
+
+impl<S: Signal + Clone> Dedup<S> {
+    /// Create a new `Dedup` processor.
+    pub fn new() -> Self {
+        Self { last: None }
+    }
+}
+
+impl<S: Signal + Clone> Processor for Dedup<S> {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", S::TYPE)]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", S::TYPE)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        for (in_signal, out_signal) in itertools::izip!(
+            inputs.iter_input_as::<S>(0)?,
+            outputs.iter_output_as::<S>(0)?
+        ) {
+            if let Some(in_signal) = in_signal {
+                if self.last.as_ref() != Some(in_signal) {
+                    *out_signal = Some(in_signal.clone());
+                    self.last = Some(in_signal.clone());
+                } else {
+                    *out_signal = None;
+                }
+            } else {
+                *out_signal = None;
             }
         }
 

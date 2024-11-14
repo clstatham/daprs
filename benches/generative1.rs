@@ -17,7 +17,7 @@ pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Nod
     let pack = graph.add(Pack::<Float>::new(options.len()));
 
     for (i, option) in options.iter().enumerate() {
-        pack.input(i as u32).connect(option.output(0));
+        pack.input(i as u32).connect(option.dedup());
     }
 
     let get = graph.add(Get::<Float>::default());
@@ -25,7 +25,7 @@ pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Nod
     get.input("list").connect(pack.output(0));
     get.input("index").connect(index.output(0));
 
-    get
+    get.make_register()
 }
 
 pub fn fm_sine_osc(graph: &GraphBuilder, freq: &Node, mod_freq: &Node) -> Node {

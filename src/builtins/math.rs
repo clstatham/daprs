@@ -54,7 +54,7 @@ impl Processor for Constant {
             (SignalBuffer::Bool(out), AnySignal::Bool(value)) => {
                 out.fill(Some(*value));
             }
-            (SignalBuffer::Buffer(out), AnySignal::Buffer(value)) => {
+            (SignalBuffer::List(out), AnySignal::List(value)) => {
                 out.fill(Some(value.clone()));
             }
             (SignalBuffer::String(out), AnySignal::String(value)) => {

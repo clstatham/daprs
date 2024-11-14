@@ -59,9 +59,9 @@ impl<S: Signal + Clone> Processor for Cond<S> {
             };
 
             if cond {
-                *out = if_true.clone();
+                out.clone_from(if_true);
             } else {
-                *out = if_false.clone();
+                out.clone_from(if_false);
             }
         }
 

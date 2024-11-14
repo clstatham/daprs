@@ -64,6 +64,19 @@ impl<T: Signal> Buffer<T> {
             buf: value.iter().map(|v| Some(v.clone())).collect(),
         }
     }
+
+    /// Copies the other buffer into this buffer using a memcpy.
+    ///
+    /// The inner type must be [`Copy`].
+    ///
+    /// This is faster than using [`Buffer::from_slice`] for large buffers that are already allocated.
+    #[inline]
+    pub fn copy_from(&mut self, value: impl AsRef<[Option<T>]>)
+    where
+        T: Copy,
+    {
+        self.buf.copy_from_slice(value.as_ref());
+    }
 }
 
 impl Buffer<Float> {
@@ -449,13 +462,13 @@ impl Signal for SignalBuffer {
 
     #[inline]
     fn into_signal(self) -> AnySignal {
-        AnySignal::Buffer(self)
+        AnySignal::List(self)
     }
 
     #[inline]
     fn try_from_signal(signal: AnySignal) -> Option<Self> {
         match signal {
-            AnySignal::Buffer(list) => Some(list),
+            AnySignal::List(list) => Some(list),
             _ => None,
         }
     }
@@ -516,8 +529,8 @@ pub enum AnySignal {
     /// A string.
     String(String),
 
-    /// A buffer of signals.
-    Buffer(SignalBuffer),
+    /// A list of signals.
+    List(SignalBuffer),
 
     /// A MIDI message.
     Midi(MidiMessage),
@@ -551,7 +564,7 @@ impl AnySignal {
 
     /// Creates a new buffer signal.
     pub fn new_buffer(value: impl Into<SignalBuffer>) -> Self {
-        Self::Buffer(value.into())
+        Self::List(value.into())
     }
 
     /// Creates a new MIDI signal.
@@ -592,7 +605,7 @@ impl AnySignal {
     /// Returns `true` if the signal is a list.
     #[inline]
     pub fn is_list(&self) -> bool {
-        matches!(self, Self::Buffer(_))
+        matches!(self, Self::List(_))
     }
 
     /// Returns `true` if the signal is a MIDI message.
@@ -641,7 +654,7 @@ impl AnySignal {
     #[inline]
     pub fn as_buffer(&self) -> Option<&SignalBuffer> {
         match self {
-            Self::Buffer(buf) => Some(buf),
+            Self::List(buf) => Some(buf),
             _ => None,
         }
     }
@@ -663,7 +676,7 @@ impl AnySignal {
             (Self::Int(_), Self::Int(_)) => true,
             (Self::Bool(_), Self::Bool(_)) => true,
             (Self::String(_), Self::String(_)) => true,
-            (Self::Buffer(_), Self::Buffer(_)) => true,
+            (Self::List(_), Self::List(_)) => true,
             (Self::Midi(_), Self::Midi(_)) => true,
             _ => false,
         }
@@ -677,7 +690,7 @@ impl AnySignal {
             Self::Int(_) => SignalType::Int,
             Self::Bool(_) => SignalType::Bool,
             Self::String(_) => SignalType::String,
-            Self::Buffer(_) => SignalType::List,
+            Self::List(_) => SignalType::List,
             Self::Midi(_) => SignalType::Midi,
         }
     }
@@ -774,7 +787,7 @@ impl From<String> for AnySignal {
 
 impl From<SignalBuffer> for AnySignal {
     fn from(buf: SignalBuffer) -> Self {
-        Self::Buffer(buf)
+        Self::List(buf)
     }
 }
 
@@ -827,8 +840,8 @@ pub enum SignalBuffer {
     /// A buffer of string signals.
     String(Buffer<String>),
 
-    /// A buffer of buffer signals.
-    Buffer(Buffer<SignalBuffer>),
+    /// A buffer of list signals.
+    List(Buffer<SignalBuffer>),
 
     /// A buffer of MIDI signals.
     Midi(Buffer<MidiMessage>),
@@ -843,7 +856,7 @@ impl SignalBuffer {
             SignalType::Int => Self::Int(Buffer::zeros(length)),
             SignalType::Bool => Self::Bool(Buffer::zeros(length)),
             SignalType::String => Self::String(Buffer::zeros(length)),
-            SignalType::List => Self::Buffer(Buffer::zeros(length)),
+            SignalType::List => Self::List(Buffer::zeros(length)),
             SignalType::Midi => Self::Midi(Buffer::zeros(length)),
         }
     }
@@ -875,7 +888,7 @@ impl SignalBuffer {
 
     /// Creates a new buffer of list signals with the given length filled with `None`.
     pub fn new_list(length: usize) -> Self {
-        Self::Buffer(Buffer::zeros(length))
+        Self::List(Buffer::zeros(length))
     }
 
     /// Creates a new buffer of MIDI signals with the given length filled with `None`.
@@ -891,7 +904,7 @@ impl SignalBuffer {
             Self::Int(_) => SignalType::Int,
             Self::Bool(_) => SignalType::Bool,
             Self::String(_) => SignalType::String,
-            Self::Buffer(_) => SignalType::List,
+            Self::List(_) => SignalType::List,
             Self::Midi(_) => SignalType::Midi,
         }
     }
@@ -923,7 +936,7 @@ impl SignalBuffer {
 
     /// Returns `true` if the buffer is for list signals.
     pub const fn is_list(&self) -> bool {
-        matches!(self, Self::Buffer(_))
+        matches!(self, Self::List(_))
     }
 
     /// Returns `true` if the buffer is for MIDI signals.
@@ -987,7 +1000,7 @@ impl SignalBuffer {
     #[inline]
     pub fn as_buffer(&self) -> Option<&Buffer<SignalBuffer>> {
         match self {
-            Self::Buffer(buffer) => Some(buffer),
+            Self::List(buffer) => Some(buffer),
             _ => None,
         }
     }
@@ -1058,7 +1071,7 @@ impl SignalBuffer {
     #[inline]
     pub fn as_buffer_mut(&mut self) -> Option<&mut Buffer<SignalBuffer>> {
         match self {
-            Self::Buffer(buffer) => Some(buffer),
+            Self::List(buffer) => Some(buffer),
             _ => None,
         }
     }
@@ -1087,7 +1100,7 @@ impl SignalBuffer {
             Self::Int(buffer) => buffer.len(),
             Self::Bool(buffer) => buffer.len(),
             Self::String(buffer) => buffer.len(),
-            Self::Buffer(buffer) => buffer.len(),
+            Self::List(buffer) => buffer.len(),
             Self::Midi(buffer) => buffer.len(),
         }
     }
@@ -1117,9 +1130,7 @@ impl SignalBuffer {
             (Self::String(buffer), AnySignal::String(value)) => {
                 buffer.buf.resize(length, Some(value))
             }
-            (Self::Buffer(buffer), AnySignal::Buffer(value)) => {
-                buffer.buf.resize(length, Some(value))
-            }
+            (Self::List(buffer), AnySignal::List(value)) => buffer.buf.resize(length, Some(value)),
             (Self::Midi(buffer), AnySignal::Midi(value)) => buffer.buf.resize(length, Some(value)),
             _ => panic!("Cannot resize buffer with value of different type"),
         }
@@ -1138,7 +1149,7 @@ impl SignalBuffer {
             (Self::Int(buffer), AnySignal::Int(value)) => buffer.fill(Some(value)),
             (Self::Bool(buffer), AnySignal::Bool(value)) => buffer.fill(Some(value)),
             (Self::String(buffer), AnySignal::String(value)) => buffer.fill(Some(value)),
-            (Self::Buffer(buffer), AnySignal::Buffer(value)) => buffer.fill(Some(value)),
+            (Self::List(buffer), AnySignal::List(value)) => buffer.fill(Some(value)),
             (Self::Midi(buffer), AnySignal::Midi(value)) => buffer.fill(Some(value)),
             _ => panic!("Cannot fill buffer with value of different type"),
         }
@@ -1152,7 +1163,7 @@ impl SignalBuffer {
             Self::Int(buffer) => buffer.buf.resize(length, None),
             Self::Bool(buffer) => buffer.buf.resize(length, None),
             Self::String(buffer) => buffer.buf.resize(length, None),
-            Self::Buffer(buffer) => buffer.buf.resize(length, None),
+            Self::List(buffer) => buffer.buf.resize(length, None),
             Self::Midi(buffer) => buffer.buf.resize(length, None),
         }
     }
@@ -1165,31 +1176,66 @@ impl SignalBuffer {
             Self::Int(buffer) => buffer.fill(None),
             Self::Bool(buffer) => buffer.fill(None),
             Self::String(buffer) => buffer.fill(None),
-            Self::Buffer(buffer) => buffer.fill(None),
+            Self::List(buffer) => buffer.fill(None),
             Self::Midi(buffer) => buffer.fill(None),
         }
     }
 
-    /// Returns the signal at the given index as an [`AnySignal`].
-    #[inline]
-    pub fn clone_signal_at(&self, index: usize) -> AnySignal {
-        match self {
-            Self::Dynamic(buffer) => buffer[index].clone().unwrap(),
-            Self::Float(buffer) => AnySignal::Float(buffer[index].unwrap()),
-            Self::Int(buffer) => AnySignal::Int(buffer[index].unwrap()),
-            Self::Bool(buffer) => AnySignal::Bool(buffer[index].unwrap()),
-            Self::String(buffer) => AnySignal::String(buffer[index].clone().unwrap()),
-            Self::Buffer(buffer) => AnySignal::Buffer(buffer[index].clone().unwrap()),
-            Self::Midi(buffer) => AnySignal::Midi(buffer[index].unwrap()),
+    /// Returns a mutable reference to the signal at the given index.
+    pub fn get_mut<S: Signal>(&mut self, index: usize) -> Option<&mut Option<S>> {
+        S::try_convert_buffer_mut(self)?.get_mut(index)
+    }
+
+    /// Clones the given signal and stores it at the given index.
+    /// Returns `true` if the signal was set successfully.
+    #[cfg_attr(feature = "profiling", inline(never))]
+    #[cfg_attr(not(feature = "profiling"), inline)]
+    pub fn set<S: Signal + Clone>(&mut self, index: usize, value: &Option<S>) -> bool {
+        if let Some(buf) = S::try_convert_buffer_mut(self) {
+            let slot = buf.get_mut(index).unwrap();
+            slot.clone_from(value); // `clone_from` is used to possibly avoid cloning the value twice
+            true
+        } else {
+            false
         }
     }
 
-    /// Copies the contents of the other buffer into this buffer.
+    /// Clones the given signal and stores it at the given index, but only if the values are not equal.
+    /// Returns `true` if the signal was set successfully.
+    #[cfg_attr(feature = "profiling", inline(never))]
+    #[cfg_attr(not(feature = "profiling"), inline)]
+    pub fn set_if_ne<S: Signal + Clone>(&mut self, index: usize, value: &Option<S>) -> bool {
+        if let Some(buf) = S::try_convert_buffer_mut(self) {
+            let slot = buf.get_mut(index).unwrap();
+            if slot != value {
+                slot.clone_from(value); // `clone_from` is used to possibly avoid cloning the value twice
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Clones the given signal and stores it as `Some` at the given index, but only if the values are not equal.
+    /// Returns `true` if the signal was set successfully.
+    #[cfg_attr(feature = "profiling", inline(never))]
+    #[cfg_attr(not(feature = "profiling"), inline)]
+    pub fn set_some_if_ne<S: Signal + Clone>(&mut self, index: usize, value: &S) -> bool {
+        if let Some(buf) = S::try_convert_buffer_mut(self) {
+            let slot = buf.get_mut(index).unwrap();
+            if slot.as_ref() != Some(value) {
+                *slot = Some(value.clone());
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Clones the contents of the other buffer into this buffer.
     ///
     /// # Panics
     ///
     /// Panics if the buffer types do not match.
-    pub fn copy_from(&mut self, other: &Self) {
+    pub fn clone_from(&mut self, other: &Self) {
         match (self, other) {
             (Self::Dynamic(this), Self::Dynamic(other)) => {
                 this.clone_from_slice(other);
@@ -1206,11 +1252,43 @@ impl SignalBuffer {
             (Self::String(this), Self::String(other)) => {
                 this.clone_from_slice(other);
             }
-            (Self::Buffer(this), Self::Buffer(other)) => {
+            (Self::List(this), Self::List(other)) => {
                 this.clone_from_slice(other);
             }
             (Self::Midi(this), Self::Midi(other)) => {
                 this.clone_from_slice(other);
+            }
+            _ => panic!("Cannot copy buffer of different type"),
+        }
+    }
+
+    /// Copies the contents of the other buffer into this buffer using a memcpy.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the buffer types do not match, or if the types are not `Copy`.
+    pub fn copy_from(&mut self, other: &Self) {
+        match (self, other) {
+            (Self::Float(this), Self::Float(other)) => {
+                this.copy_from(other);
+            }
+            (Self::Int(this), Self::Int(other)) => {
+                this.copy_from(other);
+            }
+            (Self::Bool(this), Self::Bool(other)) => {
+                this.copy_from(other);
+            }
+            (Self::Midi(this), Self::Midi(other)) => {
+                this.copy_from(other);
+            }
+            (Self::Dynamic(_), Self::Dynamic(_)) => {
+                panic!("Cannot copy dynamic buffer; use `clone_from` instead");
+            }
+            (Self::String(_), Self::String(_)) => {
+                panic!("Cannot copy string buffer; use `clone_from` instead");
+            }
+            (Self::List(_), Self::List(_)) => {
+                panic!("Cannot copy buffer buffer; use `clone_from` instead");
             }
             _ => panic!("Cannot copy buffer of different type"),
         }
@@ -1256,7 +1334,7 @@ impl FromIterator<String> for SignalBuffer {
 impl FromIterator<SignalBuffer> for SignalBuffer {
     fn from_iter<T: IntoIterator<Item = SignalBuffer>>(iter: T) -> Self {
         let iter = iter.into_iter().map(Some);
-        Self::Buffer(Buffer {
+        Self::List(Buffer {
             buf: iter.collect(),
         })
     }

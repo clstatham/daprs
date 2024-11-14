@@ -315,7 +315,7 @@ impl Node {
     /// # Panics
     ///
     /// - Panics if the node has multiple outputs.
-    /// - Panics if the output signal is not a [`List`].
+    /// - Panics if the output signal is not a list.
     #[inline]
     #[track_caller]
     pub fn len(&self) -> Node {
@@ -336,6 +336,18 @@ impl Node {
     pub fn cast(&self, type_: SignalType) -> Node {
         self.assert_single_output("cast");
         self.output(0).cast(type_)
+    }
+
+    /// Connects a [`Dedup`] processor to the output of this node.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the node has multiple outputs.
+    #[inline]
+    #[track_caller]
+    pub fn dedup(&self) -> Node {
+        self.assert_single_output("dedup");
+        self.output(0).dedup()
     }
 }
 
@@ -604,6 +616,22 @@ impl Output {
             "output signal must be a list"
         );
         let proc = self.node.graph().add(Len);
+        proc.input(0).connect(self);
+        proc
+    }
+
+    /// Creates a [`Dedup`] processor and connects it to the output.
+    #[inline]
+    pub fn dedup(&self) -> Node {
+        let proc = match self.type_() {
+            SignalType::Dynamic => self.node.graph().add(Dedup::<AnySignal>::new()),
+            SignalType::Bool => self.node.graph().add(Dedup::<bool>::new()),
+            SignalType::Int => self.node.graph().add(Dedup::<i64>::new()),
+            SignalType::Float => self.node.graph().add(Dedup::<Float>::new()),
+            SignalType::String => self.node.graph().add(Dedup::<String>::new()),
+            SignalType::List => self.node.graph().add(Dedup::<SignalBuffer>::new()),
+            SignalType::Midi => self.node.graph().add(Dedup::<MidiMessage>::new()),
+        };
         proc.input(0).connect(self);
         proc
     }

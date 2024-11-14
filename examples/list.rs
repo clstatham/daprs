@@ -6,9 +6,7 @@ fn main() {
     let graph = GraphBuilder::new();
 
     let list = graph.constant(SignalBuffer::from_iter([
-        "Hello".to_string(),
-        "World".to_string(),
-        "!".to_string(),
+        1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
     ]));
 
     let len = graph.add(Len);
@@ -26,13 +24,13 @@ fn main() {
 
     counter.input("reset").connect(cond);
 
-    let get = graph.add(Get::<String>::new());
+    let get = graph.add(Get::<Float>::new());
     get.input("list").connect(&list);
     get.input("index").connect(&counter);
 
-    let print = graph.add(Print::<String>::default());
+    let print = graph.add(Print::<Float>::default());
     print.input("trig").connect(&metro);
-    print.input("message").connect(get.cast(SignalType::String));
+    print.input("message").connect(&get);
 
     let mut runtime = graph.build_runtime();
 
