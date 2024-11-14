@@ -3,7 +3,7 @@
 use crate::{
     prelude::{Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
-    signal::{Buffer, Float, SignalBuffer, SignalType},
+    signal::{Buffer, Float, SignalType},
 };
 
 /// A processor that generates a single-sample pulse at regular intervals.
