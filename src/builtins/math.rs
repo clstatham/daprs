@@ -233,12 +233,7 @@ impl Processor for Expr {
                             expected: SignalType::Float,
                             actual,
                         })?;
-                let samp = buffer_iter
-                    .nth(samp_idx)
-                    .and_then(Option::as_ref)
-                    .ok_or_else(|| {
-                        todo!("Handle missing samples in input buffers.");
-                    })?;
+                let samp = buffer_iter.nth(samp_idx).and_then(Option::as_ref).unwrap();
                 self.input_values.push((name.to_string(), *samp));
             }
 

@@ -216,8 +216,6 @@ impl Processor for SampleDelay {
             let buffer_len = self.buffer.len();
             let delay = delay.unwrap_or_default() as usize;
 
-            // let delay = delay.min(buffer_len - 1);
-
             if buffer_len != delay {
                 self.buffer.resize(delay, 0.0);
             }

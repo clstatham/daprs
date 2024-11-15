@@ -165,7 +165,7 @@ impl Processor for SineOscillator {
             }
 
             // calculate the sine wave using the phase accumulator
-            let sine = (self.t / self.sample_rate * TAU + self.phase).sin();
+            let sine = (self.t / self.sample_rate * TAU + self.phase).cos();
             *out = Some(sine);
 
             // increment the phase accumulator

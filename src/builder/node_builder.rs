@@ -367,6 +367,19 @@ impl Node {
         self.assert_single_output("dedup");
         self.output(0).dedup()
     }
+
+    /// Connects a [`Print`] processor to the output of this node.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the node has multiple outputs.
+    /// - Panics if the output signal is not a float.
+    #[inline]
+    #[track_caller]
+    pub fn print(&self) -> Node {
+        self.assert_single_output("print");
+        self.output(0).print()
+    }
 }
 
 /// Represents an input of a [`Node`].
@@ -649,11 +662,11 @@ impl Output {
             matches!(self.type_(), SignalType::Float),
             "output signal must be a float"
         );
-        let proc = self.node.graph().add(Print::<String>::default());
+        let proc = self.node.graph().add(Print::<Float>::default());
         let changed = self.node().graph().add(Changed::new(0.0));
         changed.input(0).connect(self);
         proc.input("trig").connect(changed);
-        proc.input("message").connect(self.cast(SignalType::String));
+        proc.input("message").connect(self);
         proc
     }
 

@@ -146,11 +146,6 @@ pub(crate) struct NodeBuffers {
 
 impl NodeBuffers {
     pub fn resize(&mut self, block_size: usize) {
-        // if let NodeOutputStorage::Block(ref mut outputs) = self.outputs {
-        //     for (output, spec) in outputs.iter_mut().zip(&self.output_spec) {
-        //         output.resize_with_hint(block_size, &spec.type_);
-        //     }
-        // }
         match &mut self.outputs {
             NodeOutputStorage::Block(outputs) => {
                 for (output, spec) in outputs.iter_mut().zip(&self.output_spec) {
@@ -252,8 +247,6 @@ impl Runtime {
             let buffers = self.buffer_cache.get_mut(&node_id);
             if let Some(buffers) = buffers {
                 buffers.resize(block_size);
-            } else {
-                todo!("node {} buffer resize", node_id.index());
             }
 
             let num_inputs = graph
@@ -609,7 +602,6 @@ impl Runtime {
         midi_port: Option<MidiPort>,
     ) -> RuntimeResult<RuntimeHandle> {
         let (kill_tx, kill_rx) = mpsc::channel();
-        let (graph_tx, graph_rx) = mpsc::channel();
 
         let host_id = match backend {
             AudioBackend::Default => cpal::default_host().id(),
@@ -716,41 +708,40 @@ impl Runtime {
 
         let handle = RuntimeHandle {
             kill_tx,
-            graph_tx,
             midi_in: Arc::new(Mutex::new(midi_in)),
         };
 
         std::thread::spawn(move || -> RuntimeResult<()> {
             let stream = match config.sample_format() {
                 cpal::SampleFormat::I8 => {
-                    audio_runtime.run_inner::<i8>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<i8>(&device, &config.config())?
                 }
                 cpal::SampleFormat::I16 => {
-                    audio_runtime.run_inner::<i16>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<i16>(&device, &config.config())?
                 }
                 cpal::SampleFormat::I32 => {
-                    audio_runtime.run_inner::<i32>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<i32>(&device, &config.config())?
                 }
                 cpal::SampleFormat::I64 => {
-                    audio_runtime.run_inner::<i64>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<i64>(&device, &config.config())?
                 }
                 cpal::SampleFormat::U8 => {
-                    audio_runtime.run_inner::<u8>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<u8>(&device, &config.config())?
                 }
                 cpal::SampleFormat::U16 => {
-                    audio_runtime.run_inner::<u16>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<u16>(&device, &config.config())?
                 }
                 cpal::SampleFormat::U32 => {
-                    audio_runtime.run_inner::<u32>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<u32>(&device, &config.config())?
                 }
                 cpal::SampleFormat::U64 => {
-                    audio_runtime.run_inner::<u64>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<u64>(&device, &config.config())?
                 }
                 cpal::SampleFormat::F32 => {
-                    audio_runtime.run_inner::<f32>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<f32>(&device, &config.config())?
                 }
                 cpal::SampleFormat::F64 => {
-                    audio_runtime.run_inner::<f64>(&device, &config.config(), graph_rx)?
+                    audio_runtime.run_inner::<f64>(&device, &config.config())?
                 }
 
                 sample_format => {
@@ -777,7 +768,6 @@ impl Runtime {
         mut self,
         device: &cpal::Device,
         config: &cpal::StreamConfig,
-        graph_rx: mpsc::Receiver<Graph>,
     ) -> RuntimeResult<cpal::Stream>
     where
         T: cpal::SizedSample + cpal::FromSample<Float>,
@@ -791,11 +781,7 @@ impl Runtime {
                 config,
                 move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
                     let block_size = data.len() / channels;
-                    if let Ok(graph) = graph_rx.try_recv() {
-                        self.graph = graph;
-                        self.reset(audio_rate, block_size).unwrap();
-                        self.prepare().unwrap();
-                    } else if block_size != last_block_size {
+                    if block_size != last_block_size {
                         self.reset(audio_rate, block_size).unwrap();
                         last_block_size = block_size;
                     }
@@ -833,7 +819,6 @@ impl Runtime {
 pub struct RuntimeHandle {
     midi_in: Arc<Mutex<Option<midir::MidiInputConnection<()>>>>,
     kill_tx: mpsc::Sender<()>,
-    graph_tx: mpsc::Sender<Graph>,
 }
 
 impl RuntimeHandle {
@@ -845,11 +830,6 @@ impl RuntimeHandle {
                 midi_in.close();
             }
         }
-    }
-
-    /// Sends a new graph to the runtime, hot-reloading it.
-    pub fn hot_reload(&self, graph: Graph) {
-        self.graph_tx.send(graph).ok();
     }
 }
 
