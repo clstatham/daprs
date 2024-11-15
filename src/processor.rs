@@ -78,7 +78,7 @@ impl SignalSpec {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Ternary<A, B, C> {
+pub(crate) enum Ternary<A, B, C> {
     A(A),
     B(B),
     C(C),
@@ -101,10 +101,12 @@ where
     }
 }
 
+/// The input of a [`Processor`].
 #[derive(Debug, Clone, Copy)]
 pub enum ProcessorInput<'a> {
+    /// A block of signals.
     Block(&'a SignalBuffer),
-
+    /// A single sample.
     Sample(
         /// The signal.
         &'a AnySignal,
@@ -114,6 +116,7 @@ pub enum ProcessorInput<'a> {
 }
 
 impl ProcessorInput<'_> {
+    /// Returns the type of the input signal.
     #[inline]
     pub fn type_(&self) -> Option<SignalType> {
         match self {
@@ -122,6 +125,8 @@ impl ProcessorInput<'_> {
         }
     }
 
+    /// Returns an iterator over the input signal, if it is of the given type.
+    #[inline]
     pub fn iter<S: Signal>(&self) -> Option<impl Iterator<Item = &Option<S>>> {
         match self {
             ProcessorInput::Block(buffer) => Some(Either::Left(buffer.as_type()?.iter())),
@@ -132,13 +137,17 @@ impl ProcessorInput<'_> {
     }
 }
 
+/// The output of a [`Processor`].
 #[derive(Debug)]
 pub enum ProcessorOutput<'a> {
+    /// A block of signals.
     Block(&'a mut SignalBuffer),
+    /// A single sample.
     Sample(&'a mut AnySignal),
 }
 
 impl<'a> ProcessorOutput<'a> {
+    /// Returns the type of the output signal.
     #[inline]
     pub fn type_(&self) -> SignalType {
         match self {
@@ -147,6 +156,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    /// Returns an iterator over the output signal, if it is of the given type.
     pub fn iter_mut<S: Signal>(&'a mut self) -> impl Iterator<Item = &mut Option<S>> {
         match self {
             ProcessorOutput::Block(buffer) => {
@@ -272,7 +282,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         Self::iter_input_as::<String>(self, index).map(|iter| iter.map(|s| s.as_ref()))
     }
 
-    /// Returns an iterator over the input signal at the given index, if it is a [`Buffer`] signal.
+    /// Returns an iterator over the input signal at the given index, if it is a list signal.
     #[inline]
     pub fn iter_input_as_buffers(
         &self,
@@ -398,7 +408,7 @@ impl<'a> ProcessorOutputs<'a> {
         self.iter_output_as::<String>(index)
     }
 
-    /// Returns an iterator over the output signal at the given index, if it is a [`Buffer`] signal.
+    /// Returns an iterator over the output signal at the given index, if it is a list signal.
     #[inline]
     pub fn iter_output_mut_as_lists(
         &mut self,

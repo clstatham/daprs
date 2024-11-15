@@ -33,6 +33,7 @@ pub mod prelude {
     pub use std::time::Duration;
 }
 
+#[doc(hidden)]
 mod logging {
     use std::{
         collections::HashSet,

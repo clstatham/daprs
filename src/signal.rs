@@ -305,10 +305,12 @@ pub trait Signal: Debug + Send + Sync + PartialEq + 'static {
     where
         Self: Sized;
 
+    /// Attempts to convert an [`AnySignal`] into the signal type.
     fn try_from_signal_ref(signal: &AnySignal) -> Option<&Option<Self>>
     where
         Self: Sized;
 
+    /// Attempts to convert a mutable [`AnySignal`] into a mutable signal of the signal type.
     fn try_from_signal_mut(signal: &mut AnySignal) -> Option<&mut Option<Self>>
     where
         Self: Sized;
@@ -656,6 +658,7 @@ pub enum AnySignal {
 }
 
 impl AnySignal {
+    /// Creates a new signal of the given type with no value.
     pub fn default_of_type(type_: &SignalType) -> Self {
         match type_ {
             SignalType::Float => AnySignal::Float(None),
@@ -744,6 +747,7 @@ impl AnySignal {
         matches!(self, Self::Midi(_))
     }
 
+    /// Returns `true` if the signal is of the given type.
     pub fn is_type<T: Signal>(&self) -> bool {
         self.type_() == T::TYPE
     }
@@ -907,6 +911,7 @@ impl AnySignal {
         }
     }
 
+    /// Attempts to extract the signal as the given signal type.
     pub fn as_type<T: Signal>(&self) -> Option<&Option<T>> {
         if self.type_() == T::TYPE {
             T::try_from_signal_ref(self)
@@ -915,6 +920,7 @@ impl AnySignal {
         }
     }
 
+    /// Attempts to mutably extract the signal as the given signal type.
     pub fn as_type_mut<T: Signal>(&mut self) -> Option<&mut Option<T>> {
         if self.type_() == T::TYPE {
             T::try_from_signal_mut(self)
@@ -941,7 +947,9 @@ pub enum SignalType {
 
     /// A list signal.
     List {
+        /// The size of the list, if known.
         size: Option<usize>,
+        /// The type of the elements in the list, if known.
         element_type: Option<Box<SignalType>>,
     },
 
@@ -950,6 +958,7 @@ pub enum SignalType {
 }
 
 impl SignalType {
+    /// Returns `true` if the signal type is compatible with the other signal type.
     pub fn is_compatible_with(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Float, Self::Float) => true,
