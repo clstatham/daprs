@@ -523,7 +523,6 @@ impl Output {
     pub fn make_node(&self) -> Node {
         let type_ = self.type_();
         let node = match type_ {
-            SignalType::Dynamic => self.node.graph().add(Passthrough::<AnySignal>::new()),
             SignalType::Bool => self.node.graph().add(Passthrough::<bool>::new()),
             SignalType::Int => self.node.graph().add(Passthrough::<i64>::new()),
             SignalType::Float => self.node.graph().add(Passthrough::<Float>::new()),
@@ -543,7 +542,6 @@ impl Output {
     pub fn make_register(&self) -> Node {
         let type_ = self.type_();
         let node = match type_ {
-            SignalType::Dynamic => self.node.graph().add(Register::<AnySignal>::new()),
             SignalType::Bool => self.node.graph().add(Register::<bool>::new()),
             SignalType::Int => self.node.graph().add(Register::<i64>::new()),
             SignalType::Float => self.node.graph().add(Register::<Float>::new()),
@@ -599,7 +597,6 @@ impl Output {
         let type_ = then.type_();
         assert_signals_compatible(&type_, &else_.type_(), "cond");
         let cond = match type_ {
-            SignalType::Dynamic => self.node.graph().add(Cond::<AnySignal>::new()),
             SignalType::Bool => self.node.graph().add(Cond::<bool>::new()),
             SignalType::Int => self.node.graph().add(Cond::<i64>::new()),
             SignalType::Float => self.node.graph().add(Cond::<Float>::new()),
@@ -629,7 +626,6 @@ impl Output {
     #[inline]
     pub fn dedup(&self) -> Node {
         let proc = match self.type_() {
-            SignalType::Dynamic => self.node.graph().add(Dedup::<AnySignal>::new()),
             SignalType::Bool => self.node.graph().add(Dedup::<bool>::new()),
             SignalType::Int => self.node.graph().add(Dedup::<i64>::new()),
             SignalType::Float => self.node.graph().add(Dedup::<Float>::new()),
@@ -761,33 +757,27 @@ impl IntoNode for Float {
     }
 }
 
-impl IntoNode for AnySignal {
+impl IntoNode for i64 {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.constant(self)
     }
 }
 
-impl IntoNode for i64 {
-    fn into_node(self, graph: &GraphBuilder) -> Node {
-        graph.constant(AnySignal::Int(self))
-    }
-}
-
 impl IntoNode for i32 {
     fn into_node(self, graph: &GraphBuilder) -> Node {
-        graph.constant(AnySignal::Int(self as i64))
+        graph.constant(self as i64)
     }
 }
 
 impl IntoNode for u32 {
     fn into_node(self, graph: &GraphBuilder) -> Node {
-        graph.constant(AnySignal::Int(self as i64))
+        graph.constant(self as i64)
     }
 }
 
 impl IntoNode for &str {
     fn into_node(self, graph: &GraphBuilder) -> Node {
-        graph.constant(AnySignal::String(self.to_string()))
+        graph.constant(self.to_string())
     }
 }
 

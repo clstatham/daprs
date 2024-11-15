@@ -189,24 +189,21 @@ impl<S: Signal + Copy> Processor for Pack<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let out = outputs.output_as_buffers(0)?;
-
-        for (sample_index, out) in out.into_iter().enumerate() {
+        for (sample_index, out) in outputs
+            .iter_output_as::<SignalBuffer>(0)
+            .unwrap()
+            .enumerate()
+        {
             let mut any_some = false;
-
-            for (input_index, input) in inputs.iter().enumerate() {
+            let num_inputs = self.inputs.len();
+            for input_index in 0..num_inputs {
+                let input = inputs.input(input_index);
                 if let Some(buf) = input.as_ref() {
-                    let buf =
-                        buf.as_type::<S>()
-                            .ok_or_else(|| ProcessorError::InputSpecMismatch {
-                                index: input_index,
-                                expected: S::TYPE,
-                                actual: buf.type_(),
-                            })?;
+                    let mut buf = buf.iter::<S>().unwrap();
 
-                    self.inputs[input_index] = buf[sample_index];
+                    self.inputs[input_index] = buf.nth(sample_index).copied().flatten();
 
-                    if buf[sample_index].is_some() {
+                    if self.inputs[input_index].is_some() {
                         any_some = true;
                     }
                 }
@@ -289,24 +286,20 @@ impl<S: Signal + Copy> Processor for Unpack<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let list_buf = inputs.input(0).as_ref().and_then(|s| s.as_buffer());
+        let list_buf = inputs.input(0).unwrap();
+        let list_buf = list_buf.iter::<SignalBuffer>();
 
         if let Some(list_buf) = list_buf {
             for (sample_index, list) in list_buf
-                .iter()
                 .enumerate()
                 .filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
             {
-                for (output_index, output_buf) in outputs.iter_mut().enumerate() {
-                    let list =
-                        list.as_type::<S>()
-                            .ok_or_else(|| ProcessorError::InputSpecMismatch {
-                                index: output_index,
-                                expected: S::TYPE,
-                                actual: list.type_(),
-                            })?;
-                    let output_buf = output_buf.as_type_mut::<S>().unwrap();
-                    output_buf[sample_index] = list[output_index];
+                for output_index in 0..self.num_outputs {
+                    let mut output_buf = outputs.output(output_index);
+                    let mut output_buf = output_buf.iter_mut::<S>();
+                    let list = list.as_type::<S>().unwrap();
+                    let out = output_buf.nth(sample_index).unwrap();
+                    out.clone_from(&list.get(output_index).copied().flatten());
                 }
             }
         }

@@ -54,9 +54,14 @@ impl<S: Signal + Clone> Processor for Passthrough<S> {
             return Ok(());
         };
 
-        let out_signal = outputs.output(0);
+        let mut out_signal = outputs.output(0);
 
-        out_signal.clone_from(in_signal);
+        let in_signal = in_signal.iter::<S>().unwrap();
+        let out_signal = out_signal.iter_mut::<S>();
+
+        for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
+            *out_signal = in_signal.clone();
+        }
 
         Ok(())
     }
@@ -107,15 +112,10 @@ impl<S: Signal + Clone, T: Signal + Clone> Processor for Cast<S, T> {
             return Ok(());
         };
 
-        let in_signal = in_signal
-            .as_type::<S>()
-            .ok_or(ProcessorError::InputSpecMismatch {
-                index: 0,
-                expected: S::TYPE,
-                actual: in_signal.type_(),
-            })?;
+        let in_signal = in_signal.iter::<S>().unwrap();
 
-        let out_signal = outputs.output(0).as_type_mut::<T>().unwrap();
+        let mut out_signal = outputs.output(0);
+        let out_signal = out_signal.iter_mut::<T>();
 
         for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
             if let Some(in_signal) = in_signal {
@@ -314,8 +314,9 @@ impl Processor for SampleRate {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let sample_rate_out = outputs.output_as_floats(0)?;
-        sample_rate_out.fill(Some(self.sample_rate));
+        for sample_rate in outputs.iter_output_mut_as_floats(0)? {
+            *sample_rate = Some(self.sample_rate);
+        }
 
         Ok(())
     }

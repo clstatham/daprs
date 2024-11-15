@@ -17,26 +17,24 @@ use std::ops::{
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Any` | The constant value. |
 #[derive(Clone, Debug)]
-pub struct Constant {
-    value: AnySignal,
+pub struct Constant<S: Signal + Clone> {
+    value: S,
 }
 
-impl Constant {
+impl<S: Signal + Clone> Constant<S> {
     /// Creates a new `Constant` processor.
-    pub fn new(value: impl Into<AnySignal>) -> Self {
-        Self {
-            value: value.into(),
-        }
+    pub fn new(value: S) -> Self {
+        Self { value }
     }
 }
 
-impl Processor for Constant {
+impl<S: Signal + Clone> Processor for Constant<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", self.value.type_())]
+        vec![SignalSpec::new("out", S::TYPE)]
     }
 
     fn process(
@@ -44,32 +42,8 @@ impl Processor for Constant {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        match (outputs.output(0), &self.value) {
-            (SignalBuffer::Float(out), AnySignal::Float(value)) => {
-                out.fill(Some(*value));
-            }
-            (SignalBuffer::Int(out), AnySignal::Int(value)) => {
-                out.fill(Some(*value));
-            }
-            (SignalBuffer::Bool(out), AnySignal::Bool(value)) => {
-                out.fill(Some(*value));
-            }
-            (SignalBuffer::List(out), AnySignal::List(value)) => {
-                out.fill(Some(value.clone()));
-            }
-            (SignalBuffer::String(out), AnySignal::String(value)) => {
-                out.fill(Some(value.clone()));
-            }
-            (SignalBuffer::Midi(out), AnySignal::Midi(value)) => {
-                out.fill(Some(*value));
-            }
-            (out, _) => {
-                return Err(ProcessorError::OutputSpecMismatch {
-                    index: 0,
-                    expected: self.value.type_(),
-                    actual: out.type_(),
-                })
-            }
+        for out in outputs.iter_output_as::<S>(0)? {
+            *out = Some(self.value.clone());
         }
 
         Ok(())
@@ -78,7 +52,7 @@ impl Processor for Constant {
 
 impl GraphBuilder {
     /// Adds a node that outputs a constant value every sample.
-    pub fn constant(&self, value: impl Into<AnySignal>) -> Node {
+    pub fn constant(&self, value: impl Signal + Clone) -> Node {
         self.add(Constant::new(value))
     }
 }
@@ -245,21 +219,27 @@ impl Processor for Expr {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let out = outputs.output_as_floats(0)?;
-
-        for (samp_idx, out) in out.iter_mut().enumerate() {
+        for (samp_idx, out) in outputs.iter_output_as::<Float>(0)?.enumerate() {
             self.input_values.clear();
 
             for (inp_idx, name) in self.inputs.iter().enumerate() {
                 let buffer = &inputs.input(inp_idx).unwrap();
-                let buffer = buffer.as_float().ok_or(ProcessorError::InputSpecMismatch {
-                    index: inp_idx,
-                    expected: SignalType::Float,
-                    actual: buffer.type_(),
-                })?;
-
-                self.input_values
-                    .push((name.to_string(), buffer[samp_idx].unwrap()));
+                let actual = buffer.type_().unwrap();
+                let mut buffer_iter =
+                    buffer
+                        .iter::<Float>()
+                        .ok_or_else(|| ProcessorError::InputSpecMismatch {
+                            index: inp_idx,
+                            expected: SignalType::Float,
+                            actual,
+                        })?;
+                let samp = buffer_iter
+                    .nth(samp_idx)
+                    .and_then(Option::as_ref)
+                    .ok_or_else(|| {
+                        todo!("Handle missing samples in input buffers.");
+                    })?;
+                self.input_values.push((name.to_string(), *samp));
             }
 
             *out = Some(self.eval());

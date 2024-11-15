@@ -95,6 +95,9 @@ pub struct Graph {
     // cached visitor state for graph traversal
     visitor: DfsPostOrder<NodeIndex, FxHashSet<NodeIndex>>,
     visit_path: Vec<NodeIndex>,
+
+    // cached strongly connected components (feedback loops)
+    sccs: Vec<Vec<NodeIndex>>,
 }
 
 impl Graph {
@@ -199,6 +202,9 @@ impl Graph {
 
         self.digraph
             .add_edge(source, target, Edge::new(source_output, target_input));
+
+        self.detect_sccs();
+
         Ok(())
     }
 
@@ -225,6 +231,7 @@ impl Graph {
         if let Some(edge) = edge {
             self.needs_visitor_alloc = true;
             self.digraph.remove_edge(edge.id()).unwrap();
+            self.detect_sccs();
         }
     }
 
@@ -323,8 +330,21 @@ impl Graph {
     }
 
     #[inline]
-    pub(crate) fn visit_path(&self) -> &[NodeIndex] {
-        &self.visit_path
+    pub(crate) fn sccs(&self) -> &[Vec<NodeIndex>] {
+        &self.sccs
+    }
+
+    #[inline]
+    pub(crate) fn detect_sccs(&mut self) {
+        self.sccs = petgraph::algo::tarjan_scc(&self.digraph);
+        self.sccs.reverse();
+    }
+
+    #[inline]
+    pub(crate) fn is_in_scc(&self, node: NodeIndex) -> bool {
+        self.sccs
+            .iter()
+            .any(|scc| scc.len() > 1 && scc.contains(&node))
     }
 
     /// Allocates the visitor for the graph.

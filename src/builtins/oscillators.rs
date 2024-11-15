@@ -451,6 +451,7 @@ const BL_SQUARE_MAX_HARMONICS: usize = 512;
 /// | --- | --- | --- | --- |
 /// | `0` | `frequency` | `Float` | The frequency of the square wave. |
 /// | `1` | `pulse_width` | `Float` | The pulse width of the square wave. |
+/// | `2` | `reset` | `Bool` | Whether to reset the phase accumulator to 0. |
 ///
 /// # Outputs
 ///
@@ -501,6 +502,7 @@ impl Processor for BlSquareOscillator {
         vec![
             SignalSpec::new("frequency", SignalType::Float),
             SignalSpec::new("pulse_width", SignalType::Float),
+            SignalSpec::new("reset", SignalType::Bool),
         ]
     }
 
@@ -517,15 +519,20 @@ impl Processor for BlSquareOscillator {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, frequency, pulse_width) in itertools::izip!(
+        for (out, frequency, pulse_width, reset) in itertools::izip!(
             outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?
+            inputs.iter_input_as_floats(1)?,
+            inputs.iter_input_as_bools(2)?
         ) {
             self.frequency = frequency.unwrap_or(self.frequency);
             if self.frequency <= 0.0 {
                 *out = None;
                 continue;
+            }
+
+            if reset.unwrap_or(false) {
+                self.t = 0.0;
             }
 
             self.pulse_width = pulse_width.unwrap_or(self.pulse_width);

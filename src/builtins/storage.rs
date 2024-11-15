@@ -46,10 +46,7 @@ impl Processor for AudioBuffer {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![
-            SignalSpec::new("out", SignalType::Float),
-            SignalSpec::new("length", SignalType::Int),
-        ]
+        vec![SignalSpec::new("out", SignalType::Float)]
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
@@ -61,11 +58,8 @@ impl Processor for AudioBuffer {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let (mut outputs0, mut outputs1) = outputs.split_at_mut(1);
-
-        for (out, length, index, write) in itertools::izip!(
-            outputs0.iter_output_mut_as_floats(0)?,
-            outputs1.iter_output_mut_as_ints(0)?,
+        for (out, index, write) in itertools::izip!(
+            outputs.iter_output_mut_as_floats(0)?,
             inputs.iter_input_as_floats(0)?,
             inputs.iter_input_as_floats(1)?,
         ) {
@@ -96,8 +90,6 @@ impl Processor for AudioBuffer {
 
                 *out = Some(self.buffer[self.index as usize].unwrap_or_default());
             }
-
-            *length = Some(self.buffer.len() as i64);
         }
 
         Ok(())

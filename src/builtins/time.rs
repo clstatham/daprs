@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use crate::{
     prelude::{Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
-    signal::{Buffer, Float, SignalType},
+    signal::{Float, SignalType},
 };
 
 /// A processor that generates a single-sample pulse at regular intervals.
@@ -215,10 +215,11 @@ impl Processor for SampleDelay {
         ) {
             let buffer_len = self.buffer.len();
             let delay = delay.unwrap_or_default() as usize;
-            let delay = delay.min(buffer_len - 1);
 
-            if buffer_len != delay + 1 {
-                self.buffer.resize(delay + 1, 0.0);
+            // let delay = delay.min(buffer_len - 1);
+
+            if buffer_len != delay {
+                self.buffer.resize(delay, 0.0);
             }
 
             *out = Some(self.buffer.pop_front().unwrap_or(0.0));
