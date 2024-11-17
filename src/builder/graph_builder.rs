@@ -75,18 +75,7 @@ impl GraphBuilder {
 
     /// Builds the graph, returning a new [`Graph`] instance that can be used in a [`Runtime`].
     pub fn build(&self) -> Graph {
-        self.with_graph(|graph| {
-            for scc in graph.sccs() {
-                if scc.len() > 1 {
-                    log::warn!("Strongly connected component with {} nodes", scc.len());
-                    for node_id in scc {
-                        let node = graph.digraph().node_weight(*node_id).unwrap();
-                        log::warn!("{}:  {}", node_id.index(), node.name());
-                    }
-                }
-            }
-            graph.clone()
-        })
+        self.with_graph(|graph| graph.clone())
     }
 
     /// Builds the graph and constructs a new [`Runtime`] instance from the graph.

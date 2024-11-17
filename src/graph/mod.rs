@@ -27,14 +27,14 @@ pub type DiGraph = StableDiGraph<ProcessorNode, Edge, GraphIx>;
 
 /// An error that occurred while running a graph.
 #[derive(Debug, thiserror::Error)]
-#[error("Graph run error at node {} ({}): {type_:?}", node_index.index(), node_processor)]
+#[error("Graph run error at node {} ({}): {signal_type:?}", node_index.index(), node_processor)]
 pub struct GraphRunError {
     /// The index of the node where the error occurred.
     pub node_index: NodeIndex,
     /// The name of the processor of the node where the error occurred.
     pub node_processor: String,
     /// The type of error that occurred.
-    pub type_: GraphRunErrorType,
+    pub signal_type: GraphRunErrorType,
 }
 
 /// The type of error that occurred while running a graph.
@@ -55,12 +55,12 @@ pub enum GraphConstructionError {
     MismatchedGraphs,
 
     /// Attempted to perform an invalid operation on a node with multiple outputs.
-    #[error("Operation `{op}` invalid: Node type `{type_}` has multiple outputs")]
+    #[error("Operation `{op}` invalid: Node type `{signal_type}` has multiple outputs")]
     NodeHasMultipleOutputs {
         /// The operation that was attempted.
         op: String,
         /// The type of the node.
-        type_: String,
+        signal_type: String,
     },
 
     /// Filesystem error.

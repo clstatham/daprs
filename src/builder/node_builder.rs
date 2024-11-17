@@ -70,7 +70,7 @@ impl Node {
             Err(
                 crate::graph::GraphConstructionError::NodeHasMultipleOutputs {
                     op: op.into(),
-                    type_: self.name(),
+                    signal_type: self.name(),
                 },
             )
         }
@@ -148,7 +148,7 @@ impl Node {
         );
         self.graph.with_graph(|graph| {
             graph.digraph()[self.id()].input_spec()[index as usize]
-                .type_
+                .signal_type
                 .clone()
         })
     }
@@ -170,7 +170,7 @@ impl Node {
         );
         self.graph.with_graph(|graph| {
             graph.digraph()[self.id()].output_spec()[index as usize]
-                .type_
+                .signal_type
                 .clone()
         })
     }
@@ -343,7 +343,7 @@ impl Node {
 
     /// Connects a [`Cast`] processor to the output of this node.
     ///
-    /// The `type_` parameter specifies the type to cast the signal to.
+    /// The `signal_type` parameter specifies the type to cast the signal to.
     ///
     /// # Panics
     ///
@@ -351,9 +351,9 @@ impl Node {
     /// - Panics if the output signal cannot be cast to the specified type.
     #[inline]
     #[track_caller]
-    pub fn cast(&self, type_: SignalType) -> Node {
+    pub fn cast(&self, signal_type: SignalType) -> Node {
         self.assert_single_output("cast");
-        self.output(0).cast(type_)
+        self.output(0).cast(signal_type)
     }
 
     /// Connects a [`Dedup`] processor to the output of this node.
@@ -420,7 +420,7 @@ pub struct Input {
 impl Input {
     /// Returns the signal type of the input.
     #[inline]
-    pub fn type_(&self) -> SignalType {
+    pub fn signal_type(&self) -> SignalType {
         self.node.input_type(self.input_index)
     }
 
@@ -439,7 +439,7 @@ impl Input {
     #[track_caller]
     pub fn connect(&self, output: impl IntoOutput) -> Node {
         let output = output.into_output(self.node.graph());
-        assert_signals_compatible(&output.type_(), &self.type_(), "connect");
+        assert_signals_compatible(&output.signal_type(), &self.signal_type(), "connect");
         self.node
             .connect_input(&output.node, output.output_index, self.input_index);
         self.node.clone()
@@ -482,7 +482,7 @@ impl Output {
 
     /// Returns the signal type of the output.
     #[inline]
-    pub fn type_(&self) -> SignalType {
+    pub fn signal_type(&self) -> SignalType {
         self.node.output_type(self.output_index)
     }
 
@@ -494,7 +494,7 @@ impl Output {
     #[inline]
     #[track_caller]
     pub fn connect(&self, input: &Input) -> Node {
-        assert_signals_compatible(&self.type_(), &input.type_(), "connect");
+        assert_signals_compatible(&self.signal_type(), &input.signal_type(), "connect");
         self.node
             .connect_output(self.output_index, &input.node, input.input_index);
         self.node.clone()
@@ -502,18 +502,18 @@ impl Output {
 
     /// Creates a [`Cast`] processor and connects it to the output.
     ///
-    /// The `type_` parameter specifies the type to cast the signal to.
+    /// The `signal_type` parameter specifies the type to cast the signal to.
     ///
     /// # Panics
     ///
     /// Panics if the output signal cannot be cast to the specified type.
     #[inline]
-    pub fn cast(&self, type_: SignalType) -> Node {
-        let current_type = self.type_();
-        if current_type == type_ {
+    pub fn cast(&self, signal_type: SignalType) -> Node {
+        let current_type = self.signal_type();
+        if current_type == signal_type {
             return self.node.clone();
         }
-        let cast = match (current_type, type_) {
+        let cast = match (current_type, signal_type) {
             // bool <-> int
             (SignalType::Bool, SignalType::Int) => self.node.graph().add(Cast::<bool, i64>::new()),
             (SignalType::Int, SignalType::Bool) => self.node.graph().add(Cast::<i64, bool>::new()),
@@ -550,7 +550,9 @@ impl Output {
                 self.node.graph().add(Cast::<i64, String>::new())
             }
 
-            (current_type, type_) => panic!("cannot cast from {:?} to {:?}", current_type, type_),
+            (current_type, signal_type) => {
+                panic!("cannot cast from {:?} to {:?}", current_type, signal_type)
+            }
         };
 
         cast.input(0).connect(self);
@@ -562,8 +564,8 @@ impl Output {
     /// This can be useful in situations where a [`Node`] is required instead of an [`Output`].
     #[inline]
     pub fn make_node(&self) -> Node {
-        let type_ = self.type_();
-        let node = match type_ {
+        let signal_type = self.signal_type();
+        let node = match signal_type {
             SignalType::Bool => self.node.graph().add(Passthrough::<bool>::new()),
             SignalType::Int => self.node.graph().add(Passthrough::<i64>::new()),
             SignalType::Float => self.node.graph().add(Passthrough::<Float>::new()),
@@ -581,8 +583,8 @@ impl Output {
     /// Useful for "remembering" a value across multiple frames.
     #[inline]
     pub fn make_register(&self) -> Node {
-        let type_ = self.type_();
-        let node = match type_ {
+        let signal_type = self.signal_type();
+        let node = match signal_type {
             SignalType::Bool => self.node.graph().add(Register::<bool>::new()),
             SignalType::Int => self.node.graph().add(Register::<i64>::new()),
             SignalType::Float => self.node.graph().add(Register::<Float>::new()),
@@ -635,9 +637,9 @@ impl Output {
     pub fn cond(&self, then: impl IntoOutput, else_: impl IntoOutput) -> Node {
         let then = then.into_output(self.node.graph());
         let else_ = else_.into_output(self.node.graph());
-        let type_ = then.type_();
-        assert_signals_compatible(&type_, &else_.type_(), "cond");
-        let cond = match type_ {
+        let signal_type = then.signal_type();
+        assert_signals_compatible(&signal_type, &else_.signal_type(), "cond");
+        let cond = match signal_type {
             SignalType::Bool => self.node.graph().add(Cond::<bool>::new()),
             SignalType::Int => self.node.graph().add(Cond::<i64>::new()),
             SignalType::Float => self.node.graph().add(Cond::<Float>::new()),
@@ -655,7 +657,7 @@ impl Output {
     #[inline]
     pub fn len(&self) -> Node {
         assert!(
-            matches!(self.type_(), SignalType::List { .. }),
+            matches!(self.signal_type(), SignalType::List { .. }),
             "output signal must be a list"
         );
         let proc = self.node.graph().add(Len);
@@ -666,7 +668,7 @@ impl Output {
     /// Creates a [`Dedup`] processor and connects it to the output.
     #[inline]
     pub fn dedup(&self) -> Node {
-        let proc = match self.type_() {
+        let proc = match self.signal_type() {
             SignalType::Bool => self.node.graph().add(Dedup::<bool>::new()),
             SignalType::Int => self.node.graph().add(Dedup::<i64>::new()),
             SignalType::Float => self.node.graph().add(Dedup::<Float>::new()),
@@ -687,7 +689,7 @@ impl Output {
     #[track_caller]
     pub fn print(&self) -> Node {
         assert!(
-            matches!(self.type_(), SignalType::Float),
+            matches!(self.signal_type(), SignalType::Float),
             "output signal must be a float"
         );
         let proc = self.node.graph().add(Print::<Float>::default());
@@ -709,7 +711,7 @@ impl Output {
     #[track_caller]
     pub fn check_finite(&self) -> Node {
         assert!(
-            matches!(self.type_(), SignalType::Float),
+            matches!(self.signal_type(), SignalType::Float),
             "output signal must be a float"
         );
         let proc = self.node.graph().add(CheckFinite::default());
@@ -726,7 +728,7 @@ impl Output {
     #[track_caller]
     pub fn finite_or_zero(&self) -> Node {
         assert!(
-            matches!(self.type_(), SignalType::Float),
+            matches!(self.signal_type(), SignalType::Float),
             "output signal must be a float"
         );
         let proc = self.node.graph().add(FiniteOrZero);
@@ -910,7 +912,7 @@ impl IntoOutputIdx for &str {
 }
 
 macro_rules! impl_binary_node_ops {
-    ($name:ident, $proc:ident, ($($type_:ident => $data:ty),*), $doc:literal) => {
+    ($name:ident, $proc:ident, ($($signal_type:ident => $data:ty),*), $doc:literal) => {
         impl Output {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
@@ -918,15 +920,15 @@ macro_rules! impl_binary_node_ops {
                 let other = other.into_output(self.node().graph());
 
                 assert_signals_compatible(
-                    &self.type_(),
-                    &other.type_(),
+                    &self.signal_type(),
+                    &other.signal_type(),
                     stringify!($name),
                 );
 
-                let type_ = self.type_();
-                let node = match type_ {
-                    $(SignalType::$type_ => self.node().graph().add(<math::$proc<$data>>::default()),)*
-                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), type_),
+                let signal_type = self.signal_type();
+                let node = match signal_type {
+                    $(SignalType::$signal_type => self.node().graph().add(<math::$proc<$data>>::default()),)*
+                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), signal_type),
                 };
 
                 node.input(0).connect(self);
@@ -945,7 +947,7 @@ macro_rules! impl_binary_node_ops {
             }
         }
     };
-    ($name:ident, $std_op:ident, $proc:ident, ($($type_:ident => $data:ty),*), $doc:literal) => {
+    ($name:ident, $std_op:ident, $proc:ident, ($($signal_type:ident => $data:ty),*), $doc:literal) => {
         impl Output {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
@@ -953,16 +955,16 @@ macro_rules! impl_binary_node_ops {
                 let other = other.into_output(self.node().graph());
 
                 assert_signals_compatible(
-                    &self.type_(),
-                    &other.type_(),
+                    &self.signal_type(),
+                    &other.signal_type(),
                     stringify!($name),
                 );
 
-                let type_ = self.type_();
+                let signal_type = self.signal_type();
 
-                let node = match type_ {
-                    $(SignalType::$type_ => self.node().graph().add(<math::$proc<$data>>::default()),)*
-                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), type_),
+                let node = match signal_type {
+                    $(SignalType::$signal_type => self.node().graph().add(<math::$proc<$data>>::default()),)*
+                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), signal_type),
                 };
 
                 node.input(0).connect(self);
@@ -1058,11 +1060,15 @@ macro_rules! impl_comparison_node_ops {
             pub fn $name(&self, other: impl IntoOutput) -> Node {
                 let other = other.into_output(self.node().graph());
 
-                assert_signals_compatible(&self.type_(), &other.type_(), stringify!($name));
+                assert_signals_compatible(
+                    &self.signal_type(),
+                    &other.signal_type(),
+                    stringify!($name),
+                );
 
-                let type_ = self.type_();
+                let signal_type = self.signal_type();
 
-                let node = match type_ {
+                let node = match signal_type {
                     SignalType::Bool => self.node().graph().add(control::$proc::<bool>::default()),
                     SignalType::Int => self.node().graph().add(control::$proc::<i64>::default()),
                     SignalType::Float => {
@@ -1120,16 +1126,16 @@ impl_comparison_node_ops!(
 );
 
 macro_rules! impl_unary_node_ops {
-    ($name:ident, $proc:ident, ($($type_:ident => $data:ty),*), $doc:literal) => {
+    ($name:ident, $proc:ident, ($($signal_type:ident => $data:ty),*), $doc:literal) => {
         impl Output {
             #[allow(clippy::should_implement_trait)]
             #[doc = $doc]
             pub fn $name(&self) -> Node {
-                let type_ = self.type_();
+                let signal_type = self.signal_type();
 
-                let node = match type_ {
-                    $(SignalType::$type_ => self.node().graph().add(<math::$proc<$data>>::default()),)*
-                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), type_),
+                let node = match signal_type {
+                    $(SignalType::$signal_type => self.node().graph().add(<math::$proc<$data>>::default()),)*
+                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), signal_type),
                 };
 
                 node.input(0).connect(self);

@@ -126,7 +126,7 @@ pub(crate) struct NodeBuffers {
 impl NodeBuffers {
     fn resize(&mut self, block_size: usize) {
         for (spec, buffer) in self.output_spec.iter().zip(&mut self.outputs) {
-            buffer.resize_with_hint(block_size, &spec.type_);
+            buffer.resize_with_hint(block_size, &spec.signal_type);
         }
     }
 }
@@ -155,7 +155,7 @@ impl Runtime {
                 let mut outputs = Vec::with_capacity(output_spec.len());
 
                 for spec in output_spec {
-                    let buffer = SignalBuffer::new_of_type(&spec.type_, 0);
+                    let buffer = SignalBuffer::new_of_type(&spec.signal_type, 0);
                     outputs.push(buffer);
                 }
 
@@ -299,7 +299,7 @@ impl Runtime {
             let error = GraphRunError {
                 node_index: node_id,
                 node_processor: node.name().to_string(),
-                type_: GraphRunErrorType::ProcessorError(err),
+                signal_type: GraphRunErrorType::ProcessorError(err),
             };
             return Err(RuntimeError::GraphRunError(error));
         }
@@ -379,7 +379,7 @@ impl Runtime {
                         ProcessorError::OutputSpecMismatch {
                             index: i,
                             expected: SignalType::Float,
-                            actual: buffer[0].type_(),
+                            actual: buffer[0].signal_type(),
                         },
                     ));
                 };

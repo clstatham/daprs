@@ -41,7 +41,7 @@
                 ],
                 "filter": {
                     "name": "raug",
-                    "type_": "lib"
+                    "type": "lib"
                 }
             },
             "args": [],

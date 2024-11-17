@@ -113,11 +113,11 @@ impl<S: Signal + Copy> Processor for Get<S> {
                 continue;
             };
 
-            if list.type_() != S::signal_type() {
+            if list.signal_type() != S::signal_type() {
                 return Err(ProcessorError::InputSpecMismatch {
                     index: 0,
                     expected: S::signal_type(),
-                    actual: list.type_(),
+                    actual: list.signal_type(),
                 });
             }
 
@@ -295,7 +295,7 @@ impl<S: Signal + Copy> Processor for Unpack<S> {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let list_buf = inputs.input(0).unwrap();
-        let list_buf = list_buf.as_buffer();
+        let list_buf = list_buf.as_list();
 
         if let Some(list_buf) = list_buf {
             for (sample_index, list) in list_buf

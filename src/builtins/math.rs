@@ -221,7 +221,7 @@ impl Processor for Expr {
 
             for (inp_idx, name) in self.inputs.iter().enumerate() {
                 let buffer = &inputs.input(inp_idx).unwrap();
-                let actual = buffer.type_();
+                let actual = buffer.signal_type();
                 let buffer =
                     buffer
                         .as_type::<Float>()

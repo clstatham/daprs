@@ -121,7 +121,7 @@ impl<S: Signal + Clone, T: Signal + Clone> Processor for Cast<S, T> {
 
         for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
             if let Some(in_signal) = in_signal {
-                let in_signal = S::into_signal(in_signal.to_owned());
+                let in_signal = S::into_any_signal(in_signal.to_owned());
                 *out_signal = in_signal.cast();
             }
         }

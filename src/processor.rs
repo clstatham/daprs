@@ -53,24 +53,24 @@ pub struct SignalSpec {
     /// The name of the input or output.
     pub name: String,
     /// The type of the input or output.
-    pub type_: SignalType,
+    pub signal_type: SignalType,
 }
 
 impl Default for SignalSpec {
     fn default() -> Self {
         Self {
             name: "".into(),
-            type_: SignalType::Float,
+            signal_type: SignalType::Float,
         }
     }
 }
 
 impl SignalSpec {
     /// Creates a new [`SignalSpec`] with the given name and type.
-    pub fn new(name: impl Into<String>, type_: SignalType) -> Self {
+    pub fn new(name: impl Into<String>, signal_type: SignalType) -> Self {
         Self {
             name: name.into(),
-            type_,
+            signal_type,
         }
     }
 }
@@ -111,10 +111,10 @@ pub enum ProcessorOutput<'a> {
 impl<'a> ProcessorOutput<'a> {
     /// Returns the type of the output signal.
     #[inline]
-    pub fn type_(&self) -> SignalType {
+    pub fn signal_type(&self) -> SignalType {
         match self {
-            ProcessorOutput::Block(buffer) => buffer.type_(),
-            ProcessorOutput::Sample(buffer, _) => buffer.type_(),
+            ProcessorOutput::Block(buffer) => buffer.signal_type(),
+            ProcessorOutput::Sample(buffer, _) => buffer.signal_type(),
         }
     }
 
@@ -191,7 +191,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         };
 
         if let Some(sample_index) = self.sample_index {
-            if buffer.type_().is_compatible_with(&S::signal_type()) {
+            if buffer.signal_type().is_compatible_with(&S::signal_type()) {
                 Ok(Ternary::B(std::iter::once(
                     &buffer.as_type::<S>().unwrap()[sample_index],
                 )))
@@ -199,16 +199,16 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
                 Err(ProcessorError::InputSpecMismatch {
                     index,
                     expected: S::signal_type(),
-                    actual: buffer.type_(),
+                    actual: buffer.signal_type(),
                 })
             }
-        } else if buffer.type_().is_compatible_with(&S::signal_type()) {
+        } else if buffer.signal_type().is_compatible_with(&S::signal_type()) {
             Ok(Ternary::A(buffer.as_type::<S>().unwrap().iter()))
         } else {
             Err(ProcessorError::InputSpecMismatch {
                 index,
                 expected: S::signal_type(),
-                actual: buffer.type_(),
+                actual: buffer.signal_type(),
             })
         }
     }
@@ -318,7 +318,7 @@ impl<'a> ProcessorOutputs<'a> {
     ) -> Result<impl Iterator<Item = &mut Option<S>> + '_, ProcessorError> {
         if let Some(sample_index) = self.sample_index {
             let output = &mut self.outputs[index];
-            if output.type_().is_compatible_with(&S::signal_type()) {
+            if output.signal_type().is_compatible_with(&S::signal_type()) {
                 Ok(Either::Left(std::iter::once(
                     &mut output.as_type_mut::<S>().unwrap()[sample_index],
                 )))
@@ -326,12 +326,12 @@ impl<'a> ProcessorOutputs<'a> {
                 Err(ProcessorError::OutputSpecMismatch {
                     index,
                     expected: S::signal_type(),
-                    actual: output.type_(),
+                    actual: output.signal_type(),
                 })
             }
         } else {
             let output = &mut self.outputs[index];
-            let actual = output.type_();
+            let actual = output.signal_type();
             let output =
                 output
                     .as_type_mut::<S>()
@@ -458,6 +458,7 @@ impl ProcessorState {
     pub fn sample_index(&self) -> Option<usize> {
         self.sample_index
     }
+
     /// Returns a reference to the custom value with the given name, if it exists and is of the given type.
     #[inline]
     pub fn get<S: Signal>(&self, name: &str) -> Option<&S> {
@@ -479,7 +480,7 @@ impl ProcessorState {
     /// Sets the custom value with the given name.
     #[inline]
     pub fn set<S: Signal>(&mut self, name: impl Into<String>, value: S) {
-        self.custom.insert(name.into(), value.into_signal());
+        self.custom.insert(name.into(), value.into_any_signal());
     }
 }
 
