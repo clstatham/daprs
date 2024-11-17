@@ -858,7 +858,6 @@ impl AnySignal {
     /// | String    | Yes   | Yes | Yes  | -      | -    | -    |
     /// | List      | -     | -   | -    | -      | -    | -    |
     /// | Midi      | -     | -   | -    | -      | -    | -    |
-    /// | Dynamic   | Yes   | Yes | Yes  | Yes    | Yes  | Yes  |
     pub fn cast<T: Signal>(&self) -> Option<T> {
         if self.type_() == T::TYPE {
             T::try_from_signal(self.clone())
