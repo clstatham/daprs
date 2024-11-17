@@ -40,11 +40,11 @@ impl<S: Signal + Clone> Passthrough<S> {
 
 impl<S: Signal + Clone> Processor for Passthrough<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::TYPE)]
+        vec![SignalSpec::new("in", S::signal_type())]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::TYPE)]
+        vec![SignalSpec::new("out", S::signal_type())]
     }
 
     fn process(
@@ -98,11 +98,11 @@ impl<S: Signal + Clone, T: Signal + Clone> Cast<S, T> {
 
 impl<S: Signal + Clone, T: Signal + Clone> Processor for Cast<S, T> {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::TYPE)]
+        vec![SignalSpec::new("in", S::signal_type())]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", T::TYPE)]
+        vec![SignalSpec::new("out", T::signal_type())]
     }
 
     fn process(
@@ -160,12 +160,12 @@ impl<S: Signal + Clone> Processor for Message<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("trig", SignalType::Bool),
-            SignalSpec::new("message", S::TYPE),
+            SignalSpec::new("message", S::signal_type()),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::TYPE)]
+        vec![SignalSpec::new("out", S::signal_type())]
     }
 
     fn process(
@@ -252,7 +252,7 @@ impl<S: Signal + Clone> Processor for Print<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("trig", SignalType::Bool),
-            SignalSpec::new("message", S::TYPE),
+            SignalSpec::new("message", S::signal_type()),
         ]
     }
 
@@ -544,7 +544,7 @@ impl<S: Signal + Clone> SignalTx<S> {
 
 impl<S: Signal + Clone> Processor for SignalTx<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::TYPE)]
+        vec![SignalSpec::new("in", S::signal_type())]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -599,7 +599,7 @@ impl<S: Signal + Clone> Processor for SignalRx<S> {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::TYPE)]
+        vec![SignalSpec::new("out", S::signal_type())]
     }
 
     fn process(
@@ -737,11 +737,11 @@ impl<S: Signal + Clone> Param<S> {
 
 impl<S: Signal + Clone> Processor for Param<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("set", S::TYPE)]
+        vec![SignalSpec::new("set", S::signal_type())]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("get", S::TYPE)]
+        vec![SignalSpec::new("get", S::signal_type())]
     }
 
     fn process(
@@ -1022,11 +1022,11 @@ impl<S: Signal + Clone> Default for Dedup<S> {
 
 impl<S: Signal + Clone> Processor for Dedup<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::TYPE)]
+        vec![SignalSpec::new("in", S::signal_type())]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::TYPE)]
+        vec![SignalSpec::new("out", S::signal_type())]
     }
 
     fn process(

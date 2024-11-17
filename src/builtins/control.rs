@@ -33,17 +33,18 @@ impl<S: Signal + Clone> Processor for Cond<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("cond", SignalType::Bool),
-            SignalSpec::new("then", S::TYPE),
-            SignalSpec::new("else", S::TYPE),
+            SignalSpec::new("then", S::signal_type()),
+            SignalSpec::new("else", S::signal_type()),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::TYPE)]
+        vec![SignalSpec::new("out", S::signal_type())]
     }
 
     fn process(
         &mut self,
+        // _state: &mut ProcessorState,
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
@@ -84,7 +85,10 @@ macro_rules! comparison_op {
 
         impl<S: Signal + Clone + PartialEq + PartialOrd> Processor for $name<S> {
             fn input_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("a", S::TYPE), SignalSpec::new("b", S::TYPE)]
+                vec![
+                    SignalSpec::new("a", S::signal_type()),
+                    SignalSpec::new("b", S::signal_type()),
+                ]
             }
 
             fn output_spec(&self) -> Vec<SignalSpec> {
@@ -93,6 +97,7 @@ macro_rules! comparison_op {
 
             fn process(
                 &mut self,
+                // _state: &mut ProcessorState,
                 inputs: ProcessorInputs,
                 mut outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {

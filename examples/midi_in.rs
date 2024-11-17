@@ -16,7 +16,7 @@ fn main() {
     let freq = freq.make_register().midi2freq();
     freq.output(0).connect(&sine.input(0));
 
-    let vel = graph.add(MidiVelocity);
+    let vel = graph.add(MidiVelocity::default());
     vel.input("midi").connect(midi.output(0));
     let vel = vel.make_register().smooth(0.001);
     let vel = vel / 127.0 * 0.5;

@@ -78,8 +78,17 @@ impl Processor for PeakLimiter {
         self.sample_rate = sample_rate;
     }
 
+    fn init_state(&self, state: &mut ProcessorState) {
+        state.set("gain", 1.0);
+        state.set("envelope", 0.0);
+        state.set("threshold", 0.9885530946569389);
+        state.set("attack", 0.9);
+        state.set("release", 0.9995);
+    }
+
     fn process(
         &mut self,
+        // state: &mut ProcessorState,
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {

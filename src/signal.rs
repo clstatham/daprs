@@ -33,6 +33,7 @@ pub const TAU: Float = std::f64::consts::TAU;
 ///
 /// This type implements [`Deref`] and [`DerefMut`] so that it can be used as a slice of [`Option<T>`].
 #[derive(PartialEq, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Buffer<T: Signal> {
     buf: Vec<Option<T>>,
 }
@@ -247,6 +248,7 @@ impl<'a, T: Signal> IntoIterator for &'a mut Buffer<T> {
 
 /// A 3-byte MIDI message.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MidiMessage {
     /// The MIDI message data.
     pub data: [u8; 3],
@@ -295,7 +297,7 @@ impl DerefMut for MidiMessage {
 /// A trait for types that can be stored in a [`Buffer`] and processed by a [`Processor`](crate::processor::Processor).
 pub trait Signal: Debug + Send + Sync + PartialEq + 'static {
     /// The type of the signal.
-    const TYPE: SignalType;
+    fn signal_type() -> SignalType;
 
     /// Converts the signal into an [`AnySignal`].
     fn into_signal(self) -> AnySignal;
@@ -336,7 +338,9 @@ pub trait Signal: Debug + Send + Sync + PartialEq + 'static {
 }
 
 impl Signal for Float {
-    const TYPE: SignalType = SignalType::Float;
+    fn signal_type() -> SignalType {
+        SignalType::Float
+    }
 
     #[inline]
     fn into_signal(self) -> AnySignal {
@@ -385,7 +389,9 @@ impl Signal for Float {
 }
 
 impl Signal for bool {
-    const TYPE: SignalType = SignalType::Bool;
+    fn signal_type() -> SignalType {
+        SignalType::Bool
+    }
 
     #[inline]
     fn into_signal(self) -> AnySignal {
@@ -434,7 +440,9 @@ impl Signal for bool {
 }
 
 impl Signal for i64 {
-    const TYPE: SignalType = SignalType::Int;
+    fn signal_type() -> SignalType {
+        SignalType::Int
+    }
 
     #[inline]
     fn into_signal(self) -> AnySignal {
@@ -483,7 +491,9 @@ impl Signal for i64 {
 }
 
 impl Signal for String {
-    const TYPE: SignalType = SignalType::String;
+    fn signal_type() -> SignalType {
+        SignalType::String
+    }
 
     #[inline]
     fn into_signal(self) -> AnySignal {
@@ -532,10 +542,12 @@ impl Signal for String {
 }
 
 impl Signal for SignalBuffer {
-    const TYPE: SignalType = SignalType::List {
-        size: None,
-        element_type: None,
-    };
+    fn signal_type() -> SignalType {
+        SignalType::List {
+            size: None,
+            element_type: None,
+        }
+    }
 
     #[inline]
     fn into_signal(self) -> AnySignal {
@@ -584,7 +596,9 @@ impl Signal for SignalBuffer {
 }
 
 impl Signal for MidiMessage {
-    const TYPE: SignalType = SignalType::Midi;
+    fn signal_type() -> SignalType {
+        SignalType::Midi
+    }
 
     #[inline]
     fn into_signal(self) -> AnySignal {
@@ -634,6 +648,7 @@ impl Signal for MidiMessage {
 
 /// A type that can hold any signal type.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AnySignal {
     /// No signal. The inner value is the expected signal type.
     None(SignalType),
@@ -749,7 +764,7 @@ impl AnySignal {
 
     /// Returns `true` if the signal is of the given type.
     pub fn is_type<T: Signal>(&self) -> bool {
-        self.type_() == T::TYPE
+        self.signal_type() == T::signal_type()
     }
 
     /// Returns the floating-point value if the signal is a float, without casting.
@@ -821,7 +836,7 @@ impl AnySignal {
     }
 
     /// Returns the type of the signal.
-    pub fn type_(&self) -> SignalType {
+    pub fn signal_type(&self) -> SignalType {
         match self {
             Self::None(type_) => type_.clone(),
             Self::Float(_) => SignalType::Float,
@@ -859,10 +874,10 @@ impl AnySignal {
     /// | List      | -     | -   | -    | -      | -    | -    |
     /// | Midi      | -     | -   | -    | -      | -    | -    |
     pub fn cast<T: Signal>(&self) -> Option<T> {
-        if self.type_() == T::TYPE {
+        if self.signal_type() == T::signal_type() {
             T::try_from_signal(self.clone())
         } else {
-            match (self, T::TYPE) {
+            match (self, T::signal_type()) {
                 (Self::None(_), _) => None,
 
                 // float <-> int
@@ -912,7 +927,7 @@ impl AnySignal {
 
     /// Attempts to extract the signal as the given signal type.
     pub fn as_type<T: Signal>(&self) -> Option<&Option<T>> {
-        if self.type_() == T::TYPE {
+        if self.signal_type() == T::signal_type() {
             T::try_from_signal_ref(self)
         } else {
             None
@@ -921,7 +936,7 @@ impl AnySignal {
 
     /// Attempts to mutably extract the signal as the given signal type.
     pub fn as_type_mut<T: Signal>(&mut self) -> Option<&mut Option<T>> {
-        if self.type_() == T::TYPE {
+        if self.signal_type() == T::signal_type() {
             T::try_from_signal_mut(self)
         } else {
             None
@@ -931,6 +946,7 @@ impl AnySignal {
 
 /// A signal type.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SignalType {
     /// A floating-point signal.
     Float,
@@ -995,6 +1011,7 @@ impl SignalType {
 
 /// A buffer of signals that can hold any signal type.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SignalBuffer {
     /// A buffer of floating-point signals.
     Float(Buffer<Float>),

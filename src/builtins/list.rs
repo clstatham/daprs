@@ -87,7 +87,7 @@ impl<S: Signal + Copy> Processor for Get<S> {
                 "list",
                 SignalType::List {
                     size: None,
-                    element_type: Some(Box::new(S::TYPE)),
+                    element_type: Some(Box::new(S::signal_type())),
                 },
             ),
             SignalSpec::new("index", SignalType::Int),
@@ -95,7 +95,7 @@ impl<S: Signal + Copy> Processor for Get<S> {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::TYPE)]
+        vec![SignalSpec::new("out", S::signal_type())]
     }
 
     fn process(
@@ -113,10 +113,10 @@ impl<S: Signal + Copy> Processor for Get<S> {
                 continue;
             };
 
-            if list.type_() != S::TYPE {
+            if list.type_() != S::signal_type() {
                 return Err(ProcessorError::InputSpecMismatch {
                     index: 0,
-                    expected: S::TYPE,
+                    expected: S::signal_type(),
                     actual: list.type_(),
                 });
             }
@@ -170,7 +170,7 @@ impl<S: Signal + Copy> Pack<S> {
 impl<S: Signal + Copy> Processor for Pack<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         (0..self.inputs.len())
-            .map(|i| SignalSpec::new(i.to_string(), S::TYPE))
+            .map(|i| SignalSpec::new(i.to_string(), S::signal_type()))
             .collect()
     }
 
@@ -179,7 +179,7 @@ impl<S: Signal + Copy> Processor for Pack<S> {
             "out",
             SignalType::List {
                 size: Some(self.inputs.len()),
-                element_type: Some(Box::new(S::TYPE)),
+                element_type: Some(Box::new(S::signal_type())),
             },
         )]
     }
@@ -228,7 +228,7 @@ impl<S: Signal + Copy> Processor for Pack<S> {
             // we should only get here if the list is not initialized or has the wrong length
             error_once!("pack_list" => "list is not initialized or has the wrong length");
 
-            let mut buf = SignalBuffer::new_of_type(&S::TYPE, self.inputs.len());
+            let mut buf = SignalBuffer::new_of_type(&S::signal_type(), self.inputs.len());
             {
                 let buf = buf.as_type_mut::<S>().unwrap();
                 buf.copy_from(&self.inputs);
@@ -278,14 +278,14 @@ impl<S: Signal + Copy> Processor for Unpack<S> {
             "list",
             SignalType::List {
                 size: Some(self.num_outputs),
-                element_type: Some(Box::new(S::TYPE)),
+                element_type: Some(Box::new(S::signal_type())),
             },
         )]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         (0..self.num_outputs)
-            .map(|i| SignalSpec::new(i.to_string(), S::TYPE))
+            .map(|i| SignalSpec::new(i.to_string(), S::signal_type()))
             .collect()
     }
 

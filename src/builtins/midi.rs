@@ -63,8 +63,10 @@ impl Processor for MidiNote {
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `velocity` | `Float` | The velocity of the input MIDI message. |
-#[derive(Debug, Clone)]
-pub struct MidiVelocity;
+#[derive(Debug, Clone, Default)]
+pub struct MidiVelocity {
+    velocity: Float,
+}
 
 impl Processor for MidiVelocity {
     fn input_spec(&self) -> Vec<SignalSpec> {
@@ -85,11 +87,10 @@ impl Processor for MidiVelocity {
             outputs.iter_output_mut_as_floats(0)?
         ) {
             if let Some(msg) = midi {
-                let velocity = msg.data2() as Float;
-                *out = Some(velocity);
-            } else {
-                *out = None;
+                self.velocity = msg.data2() as Float;
             }
+
+            *out = Some(self.velocity);
         }
         Ok(())
     }

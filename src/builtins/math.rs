@@ -34,7 +34,7 @@ impl<S: Signal + Clone> Processor for Constant<S> {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::TYPE)]
+        vec![SignalSpec::new("out", S::signal_type())]
     }
 
     fn process(
@@ -264,13 +264,13 @@ macro_rules! impl_binary_proc {
         impl Processor for $name<$data> {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![
-                    SignalSpec::new("a", <$data as Signal>::TYPE),
-                    SignalSpec::new("b", <$data as Signal>::TYPE),
+                    SignalSpec::new("a", <$data as Signal>::signal_type()),
+                    SignalSpec::new("b", <$data as Signal>::signal_type()),
                 ]
             }
 
             fn output_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("out", <$data as Signal>::TYPE)]
+                vec![SignalSpec::new("out", <$data as Signal>::signal_type())]
             }
 
             fn process(
@@ -389,11 +389,11 @@ macro_rules! impl_unary_proc {
         $(
         impl Processor for $name<$data> {
             fn input_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("in", <$data as Signal>::TYPE)]
+                vec![SignalSpec::new("in", <$data as Signal>::signal_type())]
             }
 
             fn output_spec(&self) -> Vec<SignalSpec> {
-                vec![SignalSpec::new("out", <$data as Signal>::TYPE)]
+                vec![SignalSpec::new("out", <$data as Signal>::signal_type())]
             }
 
             fn process(

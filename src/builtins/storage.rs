@@ -135,13 +135,13 @@ impl<S: Signal + Clone> Default for Register<S> {
 impl<S: Signal + Clone> Processor for Register<S> {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("set", S::TYPE),
+            SignalSpec::new("set", S::signal_type()),
             SignalSpec::new("clear", SignalType::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::TYPE)]
+        vec![SignalSpec::new("out", S::signal_type())]
     }
 
     fn process(

@@ -4,9 +4,10 @@ use std::fmt::Debug;
 
 use downcast_rs::{impl_downcast, DowncastSync};
 use itertools::Either;
+use rustc_hash::FxHashMap;
 use thiserror::Error;
 
-use crate::signal::{Float, MidiMessage, Signal, SignalBuffer, SignalType};
+use crate::signal::{AnySignal, Float, MidiMessage, Signal, SignalBuffer, SignalType};
 
 /// Error type for [`Processor`] operations.
 #[derive(Debug, Clone, Error)]
@@ -190,23 +191,23 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         };
 
         if let Some(sample_index) = self.sample_index {
-            if buffer.type_().is_compatible_with(&S::TYPE) {
+            if buffer.type_().is_compatible_with(&S::signal_type()) {
                 Ok(Ternary::B(std::iter::once(
                     &buffer.as_type::<S>().unwrap()[sample_index],
                 )))
             } else {
                 Err(ProcessorError::InputSpecMismatch {
                     index,
-                    expected: S::TYPE,
+                    expected: S::signal_type(),
                     actual: buffer.type_(),
                 })
             }
-        } else if buffer.type_().is_compatible_with(&S::TYPE) {
+        } else if buffer.type_().is_compatible_with(&S::signal_type()) {
             Ok(Ternary::A(buffer.as_type::<S>().unwrap().iter()))
         } else {
             Err(ProcessorError::InputSpecMismatch {
                 index,
-                expected: S::TYPE,
+                expected: S::signal_type(),
                 actual: buffer.type_(),
             })
         }
@@ -317,14 +318,14 @@ impl<'a> ProcessorOutputs<'a> {
     ) -> Result<impl Iterator<Item = &mut Option<S>> + '_, ProcessorError> {
         if let Some(sample_index) = self.sample_index {
             let output = &mut self.outputs[index];
-            if output.type_().is_compatible_with(&S::TYPE) {
+            if output.type_().is_compatible_with(&S::signal_type()) {
                 Ok(Either::Left(std::iter::once(
                     &mut output.as_type_mut::<S>().unwrap()[sample_index],
                 )))
             } else {
                 Err(ProcessorError::OutputSpecMismatch {
                     index,
-                    expected: S::TYPE,
+                    expected: S::signal_type(),
                     actual: output.type_(),
                 })
             }
@@ -336,7 +337,7 @@ impl<'a> ProcessorOutputs<'a> {
                     .as_type_mut::<S>()
                     .ok_or_else(|| ProcessorError::OutputSpecMismatch {
                         index,
-                        expected: S::TYPE,
+                        expected: S::signal_type(),
                         actual,
                     })?;
 
@@ -399,6 +400,89 @@ impl<'a> ProcessorOutputs<'a> {
     }
 }
 
+/// The state of a processor during processing.
+///
+/// This struct is passed to the [`Processor::process`] method and contains information about the current processing state.
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ProcessorState {
+    sample_rate: Float,
+    block_size: usize,
+    sample_index: Option<usize>,
+    custom: FxHashMap<String, AnySignal>,
+}
+
+impl ProcessorState {
+    /// Creates a new [`ProcessorState`] with the given sample rate and block size.
+    pub fn new(sample_rate: Float, block_size: usize) -> Self {
+        Self {
+            sample_rate,
+            block_size,
+            sample_index: None,
+            custom: FxHashMap::default(),
+        }
+    }
+
+    /// Returns the sample rate of the processor.
+    #[inline]
+    pub fn sample_rate(&self) -> Float {
+        self.sample_rate
+    }
+
+    /// Returns the block size of the processor.
+    #[inline]
+    pub fn block_size(&self) -> usize {
+        self.block_size
+    }
+
+    /// Sets the sample rate of the processor.
+    #[inline]
+    pub(crate) fn set_sample_rate(&mut self, sample_rate: Float) {
+        self.sample_rate = sample_rate;
+    }
+
+    /// Sets the block size of the processor.
+    #[inline]
+    pub(crate) fn set_block_size(&mut self, block_size: usize) {
+        self.block_size = block_size;
+    }
+
+    /// Sets the current sample index within the block. This is used when the processor is being run per-sample.
+    #[inline]
+    pub(crate) fn set_sample_index(&mut self, sample_index: Option<usize>) {
+        self.sample_index = sample_index;
+    }
+
+    /// Returns the current sample index within the block, if the processor is being run per-sample.
+    #[inline]
+    pub fn sample_index(&self) -> Option<usize> {
+        self.sample_index
+    }
+    /// Returns a reference to the custom value with the given name, if it exists and is of the given type.
+    #[inline]
+    pub fn get<S: Signal>(&self, name: &str) -> Option<&S> {
+        self.custom
+            .get(name)
+            .and_then(|s| s.as_type::<S>())
+            .and_then(Option::as_ref)
+    }
+
+    /// Returns a mutable reference to the custom value with the given name, if it exists and is of the given type.
+    #[inline]
+    pub fn get_mut<S: Signal>(&mut self, name: &str) -> Option<&mut S> {
+        self.custom
+            .get_mut(name)
+            .and_then(|s| s.as_type_mut::<S>())
+            .and_then(Option::as_mut)
+    }
+
+    /// Sets the custom value with the given name.
+    #[inline]
+    pub fn set<S: Signal>(&mut self, name: impl Into<String>, value: S) {
+        self.custom.insert(name.into(), value.into_signal());
+    }
+}
+
 /// A processor that can process audio signals.
 pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
     /// Returns the name of the processor.
@@ -430,8 +514,17 @@ pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
         self.output_spec().len()
     }
 
+    /// Initializes the processor state by setting any custom values to their initial state.
+    ///
+    /// This method is called before processing begins.
+    #[allow(unused)]
+    fn init_state(&self, state: &mut ProcessorState) {}
+
     /// Prepares the processor for processing.
-    fn prepare(&mut self) {}
+    ///
+    /// This method is called once before processing begins.
+    #[allow(unused)]
+    fn prepare(&mut self, state: &mut ProcessorState) {}
 
     /// Called anytime the sample rate or block size changes.
     #[allow(unused)]
@@ -440,6 +533,7 @@ pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
     /// Processes the input signals and writes the output signals.
     fn process(
         &mut self,
+        // state: &mut ProcessorState,
         inputs: ProcessorInputs,
         outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError>;
