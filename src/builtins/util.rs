@@ -13,6 +13,8 @@ use crate::{
     signal::{Float, Signal, SignalType},
 };
 
+use super::lerp;
+
 /// A processor that passes its input to its output unchanged.
 ///
 /// # Inputs
@@ -56,7 +58,7 @@ impl<S: Signal + Clone> Processor for Passthrough<S> {
 
         let mut out_signal = outputs.output(0);
 
-        let in_signal = in_signal.iter::<S>().unwrap();
+        let in_signal = in_signal.as_type::<S>().unwrap();
         let out_signal = out_signal.iter_mut::<S>();
 
         for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
@@ -112,7 +114,7 @@ impl<S: Signal + Clone, T: Signal + Clone> Processor for Cast<S, T> {
             return Ok(());
         };
 
-        let in_signal = in_signal.iter::<S>().unwrap();
+        let in_signal = in_signal.as_type::<S>().unwrap();
 
         let mut out_signal = outputs.output(0);
         let out_signal = out_signal.iter_mut::<T>();
@@ -327,11 +329,6 @@ impl GraphBuilder {
     pub fn sample_rate(&self) -> Node {
         self.add(SampleRate::default())
     }
-}
-
-#[inline]
-fn lerp(a: Float, b: Float, t: Float) -> Float {
-    a + (b - a) * t
 }
 
 /// A processor that smooths a signal using linear interpolation.
@@ -657,6 +654,12 @@ impl<S: Signal + Clone> ParamRx<S> {
     }
 }
 
+/// Creates a new set of connected [`SignalTx`] and [`SignalRx`] transmitters and receivers.
+pub fn signal_channel<S: Signal + Clone>() -> (SignalTx<S>, SignalRx<S>) {
+    let (tx, rx) = crossbeam_channel::unbounded();
+    (SignalTx::new(tx), SignalRx::new(rx))
+}
+
 pub(crate) fn param_channel<S: Signal + Clone>() -> (SignalTx<S>, ParamRx<S>) {
     let (tx, rx) = crossbeam_channel::unbounded();
     (SignalTx::new(tx), ParamRx::new(SignalRx::new(rx)))
@@ -925,6 +928,55 @@ impl Processor for CheckFinite {
             }
 
             *out_signal = in_signal;
+        }
+
+        Ok(())
+    }
+}
+
+/// A processor that outputs 0.0 when the input signal is NaN or infinite.
+/// Otherwise, it passes the input signal through unchanged.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `in` | `Float` | The input signal. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The input signal passed through, or 0.0 if the input signal is NaN or infinite. |
+#[derive(Clone, Debug, Default)]
+pub struct FiniteOrZero;
+
+impl Processor for FiniteOrZero {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", SignalType::Float)]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalType::Float)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        let in_signal = inputs.iter_input_as_floats(0)?;
+        let out_signal = outputs.iter_output_mut_as_floats(0)?;
+        for (in_signal, out_signal) in in_signal.zip(out_signal) {
+            if let Some(in_signal) = in_signal {
+                if in_signal.is_nan() || in_signal.is_infinite() {
+                    *out_signal = Some(0.0);
+                } else {
+                    *out_signal = Some(in_signal);
+                }
+            } else {
+                *out_signal = None;
+            }
         }
 
         Ok(())

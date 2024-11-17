@@ -380,6 +380,34 @@ impl Node {
         self.assert_single_output("print");
         self.output(0).print()
     }
+
+    /// Connects a [`CheckFinite`] processor to the output of this node.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the node has multiple outputs.
+    /// - Panics if the output signal is not a float.
+    ///
+    /// Also note that, during the execution of the graph, this processor will panic if the output signal is `inf` or `NaN`.
+    #[inline]
+    #[track_caller]
+    pub fn check_finite(&self) -> Node {
+        self.assert_single_output("check_finite");
+        self.output(0).check_finite()
+    }
+
+    /// Connects a [`FiniteOrZero`] processor to the output of this node.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the node has multiple outputs.
+    /// - Panics if the output signal is not a float.
+    #[inline]
+    #[track_caller]
+    pub fn finite_or_zero(&self) -> Node {
+        self.assert_single_output("finite_or_zero");
+        self.output(0).finite_or_zero()
+    }
 }
 
 /// Represents an input of a [`Node`].
@@ -671,13 +699,37 @@ impl Output {
     }
 
     /// Creates a [`CheckFinite`] processor and connects it to the output.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the output signal is not a float.
+    ///
+    /// Also note that, during the execution of the graph, this processor will panic if the output signal is `inf` or `NaN`.
     #[inline]
+    #[track_caller]
     pub fn check_finite(&self) -> Node {
         assert!(
             matches!(self.type_(), SignalType::Float),
             "output signal must be a float"
         );
         let proc = self.node.graph().add(CheckFinite::default());
+        proc.input(0).connect(self);
+        proc
+    }
+
+    /// Creates a [`FiniteOrZero`] processor and connects it to the output.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the output signal is not a float.
+    #[inline]
+    #[track_caller]
+    pub fn finite_or_zero(&self) -> Node {
+        assert!(
+            matches!(self.type_(), SignalType::Float),
+            "output signal must be a float"
+        );
+        let proc = self.node.graph().add(FiniteOrZero);
         proc.input(0).connect(self);
         proc
     }

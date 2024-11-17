@@ -89,9 +89,6 @@ pub struct Graph {
     input_nodes: Vec<NodeIndex>,
     output_nodes: Vec<NodeIndex>,
 
-    // internal flags for various states of the graph
-    needs_visitor_alloc: bool,
-
     // cached visitor state for graph traversal
     visitor: DfsPostOrder<NodeIndex, FxHashSet<NodeIndex>>,
     visit_path: Vec<NodeIndex>,
@@ -118,12 +115,6 @@ impl Graph {
         &mut self.digraph
     }
 
-    /// Returns `true` if the graph needs to allocate its visitor (call [`Graph::allocate_visitor()`]).
-    #[inline]
-    pub fn needs_visitor_alloc(&self) -> bool {
-        self.needs_visitor_alloc
-    }
-
     /// Adds an audio input node to the graph.
     pub fn add_audio_input(&mut self) -> NodeIndex {
         let idx = self
@@ -144,7 +135,6 @@ impl Graph {
 
     /// Adds a processor node to the graph.
     pub fn add_processor(&mut self, processor: impl Processor) -> NodeIndex {
-        self.needs_visitor_alloc = true;
         self.digraph.add_node(ProcessorNode::new(processor))
     }
 
@@ -198,10 +188,27 @@ impl Graph {
             self.digraph.remove_edge(edge.id()).unwrap();
         }
 
-        self.needs_visitor_alloc = true;
+        let source_output_name = self.digraph[source].processor.output_spec()
+            [source_output as usize]
+            .name
+            .clone();
 
-        self.digraph
-            .add_edge(source, target, Edge::new(source_output, target_input));
+        let target_input_name = self.digraph[target].processor.input_spec()[target_input as usize]
+            .name
+            .clone();
+
+        self.digraph.add_edge(
+            source,
+            target,
+            Edge {
+                source_output,
+                target_input,
+                source_output_name: Some(source_output_name),
+                target_input_name: Some(target_input_name),
+            },
+        );
+
+        self.reset_visitor();
 
         self.detect_sccs();
 
@@ -229,8 +236,8 @@ impl Graph {
             });
 
         if let Some(edge) = edge {
-            self.needs_visitor_alloc = true;
             self.digraph.remove_edge(edge.id()).unwrap();
+            self.reset_visitor();
             self.detect_sccs();
         }
     }
@@ -243,8 +250,9 @@ impl Graph {
             .map(|edge| edge.id())
             .collect::<Vec<_>>();
         for edge in incoming_edges {
-            self.needs_visitor_alloc = true;
             self.digraph.remove_edge(edge).unwrap();
+            self.reset_visitor();
+            self.detect_sccs();
         }
     }
 
@@ -256,8 +264,9 @@ impl Graph {
             .map(|edge| edge.id())
             .collect::<Vec<_>>();
         for edge in outgoing_edges {
-            self.needs_visitor_alloc = true;
             self.digraph.remove_edge(edge).unwrap();
+            self.reset_visitor();
+            self.detect_sccs();
         }
     }
 
@@ -277,6 +286,11 @@ impl Graph {
     #[inline]
     pub fn num_audio_outputs(&self) -> usize {
         self.output_nodes.len()
+    }
+
+    #[inline]
+    pub fn node_name(&self, node: NodeIndex) -> &str {
+        self.digraph[node].processor.name()
     }
 
     /// Returns the number of parameters in the graph.
@@ -336,30 +350,15 @@ impl Graph {
 
     #[inline]
     pub(crate) fn detect_sccs(&mut self) {
-        self.sccs = petgraph::algo::tarjan_scc(&self.digraph);
+        self.sccs = petgraph::algo::kosaraju_scc(&self.digraph);
         self.sccs.reverse();
     }
 
     #[inline]
-    pub(crate) fn is_in_scc(&self, node: NodeIndex) -> bool {
-        self.sccs
-            .iter()
-            .any(|scc| scc.len() > 1 && scc.contains(&node))
-    }
-
-    /// Allocates the visitor for the graph.
-    #[inline]
-    pub fn allocate_visitor(&mut self) {
+    pub(crate) fn reset_visitor(&mut self) {
         if self.visit_path.capacity() < self.digraph.node_count() {
             self.visit_path = Vec::with_capacity(self.digraph.node_count());
         }
-        self.reset_visitor();
-
-        self.needs_visitor_alloc = false;
-    }
-
-    #[inline]
-    pub(crate) fn reset_visitor(&mut self) {
         self.visit_path.clear();
         self.visitor.discovered.clear();
         self.visitor.stack.clear();
@@ -379,11 +378,6 @@ impl Graph {
     where
         F: FnMut(&mut Graph, NodeIndex) -> Result<(), E>,
     {
-        assert!(
-            !self.needs_visitor_alloc,
-            "Graph's cached visitor needs allocation; call `allocate_visitor()` first"
-        );
-
         self.reset_visitor();
 
         for i in 0..self.visit_path.len() {
@@ -403,7 +397,7 @@ impl Graph {
 
     /// Calls [`Processor::prepare()`] on each node in the graph.
     pub fn prepare(&mut self) -> GraphRunResult<()> {
-        self.allocate_visitor();
+        self.reset_visitor();
         self.visit(|graph, node| {
             graph.digraph[node].prepare();
             Ok(())

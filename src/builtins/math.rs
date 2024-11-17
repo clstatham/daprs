@@ -91,10 +91,7 @@ impl Processor for MidiToFreq {
             inputs.iter_input_as_floats(0)?,
             outputs.iter_output_mut_as_floats(0)?
         ) {
-            let Some(note) = note else {
-                *freq = None;
-                continue;
-            };
+            let note = note.unwrap_or_default();
             *freq = Some(Float::powf(2.0, (note - 69.0) / 12.0) * 440.0);
         }
 
@@ -224,17 +221,17 @@ impl Processor for Expr {
 
             for (inp_idx, name) in self.inputs.iter().enumerate() {
                 let buffer = &inputs.input(inp_idx).unwrap();
-                let actual = buffer.type_().unwrap();
-                let mut buffer_iter =
+                let actual = buffer.type_();
+                let buffer =
                     buffer
-                        .iter::<Float>()
+                        .as_type::<Float>()
                         .ok_or_else(|| ProcessorError::InputSpecMismatch {
                             index: inp_idx,
                             expected: SignalType::Float,
                             actual,
                         })?;
-                let samp = buffer_iter.nth(samp_idx).and_then(Option::as_ref).unwrap();
-                self.input_values.push((name.to_string(), *samp));
+                let samp = buffer[samp_idx].unwrap();
+                self.input_values.push((name.to_string(), samp));
             }
 
             *out = Some(self.eval());
@@ -286,14 +283,20 @@ macro_rules! impl_binary_proc {
                     inputs.iter_input_as::<$data>(0)?,
                     inputs.iter_input_as::<$data>(1)?
                 ) {
-                    let (Some(in1), Some(in2)) = (in1, in2) else {
-                        *sample = None;
-                        continue;
-                    };
-
-                    // debug_assert!(in1.is_finite());
-                    // debug_assert!(in2.is_finite());
-                    *sample = Some(<$data>::$method(*in1, *in2));
+                    match (in1, in2) {
+                        (Some(in1), Some(in2)) => {
+                            *sample = Some(<$data>::$method(*in1, *in2));
+                        }
+                        (Some(a), None) => {
+                            *sample = Some(<$data>::$method(*a, <$data>::default()));
+                        }
+                        (None, Some(b)) => {
+                            *sample = Some(<$data>::$method(<$data>::default(), *b));
+                        }
+                        _ => {
+                            *sample = None;
+                        }
+                    }
                 }
 
                 Ok(())

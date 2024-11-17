@@ -1,5 +1,7 @@
 //! Oscillator processors.
 
+use std::collections::VecDeque;
+
 use rand::prelude::Distribution;
 
 use crate::{
@@ -556,6 +558,115 @@ impl Processor for BlSquareOscillator {
             self.t += self.t_step;
 
             *out = Some(square);
+        }
+
+        Ok(())
+    }
+}
+
+/// A processor that models a physical string vibrating at a given frequency using the Karplus-Strong algorithm.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `trig` | `bool` | Triggers the pluck. |
+/// | `1` | `frequency` | `Float` | The frequency of the string. |
+/// | `2` | `damping` | `Float` | The damping factor of the string. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The string value. |
+#[derive(Clone, Debug)]
+pub struct KarplusStrong {
+    sample_rate: Float,
+
+    // delay line
+    ringbuf: VecDeque<Float>,
+
+    /// The damping factor of the string.
+    pub damping: Float,
+
+    /// The frequency of the string.
+    pub frequency: Float,
+}
+
+impl KarplusStrong {
+    /// Creates a new [`KarplusStrong`] processor with the given frequency, damping factor, and pluck position.
+    pub fn new(frequency: Float, damping: Float) -> Self {
+        Self {
+            sample_rate: 0.0,
+            ringbuf: VecDeque::new(),
+            damping,
+            frequency,
+        }
+    }
+}
+
+impl Default for KarplusStrong {
+    fn default() -> Self {
+        Self::new(0.0, 0.5)
+    }
+}
+
+impl Processor for KarplusStrong {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("trig", SignalType::Bool),
+            SignalSpec::new("frequency", SignalType::Float),
+            SignalSpec::new("damping", SignalType::Float),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalType::Float)]
+    }
+
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
+        self.sample_rate = sample_rate;
+        self.ringbuf = VecDeque::with_capacity(sample_rate as usize / 2);
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        for (out, trig, frequency, damping) in itertools::izip!(
+            outputs.iter_output_mut_as_floats(0)?,
+            inputs.iter_input_as_bools(0)?,
+            inputs.iter_input_as_floats(1)?,
+            inputs.iter_input_as_floats(2)?
+        ) {
+            self.frequency = frequency.unwrap_or(self.frequency);
+            if self.frequency <= 0.0 {
+                *out = None;
+                continue;
+            }
+
+            self.damping = damping.unwrap_or(self.damping);
+
+            if trig.unwrap_or(false) {
+                // calculate the delay line index
+                let delay_time = (self.sample_rate / self.frequency) as usize;
+
+                // initialize the delay line with noise
+                self.ringbuf.clear();
+                for _ in 0..delay_time {
+                    self.ringbuf.push_back(rand::random::<Float>() * 2.0 - 1.0);
+                }
+            }
+
+            let first = self.ringbuf.pop_front().unwrap_or_default();
+            let second = self.ringbuf.front().copied().unwrap_or_default();
+
+            let new_sample = (first + second) * 0.5 * (1.0 - self.damping) + first * self.damping;
+
+            self.ringbuf.push_back(new_sample);
+
+            *out = Some(first);
         }
 
         Ok(())

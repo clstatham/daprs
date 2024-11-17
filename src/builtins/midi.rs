@@ -15,8 +15,10 @@ use crate::prelude::*;
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `note` | `Float` | The note number of the input MIDI message. |
-#[derive(Debug, Clone)]
-pub struct MidiNote;
+#[derive(Debug, Clone, Default)]
+pub struct MidiNote {
+    note: Float,
+}
 
 impl Processor for MidiNote {
     fn input_spec(&self) -> Vec<SignalSpec> {
@@ -36,13 +38,13 @@ impl Processor for MidiNote {
             inputs.iter_input_as_midi(0)?,
             outputs.iter_output_mut_as_floats(0)?
         ) {
-            *out = None;
             if let Some(msg) = midi {
                 if msg.status() == 0x90 {
-                    let note = msg.data1() as Float;
-                    *out = Some(note);
+                    self.note = msg.data1() as Float;
                 }
             }
+
+            *out = Some(self.note);
         }
         Ok(())
     }
@@ -82,10 +84,11 @@ impl Processor for MidiVelocity {
             inputs.iter_input_as_midi(0)?,
             outputs.iter_output_mut_as_floats(0)?
         ) {
-            *out = None;
             if let Some(msg) = midi {
                 let velocity = msg.data2() as Float;
                 *out = Some(velocity);
+            } else {
+                *out = None;
             }
         }
         Ok(())

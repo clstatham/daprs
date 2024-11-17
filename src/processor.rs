@@ -6,10 +6,7 @@ use downcast_rs::{impl_downcast, DowncastSync};
 use itertools::Either;
 use thiserror::Error;
 
-use crate::{
-    runtime::NodeOutputStorage,
-    signal::{AnySignal, Float, MidiMessage, Signal, SignalBuffer, SignalType},
-};
+use crate::signal::{Float, MidiMessage, Signal, SignalBuffer, SignalType};
 
 /// Error type for [`Processor`] operations.
 #[derive(Debug, Clone, Error)]
@@ -101,49 +98,13 @@ where
     }
 }
 
-/// The input of a [`Processor`].
-#[derive(Debug, Clone, Copy)]
-pub enum ProcessorInput<'a> {
-    /// A block of signals.
-    Block(&'a SignalBuffer),
-    /// A single sample.
-    Sample(
-        /// The signal.
-        &'a AnySignal,
-        /// The index of the sample within the block.
-        usize,
-    ),
-}
-
-impl ProcessorInput<'_> {
-    /// Returns the type of the input signal.
-    #[inline]
-    pub fn type_(&self) -> Option<SignalType> {
-        match self {
-            ProcessorInput::Block(buffer) => Some(buffer.type_()),
-            ProcessorInput::Sample(signal, _) => Some(signal.type_()),
-        }
-    }
-
-    /// Returns an iterator over the input signal, if it is of the given type.
-    #[inline]
-    pub fn iter<S: Signal>(&self) -> Option<impl Iterator<Item = &Option<S>>> {
-        match self {
-            ProcessorInput::Block(buffer) => Some(Either::Left(buffer.as_type()?.iter())),
-            ProcessorInput::Sample(signal, _) => {
-                Some(Either::Right(std::iter::once(signal.as_type::<S>()?)))
-            }
-        }
-    }
-}
-
 /// The output of a [`Processor`].
 #[derive(Debug)]
 pub enum ProcessorOutput<'a> {
     /// A block of signals.
     Block(&'a mut SignalBuffer),
     /// A single sample.
-    Sample(&'a mut AnySignal),
+    Sample(&'a mut SignalBuffer, usize),
 }
 
 impl<'a> ProcessorOutput<'a> {
@@ -152,7 +113,7 @@ impl<'a> ProcessorOutput<'a> {
     pub fn type_(&self) -> SignalType {
         match self {
             ProcessorOutput::Block(buffer) => buffer.type_(),
-            ProcessorOutput::Sample(signal) => signal.type_(),
+            ProcessorOutput::Sample(buffer, _) => buffer.type_(),
         }
     }
 
@@ -162,32 +123,37 @@ impl<'a> ProcessorOutput<'a> {
             ProcessorOutput::Block(buffer) => {
                 Either::Left(buffer.as_type_mut().unwrap().iter_mut())
             }
-            ProcessorOutput::Sample(signal) => {
-                Either::Right(std::iter::once(signal.as_type_mut::<S>().unwrap()))
-            }
+            ProcessorOutput::Sample(buffer, sample_index) => Either::Right(std::iter::once(
+                &mut buffer.as_type_mut::<S>().unwrap()[*sample_index],
+            )),
         }
     }
 }
 
 /// A collection of input signals for a [`Processor`] and their specifications.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct ProcessorInputs<'a, 'b> {
     /// The specifications of the input signals.
     input_specs: &'a [SignalSpec],
 
     /// The input signals.
-    inputs: &'a [Option<ProcessorInput<'b>>],
+    inputs: &'a [Option<&'b SignalBuffer>],
+
+    /// The index of the current sample within the block, if the inputs are sample-based.
+    sample_index: Option<usize>,
 }
 
 impl<'a, 'b> ProcessorInputs<'a, 'b> {
     #[inline]
     pub(crate) fn new(
         input_specs: &'a [SignalSpec],
-        inputs: &'a [Option<ProcessorInput<'b>>],
+        inputs: &'a [Option<&'b SignalBuffer>],
+        sample_index: Option<usize>,
     ) -> Self {
         Self {
             input_specs,
             inputs,
+            sample_index,
         }
     }
 
@@ -205,8 +171,11 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
 
     /// Returns the input signal at the given index. Unconnected inputs are represented as `None`.
     #[inline]
-    pub fn input(&self, index: usize) -> Option<&ProcessorInput<'b>> {
-        self.inputs.get(index).and_then(|input| input.as_ref())
+    pub fn input(&self, index: usize) -> Option<&'b SignalBuffer> {
+        self.inputs
+            .get(index)
+            .and_then(|input| input.as_ref())
+            .copied()
     }
 
     /// Returns an iterator over the input signal at the given index, if it is of the given type.
@@ -220,29 +189,26 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
             return Ok(Ternary::C(std::iter::repeat(&None)));
         };
 
-        if let ProcessorInput::Block(input) = buffer {
-            let input = input
-                .as_type::<S>()
-                .ok_or_else(|| ProcessorError::InputSpecMismatch {
-                    index,
-                    expected: S::TYPE,
-                    actual: input.type_(),
-                })?;
-
-            Ok(Ternary::A(input.iter()))
-        } else if let ProcessorInput::Sample(input, _) = buffer {
-            if input.type_() == S::TYPE {
-                Ok(Ternary::B(std::iter::once(input.as_type::<S>().unwrap())))
+        if let Some(sample_index) = self.sample_index {
+            if buffer.type_().is_compatible_with(&S::TYPE) {
+                Ok(Ternary::B(std::iter::once(
+                    &buffer.as_type::<S>().unwrap()[sample_index],
+                )))
             } else {
                 Err(ProcessorError::InputSpecMismatch {
                     index,
                     expected: S::TYPE,
-                    actual: input.type_(),
+                    actual: buffer.type_(),
                 })
             }
+        } else if buffer.type_().is_compatible_with(&S::TYPE) {
+            Ok(Ternary::A(buffer.as_type::<S>().unwrap().iter()))
         } else {
-            unreachable!()
-            // Ok(Ternary::C(std::iter::repeat(&None)))
+            Err(ProcessorError::InputSpecMismatch {
+                index,
+                expected: S::TYPE,
+                actual: buffer.type_(),
+            })
         }
     }
 
@@ -307,24 +273,33 @@ pub struct ProcessorOutputs<'a> {
     output_spec: &'a [SignalSpec],
 
     /// The output signals.
-    outputs: &'a mut NodeOutputStorage,
+    outputs: &'a mut [SignalBuffer],
+
+    /// The index of the current sample within the block, if the outputs are sample-based.
+    sample_index: Option<usize>,
 }
 
 impl<'a> ProcessorOutputs<'a> {
     #[inline]
-    pub(crate) fn new(output_spec: &'a [SignalSpec], outputs: &'a mut NodeOutputStorage) -> Self {
+    pub(crate) fn new(
+        output_spec: &'a [SignalSpec],
+        outputs: &'a mut [SignalBuffer],
+        sample_index: Option<usize>,
+    ) -> Self {
         Self {
             output_spec,
             outputs,
+            sample_index,
         }
     }
 
     /// Returns the output signal at the given index.
     #[inline]
     pub fn output(&mut self, index: usize) -> ProcessorOutput<'_> {
-        match self.outputs {
-            NodeOutputStorage::Block(outputs) => ProcessorOutput::Block(&mut outputs[index]),
-            NodeOutputStorage::Sample(outputs, _) => ProcessorOutput::Sample(&mut outputs[index]),
+        if let Some(sample_index) = self.sample_index {
+            ProcessorOutput::Sample(&mut self.outputs[index], sample_index)
+        } else {
+            ProcessorOutput::Block(&mut self.outputs[index])
         }
     }
 
@@ -340,35 +315,32 @@ impl<'a> ProcessorOutputs<'a> {
         &mut self,
         index: usize,
     ) -> Result<impl Iterator<Item = &mut Option<S>> + '_, ProcessorError> {
-        match self.outputs {
-            NodeOutputStorage::Block(outputs) => {
-                let output = &mut outputs[index];
-                let actual = output.type_();
-                let output = output.as_type_mut::<S>().ok_or_else(|| {
-                    ProcessorError::OutputSpecMismatch {
+        if let Some(sample_index) = self.sample_index {
+            let output = &mut self.outputs[index];
+            if output.type_().is_compatible_with(&S::TYPE) {
+                Ok(Either::Left(std::iter::once(
+                    &mut output.as_type_mut::<S>().unwrap()[sample_index],
+                )))
+            } else {
+                Err(ProcessorError::OutputSpecMismatch {
+                    index,
+                    expected: S::TYPE,
+                    actual: output.type_(),
+                })
+            }
+        } else {
+            let output = &mut self.outputs[index];
+            let actual = output.type_();
+            let output =
+                output
+                    .as_type_mut::<S>()
+                    .ok_or_else(|| ProcessorError::OutputSpecMismatch {
                         index,
                         expected: S::TYPE,
                         actual,
-                    }
-                })?;
+                    })?;
 
-                Ok(Either::Left(output.iter_mut()))
-            }
-            NodeOutputStorage::Sample(outputs, _) => {
-                let output = &mut outputs[index];
-                // let mut output = output.as_any_mut();
-                if output.type_() == S::TYPE {
-                    Ok(Either::Right(std::iter::once(
-                        output.as_type_mut::<S>().unwrap(),
-                    )))
-                } else {
-                    Err(ProcessorError::OutputSpecMismatch {
-                        index,
-                        expected: S::TYPE,
-                        actual: output.type_(),
-                    })
-                }
-            }
+            Ok(Either::Right(output.iter_mut()))
         }
     }
 
@@ -431,10 +403,15 @@ impl<'a> ProcessorOutputs<'a> {
 pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
     /// Returns the name of the processor.
     fn name(&self) -> &str {
-        std::any::type_name::<Self>()
-            .split("::")
-            .last()
-            .unwrap_or_default()
+        let type_name = std::any::type_name::<Self>();
+        let has_generics = type_name.contains('<');
+        if has_generics {
+            let end = type_name.find('<').unwrap();
+            let start = type_name[..end].rfind(':').map_or(0, |i| i + 1);
+            &type_name[start..end]
+        } else {
+            type_name.rsplit(':').next().unwrap()
+        }
     }
 
     /// Returns the specifications of the input signals of the processor.

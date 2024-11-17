@@ -13,8 +13,8 @@ use crate::{
     debug_once,
     graph::{Graph, GraphRunError, GraphRunErrorType, NodeIndex},
     prelude::{ProcessorInputs, SignalSpec},
-    processor::{ProcessorError, ProcessorInput, ProcessorOutputs},
-    signal::{AnySignal, Float, MidiMessage, SignalBuffer, SignalType},
+    processor::{ProcessorError, ProcessorOutputs},
+    signal::{Float, MidiMessage, SignalBuffer, SignalType},
 };
 
 /// Errors that can occur related to the runtime.
@@ -117,49 +117,16 @@ pub enum MidiPort {
 }
 
 #[derive(Clone)]
-pub(crate) enum NodeOutputStorage {
-    Block(Vec<SignalBuffer>),
-    Sample(Vec<AnySignal>, Vec<SignalBuffer>),
-}
-
-impl NodeOutputStorage {
-    pub fn get(&self, index: usize, sample_index: Option<usize>) -> Option<ProcessorInput> {
-        match self {
-            NodeOutputStorage::Block(outputs) => outputs.get(index).map(ProcessorInput::Block),
-            NodeOutputStorage::Sample(outputs, buffers) => outputs.get(index).map(|output| {
-                if let Some(sample_index) = sample_index {
-                    ProcessorInput::Sample(output, sample_index)
-                } else {
-                    ProcessorInput::Block(&buffers[index])
-                }
-            }),
-        }
-    }
-}
-
-#[derive(Clone)]
 pub(crate) struct NodeBuffers {
     input_spec: Vec<SignalSpec>,
     output_spec: Vec<SignalSpec>,
-    outputs: NodeOutputStorage,
+    outputs: Vec<SignalBuffer>,
 }
 
 impl NodeBuffers {
-    pub fn resize(&mut self, block_size: usize) {
-        match &mut self.outputs {
-            NodeOutputStorage::Block(outputs) => {
-                for (output, spec) in outputs.iter_mut().zip(&self.output_spec) {
-                    output.resize_with_hint(block_size, &spec.type_);
-                }
-            }
-            NodeOutputStorage::Sample(samples, output) => {
-                for (sample, spec) in samples.iter_mut().zip(&self.output_spec) {
-                    *sample = AnySignal::default_of_type(&spec.type_);
-                }
-                for (output, spec) in output.iter_mut().zip(&self.output_spec) {
-                    output.resize_with_hint(block_size, &spec.type_);
-                }
-            }
+    fn resize(&mut self, block_size: usize) {
+        for (spec, buffer) in self.output_spec.iter().zip(&mut self.outputs) {
+            buffer.resize_with_hint(block_size, &spec.type_);
         }
     }
 }
@@ -179,7 +146,7 @@ impl Runtime {
         let mut buffer_cache =
             FxHashMap::with_capacity_and_hasher(graph.digraph().node_count(), FxBuildHasher);
 
-        graph.allocate_visitor();
+        graph.reset_visitor();
         graph
             .visit(|graph, node_id| -> RuntimeResult<()> {
                 let node = &graph.digraph()[node_id];
@@ -192,31 +159,14 @@ impl Runtime {
                     outputs.push(buffer);
                 }
 
-                if graph.is_in_scc(node_id) {
-                    let mut storage = Vec::with_capacity(output_spec.len());
-                    for spec in output_spec {
-                        let sig = AnySignal::default_of_type(&spec.type_);
-                        storage.push(sig);
-                    }
-
-                    buffer_cache.insert(
-                        node_id,
-                        NodeBuffers {
-                            input_spec: node.input_spec().to_vec(),
-                            output_spec: output_spec.to_vec(),
-                            outputs: NodeOutputStorage::Sample(storage, outputs),
-                        },
-                    );
-                } else {
-                    buffer_cache.insert(
-                        node_id,
-                        NodeBuffers {
-                            input_spec: node.input_spec().to_vec(),
-                            output_spec: output_spec.to_vec(),
-                            outputs: NodeOutputStorage::Block(outputs),
-                        },
-                    );
-                }
+                buffer_cache.insert(
+                    node_id,
+                    NodeBuffers {
+                        input_spec: node.input_spec().to_vec(),
+                        output_spec: output_spec.to_vec(),
+                        outputs,
+                    },
+                );
 
                 Ok(())
             })
@@ -233,7 +183,13 @@ impl Runtime {
     /// Resets the runtime with the given sample rate and block size. This will allocate buffers for each node in the graph.
     #[inline(never)]
     pub fn reset(&mut self, sample_rate: Float, block_size: usize) -> RuntimeResult<()> {
-        self.graph.allocate_visitor();
+        self.graph.reset_visitor();
+
+        log::debug!(
+            "Resetting runtime with sample rate {} and block size {}",
+            sample_rate,
+            block_size
+        );
 
         self.sample_rate = sample_rate;
         self.block_size = block_size;
@@ -284,155 +240,16 @@ impl Runtime {
     #[cfg_attr(feature = "profiling", inline(never))]
     pub fn process(&mut self) -> RuntimeResult<()> {
         self.graph.reset_visitor();
-        let path_len = self.graph.sccs().len();
-        for i in 0..path_len {
-            let node_ids = &self.graph.sccs()[i];
 
-            if node_ids.len() == 1 {
-                // continue as normal
-                let node_id = node_ids[0];
-
-                let num_inputs = self.buffer_cache[&node_id].input_spec.len();
-
-                // Note on the choice of SmallVec array size:
-                // Some processors can have arbitrarily large numbers of inputs, such as the `Pack`
-                // processor. However, in practice, most processors have a small number of inputs.
-                // We choose a small array size here to optimize for the common case, and fall back to
-                // the heap for larger numbers of inputs as a trade-off that's kind of on the user to
-                // make if they want to make really long lists or something. Couldn't be me.
-                let mut inputs: smallvec::SmallVec<[_; 8]> = smallvec::smallvec![None; num_inputs];
-
-                let mut buffers = self.buffer_cache.remove(&node_id).unwrap();
-
-                for (source_id, edge) in self
-                    .graph
-                    .digraph()
-                    .edges_directed(node_id, Direction::Incoming)
-                    .map(|edge| (edge.source(), *edge.weight()))
-                {
-                    let source_buffers = self.buffer_cache.get(&source_id).unwrap();
-                    inputs[edge.target_input as usize] = Some(
-                        source_buffers
-                            .outputs
-                            .get(edge.source_output as usize, None)
-                            .unwrap(),
-                    );
-                }
-
-                let node = self.graph.digraph_mut().node_weight_mut(node_id).unwrap();
-
-                if inputs.spilled() {
-                    debug_once!(format!("{}_spilled", node_id.index()) => "Input array for {} ({}) spilled over to the heap (has {} inputs > 8)", node.name(), node_id.index(), num_inputs);
-                }
-
-                let result = node.process(
-                    ProcessorInputs::new(&buffers.input_spec, &inputs[..]),
-                    ProcessorOutputs::new(&buffers.output_spec, &mut buffers.outputs),
-                );
-
-                if let Err(err) = result {
-                    let node = self.graph.digraph().node_weight(node_id).unwrap();
-                    log::error!("Error processing node {}: {:?}", node.name(), err);
-                    let error = GraphRunError {
-                        node_index: node_id,
-                        node_processor: node.name().to_string(),
-                        type_: GraphRunErrorType::ProcessorError(err),
-                    };
-                    return Err(RuntimeError::GraphRunError(error));
-                }
-
-                drop(inputs);
-
-                self.buffer_cache.insert(node_id, buffers);
+        let visit_path = self.graph.sccs().to_vec();
+        for scc in visit_path {
+            if scc.len() == 1 {
+                let node_id = scc[0];
+                self.process_node(node_id, None)?;
             } else {
-                // we're in a feedback loop
-                let node_ids = self.graph.sccs()[i].clone();
                 for sample_index in 0..self.block_size {
-                    for node_id in node_ids.iter() {
-                        let num_inputs = self.buffer_cache[node_id].input_spec.len();
-
-                        let mut inputs: smallvec::SmallVec<[_; 8]> =
-                            smallvec::smallvec![None; num_inputs];
-
-                        let mut buffers = self.buffer_cache.remove(node_id).unwrap();
-
-                        for (source_id, edge) in self
-                            .graph
-                            .digraph()
-                            .edges_directed(*node_id, Direction::Incoming)
-                            .map(|edge| (edge.source(), *edge.weight()))
-                        {
-                            let source_buffers = self.buffer_cache.get(&source_id).unwrap();
-                            inputs[edge.target_input as usize] = Some(
-                                source_buffers
-                                    .outputs
-                                    .get(edge.source_output as usize, Some(sample_index))
-                                    .unwrap(),
-                            );
-                        }
-
-                        let node = self.graph.digraph_mut().node_weight_mut(*node_id).unwrap();
-
-                        if inputs.spilled() {
-                            debug_once!(format!("{}_spilled", node_id.index()) => "Input array for {} ({}) spilled over to the heap (has {} inputs > 8)", node.name(), node_id.index(), num_inputs);
-                        }
-
-                        let result = node.process(
-                            ProcessorInputs::new(&buffers.input_spec, &inputs[..]),
-                            ProcessorOutputs::new(&buffers.output_spec, &mut buffers.outputs),
-                        );
-
-                        if let Err(err) = result {
-                            let node = self.graph.digraph().node_weight(*node_id).unwrap();
-                            log::error!("Error processing node {}: {:?}", node.name(), err);
-                            let error = GraphRunError {
-                                node_index: *node_id,
-                                node_processor: node.name().to_string(),
-                                type_: GraphRunErrorType::ProcessorError(err),
-                            };
-                            return Err(RuntimeError::GraphRunError(error));
-                        }
-
-                        drop(inputs);
-
-                        let NodeOutputStorage::Sample(sample, outputs) = &mut buffers.outputs
-                        else {
-                            unreachable!()
-                        };
-
-                        for (sample, output) in sample.iter_mut().zip(outputs.iter_mut()) {
-                            match (sample, output) {
-                                (AnySignal::Float(sample), SignalBuffer::Float(output)) => {
-                                    output[sample_index] = *sample;
-                                }
-                                (AnySignal::Int(sample), SignalBuffer::Int(output)) => {
-                                    output[sample_index] = *sample;
-                                }
-                                (AnySignal::Bool(sample), SignalBuffer::Bool(output)) => {
-                                    output[sample_index] = *sample;
-                                }
-                                (AnySignal::List(sample), SignalBuffer::List(output)) => {
-                                    output[sample_index] = sample.clone();
-                                }
-                                (AnySignal::String(sample), SignalBuffer::String(output)) => {
-                                    output[sample_index] = sample.clone();
-                                }
-                                (AnySignal::Midi(sample), SignalBuffer::Midi(output)) => {
-                                    output[sample_index] = *sample;
-                                }
-                                (sample, output) => {
-                                    return Err(RuntimeError::ProcessorError(
-                                        ProcessorError::OutputSpecMismatch {
-                                            index: 0,
-                                            expected: sample.type_(),
-                                            actual: output.type_(),
-                                        },
-                                    ));
-                                }
-                            }
-                        }
-
-                        self.buffer_cache.insert(*node_id, buffers);
+                    for node_id in &scc {
+                        self.process_node(*node_id, Some(sample_index))?;
                     }
                 }
             }
@@ -441,9 +258,62 @@ impl Runtime {
         Ok(())
     }
 
+    #[cfg_attr(feature = "profiling", inline(never))]
+    fn process_node(
+        &mut self,
+        node_id: NodeIndex,
+        sample_index: Option<usize>,
+    ) -> RuntimeResult<()> {
+        let num_inputs = self.buffer_cache[&node_id].input_spec.len();
+
+        let mut inputs: smallvec::SmallVec<[_; 8]> = smallvec::smallvec![None; num_inputs];
+
+        let mut buffers = self.buffer_cache.remove(&node_id).unwrap();
+
+        for (source_id, edge) in self
+            .graph
+            .digraph()
+            .edges_directed(node_id, Direction::Incoming)
+            .map(|edge| (edge.source(), edge.weight()))
+        {
+            let source_buffers = self.buffer_cache.get(&source_id).unwrap();
+            let buffer = &source_buffers.outputs[edge.source_output as usize];
+
+            inputs[edge.target_input as usize] = Some(buffer);
+        }
+
+        let node = self.graph.digraph_mut().node_weight_mut(node_id).unwrap();
+
+        if inputs.spilled() {
+            debug_once!(format!("{}_spilled", node_id.index()) => "Input array for {} ({}) spilled over to the heap (has {} inputs > 8)", node.name(), node_id.index(), num_inputs);
+        }
+
+        let result = node.process(
+            ProcessorInputs::new(&buffers.input_spec, &inputs[..], sample_index),
+            ProcessorOutputs::new(&buffers.output_spec, &mut buffers.outputs, sample_index),
+        );
+
+        if let Err(err) = result {
+            let node = self.graph.digraph().node_weight(node_id).unwrap();
+            log::error!("Error processing node {}: {:?}", node.name(), err);
+            let error = GraphRunError {
+                node_index: node_id,
+                node_processor: node.name().to_string(),
+                type_: GraphRunErrorType::ProcessorError(err),
+            };
+            return Err(RuntimeError::GraphRunError(error));
+        }
+
+        drop(inputs);
+
+        self.buffer_cache.insert(node_id, buffers);
+
+        Ok(())
+    }
+
     /// Returns a reference to the runtime's output buffer for the given output index.
     #[inline]
-    pub(crate) fn get_output(&self, output_index: usize) -> &NodeOutputStorage {
+    pub(crate) fn get_output(&self, output_index: usize) -> &[SignalBuffer] {
         &self
             .buffer_cache
             .get(&self.graph.output_indices()[output_index])
@@ -504,9 +374,6 @@ impl Runtime {
 
             for (i, output) in outputs.iter_mut().enumerate() {
                 let buffer = self.get_output(i);
-                let NodeOutputStorage::Block(buffer) = buffer else {
-                    unreachable!()
-                };
                 let SignalBuffer::Float(buffer) = &buffer[0] else {
                     return Err(RuntimeError::ProcessorError(
                         ProcessorError::OutputSpecMismatch {
@@ -791,9 +658,6 @@ impl Runtime {
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
                             let buffer = self.get_output(channel_idx);
-                            let NodeOutputStorage::Block(buffer) = buffer else {
-                                unreachable!()
-                            };
                             let SignalBuffer::Float(buffer) = &buffer[0] else {
                                 panic!("output {channel_idx} signal type mismatch");
                             };

@@ -21,3 +21,13 @@ pub use oscillators::*;
 pub use storage::*;
 pub use time::*;
 pub use util::*;
+
+use crate::signal::Float;
+
+/// Linear interpolation.
+#[doc(hidden)]
+#[inline]
+pub fn lerp(a: Float, b: Float, t: Float) -> Float {
+    debug_assert!((0.0..=1.0).contains(&t));
+    a + (b - a) * t
+}

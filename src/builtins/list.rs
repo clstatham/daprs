@@ -199,9 +199,9 @@ impl<S: Signal + Copy> Processor for Pack<S> {
             for input_index in 0..num_inputs {
                 let input = inputs.input(input_index);
                 if let Some(buf) = input.as_ref() {
-                    let mut buf = buf.iter::<S>().unwrap();
+                    let buf = buf.as_type::<S>().unwrap();
 
-                    self.inputs[input_index] = buf.nth(sample_index).copied().flatten();
+                    self.inputs[input_index] = buf[sample_index];
 
                     if self.inputs[input_index].is_some() {
                         any_some = true;
@@ -227,6 +227,14 @@ impl<S: Signal + Copy> Processor for Pack<S> {
 
             // we should only get here if the list is not initialized or has the wrong length
             error_once!("pack_list" => "list is not initialized or has the wrong length");
+
+            let mut buf = SignalBuffer::new_of_type(&S::TYPE, self.inputs.len());
+            {
+                let buf = buf.as_type_mut::<S>().unwrap();
+                buf.copy_from(&self.inputs);
+            }
+
+            *out = Some(buf);
         }
 
         Ok(())
@@ -287,10 +295,11 @@ impl<S: Signal + Copy> Processor for Unpack<S> {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let list_buf = inputs.input(0).unwrap();
-        let list_buf = list_buf.iter::<SignalBuffer>();
+        let list_buf = list_buf.as_buffer();
 
         if let Some(list_buf) = list_buf {
             for (sample_index, list) in list_buf
+                .iter()
                 .enumerate()
                 .filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
             {

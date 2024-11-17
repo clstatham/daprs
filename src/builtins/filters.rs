@@ -622,3 +622,98 @@ impl Processor for AutoBiquad {
         Ok(())
     }
 }
+
+/// A 1-pole lowpass filter.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `in` | `Float` | The input signal. |
+/// | `1` | `cutoff` | `Float` | The cutoff frequency of the filter. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The output signal. |
+#[derive(Clone, Debug)]
+pub struct OnePole {
+    sample_rate: Float,
+    cutoff: Float,
+    a0: Float,
+    b1: Float,
+    x1: Float,
+}
+
+impl Default for OnePole {
+    fn default() -> Self {
+        Self {
+            sample_rate: 0.0,
+            cutoff: 1000.0,
+            a0: 1.0,
+            b1: 0.0,
+            x1: 0.0,
+        }
+    }
+}
+
+impl OnePole {
+    /// Creates a new `OnePole` filter with the given cutoff frequency.
+    pub fn new(cutoff: Float) -> Self {
+        Self {
+            cutoff,
+            ..Default::default()
+        }
+    }
+}
+
+impl Processor for OnePole {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("in", SignalType::Float),
+            SignalSpec::new("cutoff", SignalType::Float),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalType::Float)]
+    }
+
+    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
+        self.sample_rate = sample_rate;
+        self.a0 = 1.0 - Float::exp(-2.0 * PI * self.cutoff / self.sample_rate);
+        self.b1 = -Float::exp(-2.0 * PI * self.cutoff / self.sample_rate);
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        for (out, in_signal, cutoff) in itertools::izip!(
+            outputs.iter_output_mut_as_floats(0)?,
+            inputs.iter_input_as_floats(0)?,
+            inputs.iter_input_as_floats(1)?
+        ) {
+            self.cutoff = cutoff
+                .unwrap_or(self.cutoff)
+                .clamp(0.0, self.sample_rate * 0.5);
+            self.b1 = Float::exp(-2.0 * PI * self.cutoff / self.sample_rate);
+            self.a0 = 1.0 - self.b1;
+
+            let Some(in_signal) = in_signal else {
+                *out = None;
+                continue;
+            };
+
+            let filtered = self.a0 * in_signal + self.b1 * self.x1;
+
+            self.x1 = in_signal;
+
+            *out = Some(filtered);
+        }
+
+        Ok(())
+    }
+}

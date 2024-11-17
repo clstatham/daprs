@@ -978,14 +978,17 @@ impl SignalType {
             (Self::Midi, Self::Midi) => true,
             (
                 Self::List {
-                    element_type: Some(element_type),
+                    element_type: a_type,
                     ..
                 },
                 Self::List {
-                    element_type: Some(other_element_type),
+                    element_type: b_type,
                     ..
                 },
-            ) => element_type.is_compatible_with(other_element_type),
+            ) => match (a_type, b_type) {
+                (Some(a), Some(b)) => a.is_compatible_with(b),
+                _ => true,
+            },
             _ => false,
         }
     }
