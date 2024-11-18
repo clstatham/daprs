@@ -295,9 +295,7 @@ impl Processor for Print {
 /// | `0` | `sample_rate` | `Float` | The sample rate. |
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SampleRate {
-    sample_rate: Float,
-}
+pub struct SampleRate;
 
 #[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for SampleRate {
@@ -309,17 +307,13 @@ impl Processor for SampleRate {
         vec![SignalSpec::new("sample_rate", SignalType::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
-    }
-
     fn process(
         &mut self,
-        _inputs: ProcessorInputs,
+        inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for sample_rate in outputs.iter_output_mut_as_floats(0)? {
-            *sample_rate = Some(self.sample_rate);
+            *sample_rate = Some(inputs.sample_rate());
         }
 
         Ok(())
@@ -329,7 +323,7 @@ impl Processor for SampleRate {
 impl GraphBuilder {
     /// Adds a new [`SampleRate`] processor that continuously outputs the current sample rate.
     pub fn sample_rate(&self) -> Node {
-        self.add(SampleRate::default())
+        self.add(SampleRate)
     }
 }
 

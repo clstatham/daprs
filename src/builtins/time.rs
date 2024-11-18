@@ -29,7 +29,6 @@ pub struct Metro {
     last_time: u64,
     next_time: u64,
     time: u64,
-    sample_rate: Float,
 }
 
 impl Metro {
@@ -40,14 +39,13 @@ impl Metro {
             last_time: 0,
             next_time: 0,
             time: 0,
-            sample_rate: 0.0,
         }
     }
 
-    fn next_sample(&mut self) -> bool {
+    fn next_sample(&mut self, sample_rate: Float) -> bool {
         let out = if self.time >= self.next_time {
             self.last_time = self.time;
-            self.next_time = self.time + (self.period * self.sample_rate) as u64;
+            self.next_time = self.time + (self.period * sample_rate) as u64;
             true
         } else {
             false
@@ -78,10 +76,6 @@ impl Processor for Metro {
         vec![SignalSpec::new("out", SignalType::Bool)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
-    }
-
     fn process(
         &mut self,
         inputs: ProcessorInputs,
@@ -100,7 +94,7 @@ impl Processor for Metro {
 
             self.period = period.unwrap_or(self.period);
 
-            if self.next_sample() {
+            if self.next_sample(inputs.sample_rate()) {
                 *out = Some(true);
             } else {
                 *out = None;
@@ -359,7 +353,6 @@ pub struct DecayEnv {
     tau: Float,
     value: Float,
     time: Float,
-    sample_rate: Float,
 }
 
 impl DecayEnv {
@@ -370,7 +363,6 @@ impl DecayEnv {
             tau,
             value: 0.0,
             time: 1000.0,
-            sample_rate: 0.0,
         }
     }
 }
@@ -394,10 +386,6 @@ impl Processor for DecayEnv {
         vec![SignalSpec::new("out", SignalType::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
-    }
-
     fn process(
         &mut self,
         inputs: ProcessorInputs,
@@ -415,7 +403,7 @@ impl Processor for DecayEnv {
                 self.value = 1.0;
                 self.time = 0.0;
             } else {
-                self.time += self.sample_rate.recip();
+                self.time += inputs.sample_rate().recip();
                 self.value = (-self.tau.recip() * self.time).exp();
             }
 
@@ -459,7 +447,6 @@ pub struct LinearDecayEnv {
     decay: Float,
     value: Float,
     time: Float,
-    sample_rate: Float,
 }
 
 impl LinearDecayEnv {
@@ -470,7 +457,6 @@ impl LinearDecayEnv {
             decay,
             value: 0.0,
             time: 1000.0,
-            sample_rate: 0.0,
         }
     }
 }
@@ -494,10 +480,6 @@ impl Processor for LinearDecayEnv {
         vec![SignalSpec::new("out", SignalType::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
-    }
-
     fn process(
         &mut self,
         inputs: ProcessorInputs,
@@ -518,7 +500,7 @@ impl Processor for LinearDecayEnv {
                 self.value = 1.0;
                 self.time = 0.0;
             } else {
-                self.time += self.sample_rate.recip();
+                self.time += inputs.sample_rate().recip();
                 self.value = 1.0 - self.time / self.decay;
             }
 
@@ -531,6 +513,19 @@ impl Processor for LinearDecayEnv {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ADSRState {
+    /// The envelope is ramping up to 1.0.
+    Attack,
+    /// The envelope is ramping down to the sustain level.
+    Decay,
+    /// The envelope is sustaining its current level.
+    Sustain,
+    /// The envelope is ramping down to 0.0.
+    Release,
 }
 
 /// A linear AR (attack-release) envelope generator.
@@ -557,8 +552,7 @@ pub struct AREnv {
     attack: Float,
     release: Float,
     value: Float,
-    sample_rate: Float,
-    state: u8, // 0 = idle, 1 = attack, 2 = release
+    state: ADSRState,
 }
 
 impl AREnv {
@@ -569,8 +563,7 @@ impl AREnv {
             attack,
             release,
             value: 0.0,
-            sample_rate: 0.0,
-            state: 0,
+            state: ADSRState::Sustain,
         }
     }
 }
@@ -595,10 +588,6 @@ impl Processor for AREnv {
         vec![SignalSpec::new("out", SignalType::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
-    }
-
     fn process(
         &mut self,
         inputs: ProcessorInputs,
@@ -616,26 +605,147 @@ impl Processor for AREnv {
 
             if trig && !self.last_trig {
                 self.value = 0.0;
-                self.state = 1; // attack
+                self.state = ADSRState::Attack; // attack
             } else if !trig && self.last_trig {
-                self.state = 2; // release
+                self.state = ADSRState::Release; // release
             }
 
             let slope = match self.state {
-                0 => 0.0,
-                1 => 1.0 / (self.attack * self.sample_rate),
-                2 => -1.0 / (self.release * self.sample_rate),
+                ADSRState::Sustain => 0.0,
+                ADSRState::Attack => 1.0 / (self.attack * inputs.sample_rate()),
+                ADSRState::Release => -1.0 / (self.release * inputs.sample_rate()),
                 _ => unreachable!(),
             };
 
             self.value += slope;
 
-            if self.state == 1 && self.value >= 1.0 {
+            if self.state == ADSRState::Attack && self.value >= 1.0 {
                 self.value = 1.0;
-                self.state = 0;
-            } else if self.state == 2 && self.value <= 0.0 {
+                self.state = ADSRState::Sustain;
+            } else if self.state == ADSRState::Release && self.value <= 0.0 {
                 self.value = 0.0;
-                self.state = 0;
+                self.state = ADSRState::Sustain;
+            }
+
+            self.last_trig = trig;
+
+            *out = Some(self.value);
+        }
+
+        Ok(())
+    }
+}
+
+/// A linear ADSR (attack-decay-sustain-release) envelope generator.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `gate` | `Bool` | The gate signal. |
+/// | `1` | `attack` | `Float` | The attack time in seconds. |
+/// | `2` | `decay` | `Float` | The decay time in seconds. |
+/// | `3` | `sustain` | `Float` | The sustain level. |
+/// | `4` | `release` | `Float` | The release time in seconds. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The envelope signal. |
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ADSREnv {
+    last_trig: bool,
+    attack: Float,
+    decay: Float,
+    sustain: Float,
+    release: Float,
+    value: Float,
+    state: ADSRState,
+}
+
+impl ADSREnv {
+    /// Creates a new `ADSREnv` processor with the given attack, decay, sustain, and release times.
+    pub fn new(attack: Float, decay: Float, sustain: Float, release: Float) -> Self {
+        Self {
+            last_trig: false,
+            attack,
+            decay,
+            sustain,
+            release,
+            value: 0.0,
+            state: ADSRState::Sustain,
+        }
+    }
+}
+
+impl Default for ADSREnv {
+    fn default() -> Self {
+        Self::new(0.0, 0.0, 1.0, 0.0)
+    }
+}
+
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for ADSREnv {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![
+            SignalSpec::new("gate", SignalType::Bool),
+            SignalSpec::new("attack", SignalType::Float),
+            SignalSpec::new("decay", SignalType::Float),
+            SignalSpec::new("sustain", SignalType::Float),
+            SignalSpec::new("release", SignalType::Float),
+        ]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalType::Float)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        for (trig, attack, decay, sustain, release, out) in itertools::izip!(
+            inputs.iter_input_as_bools(0)?,
+            inputs.iter_input_as_floats(1)?,
+            inputs.iter_input_as_floats(2)?,
+            inputs.iter_input_as_floats(3)?,
+            inputs.iter_input_as_floats(4)?,
+            outputs.iter_output_mut_as_floats(0)?
+        ) {
+            self.attack = attack.unwrap_or(self.attack);
+            self.decay = decay.unwrap_or(self.decay);
+            self.sustain = sustain.unwrap_or(self.sustain);
+            self.release = release.unwrap_or(self.release);
+            let trig = trig.unwrap_or(false);
+
+            if trig && !self.last_trig {
+                self.value = 0.0;
+                self.state = ADSRState::Attack; // attack
+            } else if !trig && self.last_trig {
+                self.state = ADSRState::Release; // release
+            }
+
+            let slope = match self.state {
+                ADSRState::Attack => 1.0 / (self.attack * inputs.sample_rate()),
+                ADSRState::Decay => -(1.0 - self.sustain) / (self.decay * inputs.sample_rate()),
+                ADSRState::Sustain => 0.0,
+                ADSRState::Release => -self.sustain / (self.release * inputs.sample_rate()),
+            };
+
+            self.value += slope;
+
+            if self.state == ADSRState::Attack && self.value >= 1.0 {
+                self.value = 1.0;
+                self.state = ADSRState::Decay;
+            } else if self.state == ADSRState::Decay && self.value <= self.sustain {
+                self.value = self.sustain;
+                self.state = ADSRState::Sustain;
+            } else if self.state == ADSRState::Release && self.value <= 0.0 {
+                self.value = 0.0;
+                self.state = ADSRState::Sustain;
             }
 
             self.last_trig = trig;

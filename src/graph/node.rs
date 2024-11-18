@@ -11,7 +11,7 @@ use crate::{
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessorNode {
-    pub(crate) processor: Box<dyn Processor>,
+    processor: Box<dyn Processor>,
     input_spec: Vec<SignalSpec>,
     output_spec: Vec<SignalSpec>,
 }
@@ -69,6 +69,18 @@ impl ProcessorNode {
         self.output_spec.len()
     }
 
+    /// Returns a reference to the processor.
+    #[inline]
+    pub fn processor(&self) -> &dyn Processor {
+        &*self.processor
+    }
+
+    /// Returns a mutable reference to the processor.
+    #[inline]
+    pub fn processor_mut(&mut self) -> &mut dyn Processor {
+        &mut *self.processor
+    }
+
     /// Resizes the internal buffers of the processor and updates the sample rate and block size.
     #[inline]
     pub fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) {
@@ -88,7 +100,6 @@ impl ProcessorNode {
         inputs: ProcessorInputs,
         outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        self.processor.process(inputs, outputs)?;
-        Ok(())
+        self.processor.process(inputs, outputs)
     }
 }

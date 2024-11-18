@@ -22,7 +22,6 @@ use crate::prelude::*;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PeakLimiter {
     gain: Float,
-    sample_rate: Float,
     envelope: Float,
 
     /// The amplitude threshold of the limiter.
@@ -51,7 +50,6 @@ impl Default for PeakLimiter {
     fn default() -> Self {
         Self {
             gain: 1.0,
-            sample_rate: 0.0,
             envelope: 0.0,
             // -0.1 dBFS
             threshold: 0.9885530946569389,
@@ -74,10 +72,6 @@ impl Processor for PeakLimiter {
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("out", SignalType::Float)]
-    }
-
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
     }
 
     fn process(

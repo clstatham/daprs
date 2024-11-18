@@ -21,18 +21,13 @@ use crate::prelude::*;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AudioBuffer {
     buffer: Buffer<Float>,
-    sample_rate: Float,
     index: Float,
 }
 
 impl AudioBuffer {
     /// Creates a new [`AudioBuffer`] processor with the given buffer.
     pub fn new(buffer: Buffer<Float>) -> Self {
-        Self {
-            buffer,
-            sample_rate: 0.0,
-            index: 0.0,
-        }
+        Self { buffer, index: 0.0 }
     }
 }
 
@@ -47,10 +42,6 @@ impl Processor for AudioBuffer {
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("out", SignalType::Float)]
-    }
-
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
     }
 
     fn process(

@@ -95,8 +95,6 @@ pub struct SineOscillator {
     t: Float,
     // phase increment per sample
     t_step: Float,
-    // sample rate
-    sample_rate: Float,
 
     /// The frequency of the sine wave.
     pub frequency: Float,
@@ -120,7 +118,6 @@ impl Default for SineOscillator {
         Self {
             t: 0.0,
             t_step: 0.0,
-            sample_rate: 0.0,
             frequency: 0.0,
             phase: 0.0,
         }
@@ -139,10 +136,6 @@ impl Processor for SineOscillator {
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("out", SignalType::Float)]
-    }
-
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
     }
 
     fn process(
@@ -169,13 +162,13 @@ impl Processor for SineOscillator {
             }
 
             // calculate the sine wave using the phase accumulator
-            let sine = (self.t / self.sample_rate * TAU + self.phase).cos();
+            let sine = (self.t / inputs.sample_rate() * TAU + self.phase).cos();
             *out = Some(sine);
 
             // increment the phase accumulator
             self.t_step = self.frequency;
             self.t += self.t_step;
-            self.t %= self.sample_rate;
+            self.t %= inputs.sample_rate();
         }
 
         Ok(())
@@ -205,8 +198,6 @@ pub struct SawOscillator {
     t: Float,
     // phase increment per sample
     t_step: Float,
-    // sample rate
-    sample_rate: Float,
 
     /// The frequency of the sawtooth wave.
     pub frequency: Float,
@@ -220,7 +211,6 @@ impl Default for SawOscillator {
         Self {
             t: 0.0,
             t_step: 0.0,
-            sample_rate: 0.0,
             frequency: 0.0,
             phase: 0.0,
         }
@@ -251,10 +241,6 @@ impl Processor for SawOscillator {
         vec![SignalSpec::new("out", SignalType::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
-    }
-
     fn process(
         &mut self,
         inputs: ProcessorInputs,
@@ -279,12 +265,12 @@ impl Processor for SawOscillator {
             }
 
             // calculate the sawtooth wave using the phase accumulator
-            *out = Some((self.t / self.sample_rate + self.phase) % 1.0);
+            *out = Some((self.t / inputs.sample_rate() + self.phase) % 1.0);
 
             // increment the phase accumulator
             self.t_step = self.frequency;
             self.t += self.t_step;
-            self.t %= self.sample_rate;
+            self.t %= inputs.sample_rate();
         }
 
         Ok(())
@@ -365,7 +351,6 @@ pub struct BlSawOscillator {
     p: Float,
     dp: Float,
     saw: Float,
-    sample_rate: Float,
 
     /// The frequency of the sawtooth wave.
     pub frequency: Float,
@@ -377,7 +362,6 @@ impl Default for BlSawOscillator {
             p: 0.0,
             dp: 1.0,
             saw: 0.0,
-            sample_rate: 0.0,
             frequency: 0.0,
         }
     }
@@ -403,10 +387,6 @@ impl Processor for BlSawOscillator {
         vec![SignalSpec::new("out", SignalType::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
-    }
-
     fn process(
         &mut self,
         inputs: ProcessorInputs,
@@ -423,7 +403,7 @@ impl Processor for BlSawOscillator {
                 continue;
             }
 
-            let pmax = 0.5 * self.sample_rate / self.frequency;
+            let pmax = 0.5 * inputs.sample_rate() / self.frequency;
             let dc = -0.498 / pmax;
 
             self.p += self.dp;
@@ -469,8 +449,6 @@ const BL_SQUARE_MAX_HARMONICS: usize = 512;
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlSquareOscillator {
-    sample_rate: Float,
-
     // phase accumulator
     t: Float,
     // phase increment per sample
@@ -501,7 +479,6 @@ impl BlSquareOscillator {
             t: 0.0,
             t_step: 0.0,
             coeff: Box::new([0.0; BL_SQUARE_MAX_HARMONICS]),
-            sample_rate: 0.0,
         }
     }
 }
@@ -518,10 +495,6 @@ impl Processor for BlSquareOscillator {
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("out", SignalType::Float)]
-    }
-
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
     }
 
     fn process(
@@ -547,9 +520,9 @@ impl Processor for BlSquareOscillator {
 
             self.pulse_width = pulse_width.unwrap_or(self.pulse_width);
 
-            self.t_step = self.frequency / self.sample_rate;
+            self.t_step = self.frequency / inputs.sample_rate();
 
-            let n_harm = (self.sample_rate / (self.frequency * 4.0)) as usize;
+            let n_harm = (inputs.sample_rate() / (self.frequency * 4.0)) as usize;
             self.coeff[0] = self.pulse_width - 0.5;
             for i in 1..n_harm + 1 {
                 self.coeff[i] =
@@ -590,8 +563,6 @@ impl Processor for BlSquareOscillator {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KarplusStrong {
-    sample_rate: Float,
-
     // delay line
     ringbuf: VecDeque<Float>,
 
@@ -606,7 +577,6 @@ impl KarplusStrong {
     /// Creates a new [`KarplusStrong`] processor with the given frequency, damping factor, and pluck position.
     pub fn new(frequency: Float, damping: Float) -> Self {
         Self {
-            sample_rate: 0.0,
             ringbuf: VecDeque::new(),
             damping,
             frequency,
@@ -635,7 +605,6 @@ impl Processor for KarplusStrong {
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
         self.ringbuf = VecDeque::with_capacity(sample_rate as usize / 2);
     }
 
@@ -660,7 +629,7 @@ impl Processor for KarplusStrong {
 
             if trig.unwrap_or(false) {
                 // calculate the delay line index
-                let delay_time = (self.sample_rate / self.frequency) as usize;
+                let delay_time = (inputs.sample_rate() / self.frequency) as usize;
 
                 // initialize the delay line with noise
                 self.ringbuf.clear();

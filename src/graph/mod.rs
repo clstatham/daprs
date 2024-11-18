@@ -190,12 +190,11 @@ impl Graph {
             self.digraph.remove_edge(edge.id()).unwrap();
         }
 
-        let source_output_name = self.digraph[source].processor.output_spec()
-            [source_output as usize]
+        let source_output_name = self.digraph[source].output_spec()[source_output as usize]
             .name
             .clone();
 
-        let target_input_name = self.digraph[target].processor.input_spec()[target_input as usize]
+        let target_input_name = self.digraph[target].input_spec()[target_input as usize]
             .name
             .clone();
 
@@ -292,7 +291,7 @@ impl Graph {
 
     #[inline]
     pub fn node_name(&self, node: NodeIndex) -> &str {
-        self.digraph[node].processor.name()
+        self.digraph[node].name()
     }
 
     /// Returns the number of parameters in the graph.
@@ -325,7 +324,7 @@ impl Graph {
             .map(|(name, idx)| {
                 (
                     name.as_str(),
-                    (*self.digraph[*idx].processor)
+                    (*self.digraph[*idx].processor())
                         .downcast_ref::<Param>()
                         .unwrap()
                         .clone(),

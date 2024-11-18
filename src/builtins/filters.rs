@@ -22,7 +22,6 @@ const THERMAL: Float = 0.000025;
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MoogLadder {
-    sample_rate: Float,
     stage: [Float; 4],
     stage_tanh: [Float; 3],
     delay: [Float; 6],
@@ -40,7 +39,6 @@ pub struct MoogLadder {
 impl Default for MoogLadder {
     fn default() -> Self {
         Self {
-            sample_rate: 0.0,
             stage: [0.0; 4],
             stage_tanh: [0.0; 3],
             delay: [0.0; 6],
@@ -78,10 +76,6 @@ impl Processor for MoogLadder {
         vec![SignalSpec::new("out", SignalType::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
-    }
-
     fn process(
         &mut self,
         inputs: ProcessorInputs,
@@ -100,14 +94,14 @@ impl Processor for MoogLadder {
             };
 
             if let Some(cutoff) = cutoff {
-                self.cutoff = cutoff.clamp(0.0, self.sample_rate * 0.5);
+                self.cutoff = cutoff.clamp(0.0, inputs.sample_rate() * 0.5);
             }
 
             if let Some(resonance) = resonance {
                 self.resonance = resonance.clamp(0.0, 1.0);
             }
 
-            let fc = self.cutoff / self.sample_rate;
+            let fc = self.cutoff / inputs.sample_rate();
             let f = fc * 0.5; // oversampling
             let fc2 = fc * fc;
             let fc3 = fc2 * fc;
@@ -168,8 +162,6 @@ impl Processor for MoogLadder {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Biquad {
-    sample_rate: Float,
-
     /// The `a0` coefficient.
     pub a0: Float,
 
@@ -197,7 +189,6 @@ pub struct Biquad {
 impl Default for Biquad {
     fn default() -> Self {
         Self {
-            sample_rate: 0.0,
             a0: 1.0,
             a1: 0.0,
             a2: 0.0,
@@ -240,10 +231,6 @@ impl Processor for Biquad {
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("out", SignalType::Float)]
-    }
-
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
     }
 
     fn process(
@@ -352,8 +339,6 @@ impl std::fmt::Display for BiquadType {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AutoBiquad {
-    sample_rate: Float,
-
     // biquad state
     a0: Float,
     a1: Float,
@@ -381,7 +366,6 @@ pub struct AutoBiquad {
 impl Default for AutoBiquad {
     fn default() -> Self {
         Self {
-            sample_rate: 0.0,
             a0: 1.0,
             a1: 0.0,
             a2: 0.0,
@@ -402,15 +386,13 @@ impl Default for AutoBiquad {
 impl AutoBiquad {
     /// Creates a new `AutoBiquad` filter with the given type, cutoff frequency, Q factor, and gain.
     pub fn new(biquad_type: BiquadType, cutoff: Float, q: Float, gain: Float) -> Self {
-        let mut this = Self {
+        Self {
             biquad_type,
             cutoff,
             q,
             gain,
             ..Default::default()
-        };
-        this.set_coefficients();
-        this
+        }
     }
 
     /// Creates a new lowpass `AutoBiquad` filter with the given cutoff frequency and Q factor.
@@ -455,13 +437,13 @@ impl AutoBiquad {
 
     // http://www.earlevel.com/scripts/widgets/20131013/biquads2.js
     #[inline]
-    fn set_coefficients(&mut self) {
+    fn set_coefficients(&mut self, sample_rate: Float) {
         if self.q < 0.01 {
             self.q = 0.01;
         }
 
         let v = Float::powf(10.0, self.gain.abs() / 20.0);
-        let k = Float::tan(PI * self.cutoff / self.sample_rate);
+        let k = Float::tan(PI * self.cutoff / sample_rate);
 
         match self.biquad_type {
             BiquadType::LowPass => {
@@ -550,7 +532,7 @@ impl AutoBiquad {
         }
 
         #[cfg(debug_assertions)]
-        if self.sample_rate > 0.0 {
+        if sample_rate > 0.0 {
             // check for NaN
             assert!(self.a0.is_finite(), "biquad: malformed a0 coefficient");
             assert!(self.a1.is_finite(), "biquad: malformed a1 coefficient");
@@ -577,8 +559,7 @@ impl Processor for AutoBiquad {
     }
 
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
-        self.set_coefficients();
+        self.set_coefficients(sample_rate);
     }
 
     fn process(
@@ -611,7 +592,7 @@ impl Processor for AutoBiquad {
                 self.q = q;
                 self.gain = gain;
 
-                self.set_coefficients();
+                self.set_coefficients(inputs.sample_rate());
             }
 
             let filtered = self.a0 * in_signal + self.a1 * self.x1 + self.a2 * self.x2
@@ -647,7 +628,6 @@ impl Processor for AutoBiquad {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OnePole {
-    sample_rate: Float,
     cutoff: Float,
     a0: Float,
     b1: Float,
@@ -657,7 +637,6 @@ pub struct OnePole {
 impl Default for OnePole {
     fn default() -> Self {
         Self {
-            sample_rate: 0.0,
             cutoff: 1000.0,
             a0: 1.0,
             b1: 0.0,
@@ -689,12 +668,6 @@ impl Processor for OnePole {
         vec![SignalSpec::new("out", SignalType::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
-        self.sample_rate = sample_rate;
-        self.a0 = 1.0 - Float::exp(-2.0 * PI * self.cutoff / self.sample_rate);
-        self.b1 = -Float::exp(-2.0 * PI * self.cutoff / self.sample_rate);
-    }
-
     fn process(
         &mut self,
         inputs: ProcessorInputs,
@@ -707,8 +680,8 @@ impl Processor for OnePole {
         ) {
             self.cutoff = cutoff
                 .unwrap_or(self.cutoff)
-                .clamp(0.0, self.sample_rate * 0.5);
-            self.b1 = Float::exp(-2.0 * PI * self.cutoff / self.sample_rate);
+                .clamp(0.0, inputs.sample_rate() * 0.5);
+            self.b1 = Float::exp(-2.0 * PI * self.cutoff / inputs.sample_rate());
             self.a0 = 1.0 - self.b1;
 
             let Some(in_signal) = in_signal else {
