@@ -231,16 +231,17 @@ pub fn iter_proc_io_as(input: TokenStream) -> TokenStream {
     let inputs = input.inputs;
     let outputs = input.outputs;
 
-    let count = input.input_types.len();
+    let input_count = input.input_types.len();
+    let output_count = input.output_types.len();
 
     let mut input_idents = vec![];
-    for i in 0..count {
+    for i in 0..input_count {
         let ident = syn::Ident::new(&format!("in{}", i), proc_macro2::Span::call_site());
         input_idents.push(ident);
     }
 
     let mut output_idents = vec![];
-    for i in 0..count {
+    for i in 0..output_count {
         let ident = syn::Ident::new(&format!("out{}", i), proc_macro2::Span::call_site());
         output_idents.push(ident);
     }
@@ -255,7 +256,7 @@ pub fn iter_proc_io_as(input: TokenStream) -> TokenStream {
         } = #inputs;
 
         let [#(#input_idents),*] = inputs else {
-            panic!("Expected {} inputs, got {}", #count, inputs.len());
+            panic!("Expected {} inputs, got {}", #input_count, inputs.len());
         };
 
         let raug::processor::ProcessorOutputs {
@@ -265,7 +266,7 @@ pub fn iter_proc_io_as(input: TokenStream) -> TokenStream {
         } = #outputs;
 
         let [#(#output_idents),*] = outputs else {
-            panic!("Expected {} outputs, got {}", #count, outputs.len());
+            panic!("Expected {} outputs, got {}", #output_count, outputs.len());
         };
     };
 

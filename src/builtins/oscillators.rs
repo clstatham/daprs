@@ -30,7 +30,7 @@ pub struct PhaseAccumulator {
     // phase accumulator
     t: Float,
     // phase increment per sample
-    t_step: Float,
+    increment: Float,
 }
 
 #[cfg_attr(feature = "serde", typetag::serde)]
@@ -49,12 +49,11 @@ impl Processor for PhaseAccumulator {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, increment, reset) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_bools(1)?
+        for (increment, reset, out) in iter_proc_io_as!(
+            inputs as [Float, bool],
+            outputs as [Float]
         ) {
             if reset.unwrap_or(false) {
                 self.t = 0.0;
@@ -64,10 +63,8 @@ impl Processor for PhaseAccumulator {
             *out = Some(self.t);
 
             // increment the phase accumulator
-            if let Some(increment) = increment {
-                self.t_step = increment;
-            }
-            self.t += self.t_step;
+            self.increment = increment.unwrap_or(self.increment);
+            self.t += self.increment;
         }
 
         Ok(())
@@ -141,25 +138,18 @@ impl Processor for SineOscillator {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, frequency, phase, reset) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?,
-            inputs.iter_input_as_bools(2)?
+        for (frequency, phase, reset, out) in iter_proc_io_as!(
+            inputs as [Float, Float, bool],
+            outputs as [Float]
         ) {
             if let Some(true) = reset {
                 self.t = 0.0;
             }
 
-            if let Some(frequency) = frequency {
-                self.frequency = frequency;
-            }
-
-            if let Some(phase) = phase {
-                self.phase = phase;
-            }
+            self.frequency = frequency.unwrap_or(self.frequency);
+            self.phase = phase.unwrap_or(self.phase);
 
             // calculate the sine wave using the phase accumulator
             let sine = (self.t / inputs.sample_rate() * TAU + self.phase).cos();
@@ -244,24 +234,22 @@ impl Processor for SawOscillator {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, frequency, phase, reset) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?,
-            inputs.iter_input_as_bools(2)?
+        for (frequency, phase, reset, out) in iter_proc_io_as!(
+            inputs as [Float, Float, bool],
+            outputs as [Float]
         ) {
             if let Some(true) = reset {
                 self.t = 0.0;
             }
 
             if let Some(frequency) = frequency {
-                self.frequency = frequency;
+                self.frequency = *frequency;
             }
 
             if let Some(phase) = phase {
-                self.phase = phase;
+                self.phase = *phase;
             }
 
             // calculate the sawtooth wave using the phase accumulator
@@ -390,13 +378,10 @@ impl Processor for BlSawOscillator {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         // algorithm courtesy of https://www.musicdsp.org/en/latest/Synthesis/12-bandlimited-waveforms.html
-        for (out, frequency) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?
-        ) {
+        for (frequency, out) in iter_proc_io_as!(inputs as [Float], outputs as [Float]) {
             self.frequency = frequency.unwrap_or(self.frequency);
             if self.frequency <= 0.0 {
                 *out = None;
@@ -500,13 +485,11 @@ impl Processor for BlSquareOscillator {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, frequency, pulse_width, reset) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?,
-            inputs.iter_input_as_bools(2)?
+        for (frequency, pulse_width, reset, out) in iter_proc_io_as!(
+            inputs as [Float, Float, bool],
+            outputs as [Float]
         ) {
             self.frequency = frequency.unwrap_or(self.frequency);
             if self.frequency <= 0.0 {

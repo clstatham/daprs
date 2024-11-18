@@ -34,12 +34,9 @@ impl Processor for MidiNote {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (midi, out) in itertools::izip!(
-            inputs.iter_input_as_midi(0)?,
-            outputs.iter_output_mut_as_floats(0)?
-        ) {
+        for (midi, out) in iter_proc_io_as!(inputs as [MidiMessage], outputs as [Float]) {
             if let Some(msg) = midi {
                 if msg.status() == 0x90 {
                     self.note = msg.data1() as Float;
@@ -84,12 +81,9 @@ impl Processor for MidiVelocity {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (midi, out) in itertools::izip!(
-            inputs.iter_input_as_midi(0)?,
-            outputs.iter_output_mut_as_floats(0)?
-        ) {
+        for (midi, out) in iter_proc_io_as!(inputs as [MidiMessage], outputs as [Float]) {
             if let Some(msg) = midi {
                 // Note on, note off, and polyphonic aftertouch messages.
                 if [0x90, 0x80, 0xa8].contains(&msg.status()) {
@@ -135,12 +129,9 @@ impl Processor for MidiGate {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (midi, out) in itertools::izip!(
-            inputs.iter_input_as_midi(0)?,
-            outputs.iter_output_mut_as_bools(0)?
-        ) {
+        for (midi, out) in iter_proc_io_as!(inputs as [MidiMessage], outputs as [bool]) {
             if let Some(msg) = midi {
                 if msg.status() == 0x90 {
                     self.gate = msg.data2() > 0;
@@ -185,12 +176,9 @@ impl Processor for MidiTrigger {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (midi, out) in itertools::izip!(
-            inputs.iter_input_as_midi(0)?,
-            outputs.iter_output_mut_as_bools(0)?
-        ) {
+        for (midi, out) in iter_proc_io_as!(inputs as [MidiMessage], outputs as [bool]) {
             *out = None;
             if let Some(msg) = midi {
                 if msg.status() == 0x90 && msg.data2() > 0 {
@@ -232,12 +220,9 @@ impl Processor for MidiChannel {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (midi, out) in itertools::izip!(
-            inputs.iter_input_as_midi(0)?,
-            outputs.iter_output_mut_as_floats(0)?
-        ) {
+        for (midi, out) in iter_proc_io_as!(inputs as [MidiMessage], outputs as [Float]) {
             *out = None;
             if let Some(msg) = midi {
                 let channel = msg.channel() as Float;

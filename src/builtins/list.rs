@@ -32,12 +32,9 @@ impl Processor for Len {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, list) in itertools::izip!(
-            outputs.iter_output_mut_as_ints(0)?,
-            inputs.iter_input_as_lists(0)?
-        ) {
+        for (list, out) in iter_proc_io_as!(inputs as [List], outputs as [i64]) {
             let Some(list) = list else {
                 *out = None;
                 continue;
