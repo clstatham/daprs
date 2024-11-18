@@ -4,7 +4,6 @@ use std::fmt::Debug;
 
 use downcast_rs::{impl_downcast, DowncastSync};
 use itertools::Either;
-use rustc_hash::FxHashMap;
 use thiserror::Error;
 
 use crate::{
@@ -478,114 +477,6 @@ impl<'a> ProcessorOutputs<'a> {
     }
 }
 
-/// The state of a processor during processing.
-///
-/// This struct is passed to the [`Processor::process`] method and contains information about the current processing state.
-#[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ProcessorState {
-    sample_rate: Float,
-    block_size: usize,
-    sample_index: Option<usize>,
-    custom: FxHashMap<String, AnySignal>,
-}
-
-impl ProcessorState {
-    /// Creates a new [`ProcessorState`] with the given sample rate and block size.
-    pub fn new(sample_rate: Float, block_size: usize) -> Self {
-        Self {
-            sample_rate,
-            block_size,
-            sample_index: None,
-            custom: FxHashMap::default(),
-        }
-    }
-
-    /// Returns the sample rate of the processor.
-    #[inline]
-    pub fn sample_rate(&self) -> Float {
-        self.sample_rate
-    }
-
-    /// Returns the block size of the processor.
-    #[inline]
-    pub fn block_size(&self) -> usize {
-        self.block_size
-    }
-
-    /// Sets the sample rate of the processor.
-    #[inline]
-    pub(crate) fn set_sample_rate(&mut self, sample_rate: Float) {
-        self.sample_rate = sample_rate;
-    }
-
-    /// Sets the block size of the processor.
-    #[inline]
-    pub(crate) fn set_block_size(&mut self, block_size: usize) {
-        self.block_size = block_size;
-    }
-
-    /// Sets the current sample index within the block. This is used when the processor is being run per-sample.
-    #[inline]
-    pub(crate) fn set_sample_index(&mut self, sample_index: Option<usize>) {
-        self.sample_index = sample_index;
-    }
-
-    /// Returns the current sample index within the block, if the processor is being run per-sample.
-    #[inline]
-    pub fn sample_index(&self) -> Option<usize> {
-        self.sample_index
-    }
-
-    /// Returns a reference to the custom value with the given name, if it exists and is of the given type.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the custom value does not exist or is not of the given type.
-    #[inline]
-    pub fn get<S: Signal>(&self, name: &str) -> &S {
-        self.custom
-            .get(name)
-            .unwrap_or_else(|| panic!("Custom value not found: {}", name))
-            .as_type::<S>()
-            .unwrap_or_else(|| panic!("Custom value type mismatch: {}", name))
-            .as_ref()
-            .expect("Custom value should be Some")
-    }
-
-    /// Returns a copy of the custom value with the given name, if it exists and is of the given type.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the custom value does not exist or is not of the given type.
-    #[inline]
-    pub fn get_copy<S: Signal + Copy>(&self, name: &str) -> S {
-        *self.get(name)
-    }
-
-    /// Returns a mutable reference to the custom value with the given name, if it exists and is of the given type.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the custom value does not exist or is not of the given type.
-    #[inline]
-    pub fn get_mut<S: Signal>(&mut self, name: &str) -> &mut S {
-        self.custom
-            .get_mut(name)
-            .unwrap_or_else(|| panic!("Custom value not found: {}", name))
-            .as_type_mut::<S>()
-            .unwrap_or_else(|| panic!("Custom value type mismatch: {}", name))
-            .as_mut()
-            .expect("Custom value should be Some")
-    }
-
-    /// Sets the custom value with the given name.
-    #[inline]
-    pub fn set<S: Signal>(&mut self, name: impl Into<String>, value: S) {
-        self.custom.insert(name.into(), value.into_any_signal());
-    }
-}
-
 /// A processor that can process audio signals.
 #[cfg_attr(feature = "serde", typetag::serde(tag = "type"))]
 pub trait Processor
@@ -621,12 +512,6 @@ where
         self.output_spec().len()
     }
 
-    /// Initializes the processor state by setting any custom values to their initial state.
-    ///
-    /// This method is called before processing begins.
-    #[allow(unused)]
-    fn init_state(&self, state: &mut ProcessorState) {}
-
     /// Prepares the processor for processing.
     ///
     /// This method is called once before processing begins.
@@ -640,7 +525,6 @@ where
     /// Processes the input signals and writes the output signals.
     fn process(
         &mut self,
-        // state: &mut ProcessorState,
         inputs: ProcessorInputs,
         outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError>;

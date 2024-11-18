@@ -288,8 +288,6 @@ impl Runtime {
             debug_once!(format!("{}_spilled", node_id.index()) => "Input array for {} ({}) spilled over to the heap (has {} inputs > 8)", node.name(), node_id.index(), num_inputs);
         }
 
-        node.set_sample_index(sample_index);
-
         let result = node.process(
             ProcessorInputs::new(&buffers.input_spec, &inputs[..], sample_index),
             ProcessorOutputs::new(&buffers.output_spec, &mut buffers.outputs, sample_index),

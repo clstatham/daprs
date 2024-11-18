@@ -52,7 +52,6 @@ impl Processor for Cond {
 
     fn process(
         &mut self,
-        // _state: &mut ProcessorState,
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
@@ -135,7 +134,6 @@ macro_rules! comparison_op {
 
             fn process(
                 &mut self,
-                // _state: &mut ProcessorState,
                 inputs: ProcessorInputs,
                 mut outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {

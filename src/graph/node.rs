@@ -4,7 +4,6 @@ use std::fmt::Debug;
 
 use crate::{
     prelude::{Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, SignalSpec},
-    processor::ProcessorState,
     signal::Float,
 };
 
@@ -81,9 +80,6 @@ impl ProcessorNode {
     pub fn prepare(&mut self) {
         self.processor.prepare();
     }
-
-    #[inline]
-    pub(crate) fn set_sample_index(&mut self, sample_index: Option<usize>) {}
 
     /// Processes the input signals and writes the output signals to the given buffers.
     #[inline]

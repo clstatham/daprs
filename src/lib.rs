@@ -24,7 +24,7 @@ pub mod prelude {
     pub use crate::builtins::*;
     pub use crate::graph::Graph;
     pub use crate::processor::{
-        Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, ProcessorState, SignalSpec,
+        Processor, ProcessorError, ProcessorInputs, ProcessorOutputs, SignalSpec,
     };
     pub use crate::runtime::{AudioBackend, AudioDevice, MidiPort, Runtime, RuntimeHandle};
     pub use crate::signal::{
