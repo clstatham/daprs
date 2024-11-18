@@ -150,7 +150,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
-    pub fn set(&mut self, index: usize, value: impl Into<AnySignal>) {
+    pub fn set(&mut self, index: usize, value: AnySignalRef) {
         match self {
             ProcessorOutput::Block(buffer) => {
                 buffer.set(index, value.into());
@@ -179,11 +179,20 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
-    pub fn fill<S: Signal + Clone>(&mut self, value: impl Into<Option<S>>) {
+    pub fn fill_as<S: Signal + Clone>(&mut self, value: impl Into<Option<S>>) {
         match self {
             ProcessorOutput::Block(buffer) => buffer.as_type_mut::<S>().unwrap().fill(value.into()),
             ProcessorOutput::Sample(buffer, sample_index) => {
                 buffer.as_type_mut::<S>().unwrap()[*sample_index] = value.into();
+            }
+        }
+    }
+
+    pub fn fill(&mut self, value: AnySignal) {
+        match self {
+            ProcessorOutput::Block(buffer) => buffer.fill(value),
+            ProcessorOutput::Sample(buffer, sample_index) => {
+                buffer.set(*sample_index, value.as_ref());
             }
         }
     }

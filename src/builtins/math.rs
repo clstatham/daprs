@@ -47,35 +47,7 @@ impl Processor for Constant {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let mut out = outputs.output(0);
-
-        if out.signal_type() != self.value.signal_type() {
-            return Err(ProcessorError::OutputSpecMismatch {
-                index: 0,
-                expected: self.value.signal_type(),
-                actual: out.signal_type(),
-            });
-        }
-
-        match self.value.signal_type() {
-            SignalType::Float => {
-                out.fill::<Float>(self.value.as_type::<Float>().unwrap().unwrap());
-            }
-            SignalType::Int => {
-                out.fill::<i64>(self.value.as_type::<i64>().unwrap().unwrap());
-            }
-            SignalType::Bool => {
-                out.fill::<bool>(self.value.as_type::<bool>().unwrap().unwrap());
-            }
-            SignalType::String => {
-                out.fill::<String>(self.value.as_type::<String>().cloned().unwrap());
-            }
-            SignalType::List { .. } => {
-                out.fill::<SignalBuffer>(self.value.as_type::<SignalBuffer>().cloned().unwrap());
-            }
-            SignalType::Midi => {
-                out.fill::<MidiMessage>(self.value.as_type::<MidiMessage>().unwrap().unwrap());
-            }
-        }
+        out.fill(self.value.to_owned());
 
         Ok(())
     }
@@ -328,7 +300,7 @@ macro_rules! impl_binary_proc {
                                 actual: in1.signal_type(),
                             });
                         }
-                        self.a = in1.to_owned();
+                        self.a.clone_from_ref(in1);
                     }
 
                     if let Some(in2) = in2 {
@@ -339,7 +311,7 @@ macro_rules! impl_binary_proc {
                                 actual: in2.signal_type(),
                             });
                         }
-                        self.b = in2.to_owned();
+                        self.b.clone_from_ref(in2);
                     }
 
                     if self.a.is_none() || self.b.is_none() {
@@ -479,7 +451,7 @@ macro_rules! impl_unary_proc {
                                 actual: a.signal_type(),
                             });
                         }
-                        self.a = a.to_owned();
+                        self.a.clone_from_ref(a);
                     }
 
                     match sample {

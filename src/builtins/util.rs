@@ -61,7 +61,7 @@ impl Processor for Passthrough {
 
         for (mut out_signal, in_signal) in itertools::izip!(out_signal.iter_mut(), in_signal.iter())
         {
-            out_signal.set(in_signal.to_owned());
+            out_signal.clone_from_ref(in_signal);
         }
 
         Ok(())
@@ -125,7 +125,7 @@ impl Processor for Cast {
                     self.to.clone(),
                 ));
             };
-            out_signal.set(cast);
+            out_signal.clone_from_ref(cast.as_ref());
         }
 
         Ok(())
@@ -192,11 +192,11 @@ impl Processor for Message {
                         actual: message.signal_type(),
                     });
                 }
-                self.message = message.to_owned();
+                self.message.clone_from_ref(message);
             }
 
             if bang.unwrap_or(false) {
-                out.set(self.message.to_owned());
+                out.clone_from_ref(self.message.as_ref());
             } else {
                 out.set_none();
             }
@@ -730,7 +730,9 @@ impl Processor for Param {
             }
 
             if let Some(msg) = self.rx_mut().recv() {
-                get.set(msg);
+                get.clone_from_ref(msg.as_ref());
+            } else if let Some(last) = self.rx().last() {
+                get.clone_from_ref(last.as_ref());
             } else {
                 get.set_none();
             }
@@ -1021,7 +1023,7 @@ impl Processor for Dedup {
         {
             if let Some(in_signal) = in_signal {
                 if self.last.as_ref() != in_signal {
-                    out_signal.set(in_signal.to_owned());
+                    out_signal.clone_from_ref(in_signal);
                 } else {
                     out_signal.set_none();
                 }

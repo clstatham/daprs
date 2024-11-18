@@ -241,15 +241,15 @@ impl Runtime {
     pub fn process(&mut self) -> RuntimeResult<()> {
         self.graph.reset_visitor();
 
-        let visit_path = self.graph.sccs().to_vec();
-        for scc in visit_path {
-            if scc.len() == 1 {
-                let node_id = scc[0];
+        for i in 0..self.graph.sccs().len() {
+            if self.graph.sccs()[i].len() == 1 {
+                let node_id = self.graph.sccs()[i][0];
                 self.process_node(node_id, None)?;
             } else {
+                let nodes = self.graph.sccs()[i].clone();
                 for sample_index in 0..self.block_size {
-                    for node_id in &scc {
-                        self.process_node(*node_id, Some(sample_index))?;
+                    for &node_id in &nodes {
+                        self.process_node(node_id, Some(sample_index))?;
                     }
                 }
             }

@@ -1,6 +1,6 @@
 //! Processors for working with lists.
 
-use crate::{error_once, prelude::*};
+use crate::prelude::*;
 
 /// A processor that computes the length of a list.
 ///
@@ -22,13 +22,7 @@ pub struct Len;
 #[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Len {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new(
-            "list",
-            SignalType::List {
-                size: None,
-                element_type: None,
-            },
-        )]
+        vec![SignalSpec::new("list", SignalType::List)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -89,13 +83,7 @@ impl Get {
 impl Processor for Get {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new(
-                "list",
-                SignalType::List {
-                    size: None,
-                    element_type: Some(Box::new(self.value.signal_type())),
-                },
-            ),
+            SignalSpec::new("list", SignalType::List),
             SignalSpec::new("index", SignalType::Int),
         ]
     }
@@ -134,7 +122,7 @@ impl Processor for Get {
                 continue;
             };
 
-            out.set(i, list.get(index as usize).unwrap().to_owned());
+            out.set(i, list.get(index as usize).unwrap());
         }
 
         Ok(())
@@ -180,13 +168,7 @@ impl Processor for Pack {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new(
-            "out",
-            SignalType::List {
-                size: Some(self.inputs.len()),
-                element_type: Some(Box::new(self.inputs.signal_type())),
-            },
-        )]
+        vec![SignalSpec::new("out", SignalType::List)]
     }
 
     fn process(
@@ -229,13 +211,13 @@ impl Processor for Pack {
                         }
                         SignalType::String => {
                             let buf = buf.as_type::<String>().unwrap();
-                            self.inputs.as_type_mut::<String>().unwrap()[input_index] =
-                                buf.get(sample_index).cloned().flatten();
+                            self.inputs.as_type_mut::<String>().unwrap()[input_index]
+                                .clone_from(&buf.get(sample_index).cloned().flatten());
                         }
                         SignalType::List { .. } => {
-                            let buf = buf.as_list().unwrap();
-                            self.inputs.as_list_mut().unwrap()[input_index] =
-                                buf.get(sample_index).cloned().flatten();
+                            let buf = buf.as_type::<SignalBuffer>().unwrap();
+                            self.inputs.as_type_mut::<SignalBuffer>().unwrap()[input_index]
+                                .clone_from(&buf.get(sample_index).cloned().flatten());
                         }
                         SignalType::Midi => {
                             let buf = buf.as_type::<MidiMessage>().unwrap();
@@ -256,7 +238,6 @@ impl Processor for Pack {
             }
 
             // we should only get here if the list is not initialized or has the wrong length
-            error_once!("pack_list" => "list is not initialized or has the wrong length");
             *out = Some(self.inputs.clone());
         }
 
@@ -299,13 +280,7 @@ impl Unpack {
 #[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Unpack {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new(
-            "list",
-            SignalType::List {
-                size: Some(self.num_outputs),
-                element_type: Some(Box::new(self.signal_type.clone())),
-            },
-        )]
+        vec![SignalSpec::new("list", SignalType::List)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -320,7 +295,7 @@ impl Processor for Unpack {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let list_buf = inputs.input(0).unwrap();
-        let list_buf = list_buf.as_list();
+        let list_buf = list_buf.as_type::<SignalBuffer>();
 
         if let Some(list_buf) = list_buf {
             for (sample_index, list) in list_buf
@@ -331,7 +306,7 @@ impl Processor for Unpack {
                 for output_index in 0..self.num_outputs {
                     let mut output_buf = outputs.output(output_index);
 
-                    output_buf.set(sample_index, list.get(output_index).unwrap().to_owned());
+                    output_buf.set(sample_index, list.get(output_index).unwrap());
                 }
             }
         }

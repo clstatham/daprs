@@ -149,14 +149,14 @@ impl Processor for Register {
             outputs.iter_output(0),
         ) {
             if let Some(set) = set {
-                self.value = set.to_owned();
+                self.value.clone_from_ref(set);
             }
 
             if clear.is_some() {
                 self.value.as_mut().set_none();
             }
 
-            out.set(self.value.to_owned());
+            out.clone_from_ref(self.value.as_ref());
         }
 
         Ok(())

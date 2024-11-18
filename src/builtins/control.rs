@@ -73,7 +73,7 @@ impl Processor for Cond {
                         actual: then.signal_type(),
                     });
                 }
-                self.then = then.to_owned();
+                self.then.clone_from_ref(then);
             }
 
             if let Some(else_) = else_ {
@@ -84,13 +84,13 @@ impl Processor for Cond {
                         actual: else_.signal_type(),
                     });
                 }
-                self.else_ = else_.to_owned();
+                self.else_.clone_from_ref(else_);
             }
 
             if self.cond {
-                out.set(self.then.to_owned());
+                out.clone_from_ref(self.then.as_ref());
             } else {
-                out.set(self.else_.to_owned());
+                out.clone_from_ref(self.else_.as_ref());
             }
         }
 
@@ -150,7 +150,7 @@ macro_rules! comparison_op {
                                 actual: a.signal_type(),
                             });
                         }
-                        self.a = a.to_owned();
+                        self.a.clone_from_ref(a);
                     }
 
                     if let Some(b) = b {
@@ -161,7 +161,7 @@ macro_rules! comparison_op {
                                 actual: b.signal_type(),
                             });
                         }
-                        self.b = b.to_owned();
+                        self.b.clone_from_ref(b);
                     }
 
                     if self.a.is_none() || self.b.is_none() {
@@ -172,8 +172,8 @@ macro_rules! comparison_op {
                     if self.a.signal_type() != self.b.signal_type() {
                         return Err(ProcessorError::InputSpecMismatch {
                             index: 0,
-                            expected: self.b.signal_type(),
-                            actual: self.a.signal_type(),
+                            expected: self.a.signal_type(),
+                            actual: self.b.signal_type(),
                         });
                     }
 
