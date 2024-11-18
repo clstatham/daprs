@@ -8,8 +8,8 @@ use thiserror::Error;
 
 use crate::{
     signal::{
-        AnySignal, AnySignalMut, AnySignalRef, Float, MidiMessage, Signal, SignalBuffer,
-        SignalBufferIterMut, SignalType,
+        AnySignal, AnySignalMut, AnySignalRef, Float, List, MidiMessage, Signal, SignalBuffer,
+        SignalType,
     },
     GraphSerde,
 };
@@ -107,6 +107,19 @@ where
             Ternary::C(c) => c.next(),
         }
     }
+}
+
+/// The mode in which a processor should process signals.
+///
+/// - `Block` means the processor processes the entire block of samples at once.
+/// - `Sample` means the processor processes each sample individually.
+#[derive(Debug, Clone, Copy)]
+pub enum ProcessMode {
+    Block,
+    Sample(
+        /// The index of the current sample within the block.
+        usize,
+    ),
 }
 
 /// The output of a [`Processor`].
@@ -207,8 +220,14 @@ pub struct ProcessorInputs<'a, 'b> {
     /// The input signals.
     inputs: &'a [Option<&'b SignalBuffer>],
 
-    /// The index of the current sample within the block, if the inputs are sample-based.
-    sample_index: Option<usize>,
+    /// The mode in which the processor should process signals.
+    mode: ProcessMode,
+
+    /// The current sample rate.
+    sample_rate: Float,
+
+    /// The current block size.
+    block_size: usize,
 }
 
 impl<'a, 'b> ProcessorInputs<'a, 'b> {
@@ -216,12 +235,16 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     pub(crate) fn new(
         input_specs: &'a [SignalSpec],
         inputs: &'a [Option<&'b SignalBuffer>],
-        sample_index: Option<usize>,
+        mode: ProcessMode,
+        sample_rate: Float,
+        block_size: usize,
     ) -> Self {
         Self {
             input_specs,
             inputs,
-            sample_index,
+            mode,
+            sample_rate,
+            block_size,
         }
     }
 
@@ -237,6 +260,18 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         &self.input_specs[index]
     }
 
+    /// Returns the current sample rate.
+    #[inline]
+    pub fn sample_rate(&self) -> Float {
+        self.sample_rate
+    }
+
+    /// Returns the current block size.
+    #[inline]
+    pub fn block_size(&self) -> usize {
+        self.block_size
+    }
+
     /// Returns the input signal at the given index. Unconnected inputs are represented as `None`.
     #[inline]
     pub fn input(&self, index: usize) -> Option<&'b SignalBuffer> {
@@ -250,8 +285,8 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     pub fn iter_input(&self, index: usize) -> impl Iterator<Item = Option<AnySignalRef>> {
         let buffer = &self.inputs[index];
         if let Some(buffer) = buffer.as_ref() {
-            if let Some(sample_index) = self.sample_index {
-                Ternary::B(std::iter::once(buffer.get(sample_index)))
+            if let ProcessMode::Sample(sample_index) = self.mode {
+                Ternary::B(std::iter::once(Some(buffer.get(sample_index).unwrap())))
             } else {
                 Ternary::A(buffer.iter().map(Some))
             }
@@ -271,7 +306,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
             return Ok(Ternary::C(std::iter::repeat(&None)));
         };
 
-        if let Some(sample_index) = self.sample_index {
+        if let ProcessMode::Sample(sample_index) = self.mode {
             if buffer.signal_type().is_compatible_with(&S::signal_type()) {
                 Ok(Ternary::B(std::iter::once(
                     &buffer.as_type::<S>().unwrap()[sample_index],
@@ -330,13 +365,13 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         Self::iter_input_as::<String>(self, index).map(|iter| iter.map(|s| s.as_ref()))
     }
 
-    /// Returns an iterator over the input signal at the given index, if it is a list signal.
+    /// Returns an iterator over the input signal at the given index, if it is a [`List`] signal.
     #[inline]
     pub fn iter_input_as_lists(
         &self,
         index: usize,
-    ) -> Result<impl Iterator<Item = Option<&SignalBuffer>> + '_, ProcessorError> {
-        Self::iter_input_as::<SignalBuffer>(self, index).map(|iter| iter.map(|s| s.as_ref()))
+    ) -> Result<impl Iterator<Item = Option<&List>> + '_, ProcessorError> {
+        Self::iter_input_as::<List>(self, index).map(|iter| iter.map(|s| s.as_ref()))
     }
 
     /// Returns an iterator over the input signal at the given index, if it is a [`MidiMessage`] signal.
@@ -357,8 +392,8 @@ pub struct ProcessorOutputs<'a> {
     /// The output signals.
     outputs: &'a mut [SignalBuffer],
 
-    /// The index of the current sample within the block, if the outputs are sample-based.
-    sample_index: Option<usize>,
+    /// The mode in which the processor should process signals.
+    mode: ProcessMode,
 }
 
 impl<'a> ProcessorOutputs<'a> {
@@ -366,19 +401,19 @@ impl<'a> ProcessorOutputs<'a> {
     pub(crate) fn new(
         output_spec: &'a [SignalSpec],
         outputs: &'a mut [SignalBuffer],
-        sample_index: Option<usize>,
+        mode: ProcessMode,
     ) -> Self {
         Self {
             output_spec,
             outputs,
-            sample_index,
+            mode,
         }
     }
 
     /// Returns the output signal at the given index.
     #[inline]
     pub fn output(&mut self, index: usize) -> ProcessorOutput<'_> {
-        if let Some(sample_index) = self.sample_index {
+        if let ProcessMode::Sample(sample_index) = self.mode {
             ProcessorOutput::Sample(&mut self.outputs[index], sample_index)
         } else {
             ProcessorOutput::Block(&mut self.outputs[index])
@@ -392,8 +427,13 @@ impl<'a> ProcessorOutputs<'a> {
     }
 
     #[inline]
-    pub fn iter_output(&mut self, index: usize) -> SignalBufferIterMut {
-        self.outputs[index].iter_mut()
+    pub fn iter_output(&mut self, index: usize) -> impl Iterator<Item = AnySignalMut> {
+        let output = &mut self.outputs[index];
+        if let ProcessMode::Sample(sample_index) = self.mode {
+            Either::Left(std::iter::once(output.get_mut(sample_index).unwrap()))
+        } else {
+            Either::Right(output.iter_mut())
+        }
     }
 
     /// Returns an iterator over the output signal at the given index, if it is of the given type.
@@ -402,7 +442,7 @@ impl<'a> ProcessorOutputs<'a> {
         &mut self,
         index: usize,
     ) -> Result<impl Iterator<Item = &mut Option<S>> + '_, ProcessorError> {
-        if let Some(sample_index) = self.sample_index {
+        if let ProcessMode::Sample(sample_index) = self.mode {
             let output = &mut self.outputs[index];
             if output.signal_type().is_compatible_with(&S::signal_type()) {
                 Ok(Either::Left(std::iter::once(
@@ -472,8 +512,8 @@ impl<'a> ProcessorOutputs<'a> {
     pub fn iter_output_mut_as_lists(
         &mut self,
         index: usize,
-    ) -> Result<impl Iterator<Item = &mut Option<SignalBuffer>> + '_, ProcessorError> {
-        self.iter_output_as::<SignalBuffer>(index)
+    ) -> Result<impl Iterator<Item = &mut Option<List>> + '_, ProcessorError> {
+        self.iter_output_as::<List>(index)
     }
 
     /// Returns an iterator over the output signal at the given index, if it is a [`MidiMessage`] signal.

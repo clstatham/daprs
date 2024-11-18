@@ -147,14 +147,14 @@ impl Processor for Get {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pack {
-    inputs: SignalBuffer,
+    inputs: List,
 }
 
 impl Pack {
     /// Creates a new `Pack` processor with the specified type and number of inputs.
     pub fn new(signal_type: SignalType, num_inputs: usize) -> Self {
         Self {
-            inputs: SignalBuffer::new_of_type(&signal_type, num_inputs),
+            inputs: List::new_of_type(signal_type, num_inputs),
         }
     }
 }
@@ -176,11 +176,7 @@ impl Processor for Pack {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (sample_index, out) in outputs
-            .iter_output_as::<SignalBuffer>(0)
-            .unwrap()
-            .enumerate()
-        {
+        for (sample_index, out) in outputs.iter_output_as::<List>(0).unwrap().enumerate() {
             let num_inputs = self.inputs.len();
             for input_index in 0..num_inputs {
                 let input = inputs.input(input_index);
@@ -193,38 +189,7 @@ impl Processor for Pack {
                         });
                     }
 
-                    match self.inputs.signal_type() {
-                        SignalType::Float => {
-                            let buf = buf.as_type::<Float>().unwrap();
-                            self.inputs.as_type_mut::<Float>().unwrap()[input_index] =
-                                buf.get(sample_index).copied().flatten();
-                        }
-                        SignalType::Int => {
-                            let buf = buf.as_type::<i64>().unwrap();
-                            self.inputs.as_type_mut::<i64>().unwrap()[input_index] =
-                                buf.get(sample_index).copied().flatten();
-                        }
-                        SignalType::Bool => {
-                            let buf = buf.as_type::<bool>().unwrap();
-                            self.inputs.as_type_mut::<bool>().unwrap()[input_index] =
-                                buf.get(sample_index).copied().flatten();
-                        }
-                        SignalType::String => {
-                            let buf = buf.as_type::<String>().unwrap();
-                            self.inputs.as_type_mut::<String>().unwrap()[input_index]
-                                .clone_from(&buf.get(sample_index).cloned().flatten());
-                        }
-                        SignalType::List { .. } => {
-                            let buf = buf.as_type::<SignalBuffer>().unwrap();
-                            self.inputs.as_type_mut::<SignalBuffer>().unwrap()[input_index]
-                                .clone_from(&buf.get(sample_index).cloned().flatten());
-                        }
-                        SignalType::Midi => {
-                            let buf = buf.as_type::<MidiMessage>().unwrap();
-                            self.inputs.as_type_mut::<MidiMessage>().unwrap()[input_index] =
-                                buf.get(sample_index).cloned().flatten();
-                        }
-                    }
+                    self.inputs.set(input_index, buf.get(sample_index).unwrap());
                 }
             }
 
@@ -295,7 +260,7 @@ impl Processor for Unpack {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         let list_buf = inputs.input(0).unwrap();
-        let list_buf = list_buf.as_type::<SignalBuffer>();
+        let list_buf = list_buf.as_type::<List>();
 
         if let Some(list_buf) = list_buf {
             for (sample_index, list) in list_buf

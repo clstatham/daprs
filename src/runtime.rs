@@ -13,7 +13,7 @@ use crate::{
     debug_once,
     graph::{Graph, GraphRunError, GraphRunErrorType, NodeIndex},
     prelude::{ProcessorInputs, SignalSpec},
-    processor::{ProcessorError, ProcessorOutputs},
+    processor::{ProcessMode, ProcessorError, ProcessorOutputs},
     signal::{Float, MidiMessage, SignalBuffer, SignalType},
 };
 
@@ -244,12 +244,12 @@ impl Runtime {
         for i in 0..self.graph.sccs().len() {
             if self.graph.sccs()[i].len() == 1 {
                 let node_id = self.graph.sccs()[i][0];
-                self.process_node(node_id, None)?;
+                self.process_node(node_id, ProcessMode::Block)?;
             } else {
                 let nodes = self.graph.sccs()[i].clone();
                 for sample_index in 0..self.block_size {
                     for &node_id in &nodes {
-                        self.process_node(node_id, Some(sample_index))?;
+                        self.process_node(node_id, ProcessMode::Sample(sample_index))?;
                     }
                 }
             }
@@ -259,11 +259,7 @@ impl Runtime {
     }
 
     #[cfg_attr(feature = "profiling", inline(never))]
-    fn process_node(
-        &mut self,
-        node_id: NodeIndex,
-        sample_index: Option<usize>,
-    ) -> RuntimeResult<()> {
+    fn process_node(&mut self, node_id: NodeIndex, mode: ProcessMode) -> RuntimeResult<()> {
         let num_inputs = self.buffer_cache[&node_id].input_spec.len();
 
         let mut inputs: smallvec::SmallVec<[_; 8]> = smallvec::smallvec![None; num_inputs];
@@ -289,8 +285,14 @@ impl Runtime {
         }
 
         let result = node.process(
-            ProcessorInputs::new(&buffers.input_spec, &inputs[..], sample_index),
-            ProcessorOutputs::new(&buffers.output_spec, &mut buffers.outputs, sample_index),
+            ProcessorInputs::new(
+                &buffers.input_spec,
+                &inputs[..],
+                mode,
+                self.sample_rate,
+                self.block_size,
+            ),
+            ProcessorOutputs::new(&buffers.output_spec, &mut buffers.outputs, mode),
         );
 
         if let Err(err) = result {

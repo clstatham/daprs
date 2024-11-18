@@ -334,11 +334,12 @@ impl Processor for NoiseOscillator {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        use rand::Rng;
+        use rand::distributions::Distribution;
         let mut rng = rand::thread_rng();
+        let dist = rand::distributions::Uniform::new(0.0, 1.0);
         for out in outputs.iter_output_mut_as_floats(0)? {
             // generate a random number
-            *out = Some(rng.gen_range(0.0..1.0));
+            *out = Some(dist.sample(&mut rng));
         }
 
         Ok(())

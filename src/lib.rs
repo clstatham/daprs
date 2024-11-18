@@ -28,7 +28,7 @@ pub mod prelude {
     };
     pub use crate::runtime::{AudioBackend, AudioDevice, MidiPort, Runtime, RuntimeHandle};
     pub use crate::signal::{
-        AnySignal, Buffer, Float, MidiMessage, Signal, SignalBuffer, SignalType,
+        AnySignal, Buffer, Float, List, MidiMessage, Signal, SignalBuffer, SignalType,
     };
     pub use std::time::Duration;
 }
@@ -36,7 +36,7 @@ pub mod prelude {
 #[doc(hidden)]
 mod graph_serde {
     #[cfg(feature = "serde")]
-    pub(crate) trait GraphSerde: erased_serde::Serialize {}
+    pub trait GraphSerde: erased_serde::Serialize {}
     #[cfg(feature = "serde")]
     impl<T: ?Sized> GraphSerde for T where T: erased_serde::Serialize {}
 

@@ -11,14 +11,14 @@ fn main() {
     let sine = graph.add(SineOscillator::default());
     sine.input("frequency").connect(440.0);
 
-    let sine = sine * 0.5;
+    let sine = sine * 0.2;
 
     sine.output(0).connect(&out1.input(0));
     sine.output(0).connect(&out2.input(0));
 
-    let mut runtime = graph.build_runtime();
+    let graph = graph.build();
 
-    let ser = serde_json::to_string_pretty(runtime.graph()).unwrap();
+    let ser = serde_json::to_string(&graph).unwrap();
     println!("{}", ser);
 
     let graph = serde_json::from_str(&ser).unwrap();

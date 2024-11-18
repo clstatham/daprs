@@ -102,14 +102,6 @@ pub fn random_tones(
     // create the filter envelope
     let filt_env = decay_env(graph, &trig, &filt_decay);
 
-    // select a random scale
-    let scales = [0.25, 0.5, 1.0];
-    let scales = graph.constant(SignalBuffer::from_iter(scales.iter().copied()));
-    let scale = pick_randomly(graph, &trig, &scales);
-
-    // scale the filter envelope
-    let filt_env = filt_env * scale * 19800.0 + 200.0;
-
     // create the modulator
     let modulator = graph.add(BlSawOscillator::default());
     modulator.input(0).connect((&freq * ratio).output(0));
@@ -141,13 +133,13 @@ pub fn generative1(num_tones: usize) -> GraphBuilder {
         .add_param(Param::new::<Float>("amp", Some(0.5)))
         .make_register();
 
-    let ratios = graph.constant(SignalBuffer::from_iter(ratios.iter().copied()));
-    let decays = graph.constant(SignalBuffer::from_iter(decays.iter().copied()));
-    let amps = graph.constant(SignalBuffer::from_iter(amps.iter().copied()));
-    let rates = graph.constant(SignalBuffer::from_iter(rates.iter().copied()));
+    let ratios = graph.constant(List::from_iter(ratios.iter().copied()));
+    let decays = graph.constant(List::from_iter(decays.iter().copied()));
+    let amps = graph.constant(List::from_iter(amps.iter().copied()));
+    let rates = graph.constant(List::from_iter(rates.iter().copied()));
 
     let freqs = scale_freqs(0.0);
-    let freqs = graph.constant(SignalBuffer::from_iter(freqs.iter().copied()));
+    let freqs = graph.constant(List::from_iter(freqs.iter().copied()));
 
     let mut tones = vec![];
     for _ in 0..num_tones {

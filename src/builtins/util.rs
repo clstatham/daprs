@@ -410,16 +410,18 @@ impl Processor for Smooth {
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Changed {
-    last: Float,
+    last: Option<Float>,
     threshold: Float,
+    include_none: bool,
 }
 
 impl Changed {
     /// Create a new `Changed` processor with the given threshold.
-    pub fn new(threshold: Float) -> Self {
+    pub fn new(threshold: Float, include_none: bool) -> Self {
         Self {
-            last: 0.0,
+            last: None,
             threshold,
+            include_none,
         }
     }
 }
@@ -447,17 +449,25 @@ impl Processor for Changed {
             inputs.iter_input_as_floats(1)?,
             outputs.iter_output_mut_as_bools(0)?
         ) {
-            let Some(in_signal) = in_signal else {
-                *out_signal = None;
-                continue;
-            };
-
             self.threshold = threshold.unwrap_or(self.threshold);
 
-            if (self.last - in_signal).abs() > self.threshold {
-                *out_signal = Some(true);
-            } else {
-                *out_signal = None;
+            match (self.last, in_signal) {
+                (Some(last), Some(in_signal)) => {
+                    if (last - in_signal).abs() > self.threshold {
+                        *out_signal = Some(true);
+                    } else {
+                        *out_signal = None;
+                    }
+                }
+                (None, Some(_)) if self.include_none => {
+                    *out_signal = Some(true);
+                }
+                (Some(_), None) if self.include_none => {
+                    *out_signal = Some(true);
+                }
+                _ => {
+                    *out_signal = None;
+                }
             }
 
             self.last = in_signal;
@@ -1029,6 +1039,169 @@ impl Processor for Dedup {
                 }
             } else {
                 out_signal.set_none();
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// A processor that outputs `true` when the input signal is `Some`, and `false` when it is `None`.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `in` | `Any` | The input signal. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Bool` | The output signal. |
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct IsSome {
+    signal_type: SignalType,
+}
+
+impl IsSome {
+    /// Create a new `IsSome` processor.
+    pub fn new(signal_type: SignalType) -> Self {
+        Self { signal_type }
+    }
+}
+
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for IsSome {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", self.signal_type.clone())]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalType::Bool)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        for (in_signal, out_signal) in
+            itertools::izip!(inputs.iter_input(0), outputs.iter_output_mut_as_bools(0)?)
+        {
+            *out_signal = Some(in_signal.is_some_and(|signal| signal.is_some()));
+        }
+
+        Ok(())
+    }
+}
+
+/// A processor that outputs `true` when the input signal is `None`, and `false` when it is `Some`.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `in` | `Any` | The input signal. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Bool` | The output signal. |
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct IsNone {
+    signal_type: SignalType,
+}
+
+impl IsNone {
+    /// Create a new `IsNone` processor.
+    pub fn new(signal_type: SignalType) -> Self {
+        Self { signal_type }
+    }
+}
+
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for IsNone {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", self.signal_type.clone())]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalType::Bool)]
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        for (in_signal, out_signal) in
+            itertools::izip!(inputs.iter_input(0), outputs.iter_output_mut_as_bools(0)?)
+        {
+            *out_signal = Some(!in_signal.is_some_and(|signal| signal.is_some()));
+        }
+
+        Ok(())
+    }
+}
+
+/// A processor that outputs the input signal if it is Some, otherwise it outputs a default value.
+///
+/// # Inputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `in` | `Any` | The input signal. |
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Any` | The input signal if it is Some, otherwise a default value. |
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct OrElse {
+    default: AnySignal,
+}
+
+impl OrElse {
+    /// Create a new `OrElse` processor.
+    pub fn new(default: impl Signal) -> Self {
+        Self {
+            default: default.into_any_signal(),
+        }
+    }
+}
+
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for OrElse {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("in", self.default.signal_type())]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", self.default.signal_type())]
+    }
+
+    fn process(
+        &mut self,
+        inputs: ProcessorInputs,
+        mut outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        for (in_signal, mut out_signal) in
+            itertools::izip!(inputs.iter_input(0), outputs.iter_output(0))
+        {
+            if let Some(in_signal) = in_signal {
+                if in_signal.is_some() {
+                    out_signal.clone_from_ref(in_signal);
+                } else {
+                    out_signal.clone_from_ref(self.default.as_ref());
+                }
+            } else {
+                out_signal.clone_from_ref(self.default.as_ref());
             }
         }
 

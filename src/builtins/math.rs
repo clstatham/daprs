@@ -140,10 +140,7 @@ impl Processor for FreqToMidi {
             inputs.iter_input_as_floats(0)?,
             outputs.iter_output_mut_as_floats(0)?
         ) {
-            let Some(freq) = freq else {
-                *note = None;
-                continue;
-            };
+            let freq = freq.unwrap_or_default();
             *note = Some(69.0 + 12.0 * (freq / 440.0).log2());
         }
 
@@ -314,20 +311,28 @@ macro_rules! impl_binary_proc {
                         self.b.clone_from_ref(in2);
                     }
 
-                    if self.a.is_none() || self.b.is_none() {
-                        sample.set_none();
-                        continue;
-                    }
-
                     match sample {
                         $(AnySignalMut::$data(sample) => {
-                            *sample = Some(
-                                self.a
-                                    .as_type::<$ty>()
-                                    .unwrap()
-                                    .unwrap()
-                                    .$method(self.b.as_type::<$ty>().unwrap().unwrap()),
-                            );
+                            match (self.a.is_some(), self.b.is_some()) {
+                                (true, true) => {
+                                    let a = self.a.as_type::<$ty>().unwrap().unwrap();
+                                    let b = self.b.as_type::<$ty>().unwrap().unwrap();
+                                    *sample = Some(a.$method(b));
+                                }
+                                (true, false) => {
+                                    let a = self.a.as_type::<$ty>().unwrap().unwrap();
+                                    let b = <$ty>::default();
+                                    *sample = Some(a.$method(b));
+                                }
+                                (false, true) => {
+                                    let a = <$ty>::default();
+                                    let b = self.b.as_type::<$ty>().unwrap().unwrap();
+                                    *sample = Some(a.$method(b));
+                                }
+                                (false, false) => {
+                                    *sample = None;
+                                }
+                            }
                         })*
                         sample => {
                             return Err(ProcessorError::OutputSpecMismatch {
@@ -454,15 +459,15 @@ macro_rules! impl_unary_proc {
                         self.a.clone_from_ref(a);
                     }
 
+                    if self.a.is_none() {
+                        sample.set_none();
+                        continue;
+                    }
+
                     match sample {
                         $(AnySignalMut::$data(sample) => {
-                            *sample = Some(
-                                self.a
-                                    .as_type::<$ty>()
-                                    .unwrap()
-                                    .unwrap()
-                                    .$method(),
-                            );
+                            let a = self.a.as_type::<$ty>().unwrap().unwrap();
+                            *sample = Some(a.$method());
                         })*
                         sample => {
                             return Err(ProcessorError::OutputSpecMismatch {

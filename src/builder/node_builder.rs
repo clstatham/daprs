@@ -408,6 +408,42 @@ impl Node {
         self.assert_single_output("finite_or_zero");
         self.output(0).finite_or_zero()
     }
+
+    /// Connects a [`IsSome`] processor to the output of this node.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the node has multiple outputs.
+    #[inline]
+    #[track_caller]
+    pub fn is_some(&self) -> Node {
+        self.assert_single_output("is_some");
+        self.output(0).is_some()
+    }
+
+    /// Connects a [`IsNone`] processor to the output of this node.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the node has multiple outputs.
+    #[inline]
+    #[track_caller]
+    pub fn is_none(&self) -> Node {
+        self.assert_single_output("is_none");
+        self.output(0).is_none()
+    }
+
+    /// Connects a [`OrElse`] processor to the output of this node.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the node has multiple outputs.
+    #[inline]
+    #[track_caller]
+    pub fn or_else(&self, default: impl Signal) -> Node {
+        self.assert_single_output("or_else");
+        self.output(0).or_else(default)
+    }
 }
 
 /// Represents an input of a [`Node`].
@@ -630,7 +666,7 @@ impl Output {
             "output signal must be a float"
         );
         let proc = self.node.graph().add(Print::new(SignalType::Float));
-        let changed = self.node().graph().add(Changed::new(0.0));
+        let changed = self.node().graph().add(Changed::new(0.0, true));
         changed.input(0).connect(self);
         proc.input("trig").connect(changed);
         proc.input("message").connect(self);
@@ -672,6 +708,30 @@ impl Output {
         proc.input(0).connect(self);
         proc
     }
+
+    /// Creates a [`IsSome`] processor and connects it to the output.
+    #[inline]
+    pub fn is_some(&self) -> Node {
+        let proc = self.node.graph().add(IsSome::new(self.signal_type()));
+        proc.input(0).connect(self);
+        proc
+    }
+
+    /// Creates a [`IsNone`] processor and connects it to the output.
+    #[inline]
+    pub fn is_none(&self) -> Node {
+        let proc = self.node.graph().add(IsNone::new(self.signal_type()));
+        proc.input(0).connect(self);
+        proc
+    }
+
+    /// Creates a [`OrElse`] processor and connects it to the output.
+    #[inline]
+    pub fn or_else(&self, default: impl Signal) -> Node {
+        let proc = self.node.graph().add(OrElse::new(default));
+        proc.input(0).connect(self);
+        proc
+    }
 }
 
 mod sealed {
@@ -684,6 +744,7 @@ mod sealed {
     impl Sealed for super::AnySignal {}
     impl Sealed for crate::builtins::util::Param {}
     impl Sealed for crate::signal::Float {}
+    impl Sealed for bool {}
     impl Sealed for i32 {}
     impl Sealed for i64 {}
     impl Sealed for u32 {}
@@ -720,6 +781,12 @@ impl<T: IntoNode> IntoOutput for T {
 pub trait IntoNode: sealed::Sealed {
     /// Converts the value into a [`Node`] in the given graph.
     fn into_node(self, graph: &GraphBuilder) -> Node;
+}
+
+impl IntoNode for bool {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
+        graph.constant(self)
+    }
 }
 
 impl IntoNode for Node {

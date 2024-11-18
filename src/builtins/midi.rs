@@ -91,7 +91,10 @@ impl Processor for MidiVelocity {
             outputs.iter_output_mut_as_floats(0)?
         ) {
             if let Some(msg) = midi {
-                self.velocity = msg.data2() as Float;
+                // Note on, note off, and polyphonic aftertouch messages.
+                if [0x90, 0x80, 0xa8].contains(&msg.status()) {
+                    self.velocity = msg.data2() as Float;
+                }
             }
 
             *out = Some(self.velocity);
@@ -139,12 +142,11 @@ impl Processor for MidiGate {
             outputs.iter_output_mut_as_bools(0)?
         ) {
             if let Some(msg) = midi {
-                let gate = match msg.status() {
-                    0x90 => msg.data2() > 0,
-                    0x80 => false,
-                    _ => false,
-                };
-                self.gate = gate;
+                if msg.status() == 0x90 {
+                    self.gate = msg.data2() > 0;
+                } else if msg.status() == 0x80 {
+                    self.gate = false;
+                }
             }
 
             *out = Some(self.gate);
