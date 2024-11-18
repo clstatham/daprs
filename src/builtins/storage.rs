@@ -137,7 +137,7 @@ impl Processor for Register {
         for (set, clear, mut out) in itertools::izip!(
             inputs.iter_input(0),
             inputs.iter_input_as_bools(1)?,
-            outputs.iter_output(0),
+            outputs.iter_output_mut(0),
         ) {
             if let Some(set) = set {
                 self.value.clone_from_ref(set);

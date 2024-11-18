@@ -17,12 +17,9 @@ impl Processor for GainProc {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (input, output) in itertools::izip!(
-            inputs.iter_input_as_floats(0)?,
-            outputs.iter_output_mut_as_floats(0)?
-        ) {
+        for (input, output) in iter_proc_io_as!(inputs as [Float], outputs as [Float]) {
             let Some(input) = input else {
                 *output = None;
                 continue;
@@ -44,7 +41,7 @@ fn main() {
     let sine = graph.add(SineOscillator::default());
     sine.input("frequency").connect(440.0);
 
-    let gain = graph.add(GainProc { gain: 0.5 });
+    let gain = graph.add(GainProc { gain: 0.2 });
 
     sine.output(0).connect(&gain.input(0));
 

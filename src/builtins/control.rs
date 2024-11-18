@@ -56,7 +56,7 @@ impl Processor for Cond {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (mut out, cond, then, else_) in itertools::izip!(
-            outputs.iter_output(0),
+            outputs.iter_output_mut(0),
             inputs.iter_input_as_bools(0)?,
             inputs.iter_input(1),
             inputs.iter_input(2)

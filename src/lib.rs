@@ -17,6 +17,7 @@ pub mod signal;
 /// Re-exports of commonly used types and traits from the crate.
 #[allow(unused_imports)]
 pub mod prelude {
+    pub(crate) use crate as raug;
     pub use crate::builder::{
         graph_builder::GraphBuilder,
         node_builder::{Input, IntoNode, Node, Output},
@@ -30,6 +31,7 @@ pub mod prelude {
     pub use crate::signal::{
         AnySignal, Buffer, Float, List, MidiMessage, Signal, SignalBuffer, SignalType,
     };
+    pub use raug_macros::{iter_inputs_as, iter_outputs_mut_as, iter_proc_io_as, split_outputs};
     pub use std::time::Duration;
 }
 
@@ -121,6 +123,12 @@ mod logging {
             $crate::log_once!($val => trace $($msg)*);
         };
     }
+}
+
+#[doc(hidden)]
+#[allow(unused)]
+pub mod __itertools {
+    pub use itertools::{cons_tuples, izip};
 }
 
 /// Returns a list of available audio backends, as exposed by the `cpal` crate.

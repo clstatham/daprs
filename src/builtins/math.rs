@@ -285,7 +285,7 @@ macro_rules! impl_binary_proc {
                 mut outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {
                 for (sample, in1, in2) in itertools::izip!(
-                    outputs.iter_output(0),
+                    outputs.iter_output_mut(0),
                     inputs.iter_input(0),
                     inputs.iter_input(1)
                 ) {
@@ -445,7 +445,7 @@ macro_rules! impl_unary_proc {
                 mut outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {
                 for (sample, a) in itertools::izip!(
-                    outputs.iter_output(0),
+                    outputs.iter_output_mut(0),
                     inputs.iter_input(0)
                 ) {
                     if let Some(a) = a {

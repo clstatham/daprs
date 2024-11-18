@@ -182,7 +182,7 @@ impl Processor for Message {
         for (bang, message, mut out) in itertools::izip!(
             inputs.iter_input_as_bools(0)?,
             inputs.iter_input(1),
-            outputs.iter_output(0),
+            outputs.iter_output_mut(0),
         ) {
             if let Some(message) = message {
                 if message.signal_type() != self.message.signal_type() {
@@ -728,7 +728,7 @@ impl Processor for Param {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (set, mut get) in itertools::izip!(inputs.iter_input(0), outputs.iter_output(0)) {
+        for (set, mut get) in itertools::izip!(inputs.iter_input(0), outputs.iter_output_mut(0)) {
             if let Some(set) = set {
                 self.tx().send(set.to_owned());
             }
@@ -1023,7 +1023,7 @@ impl Processor for Dedup {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (in_signal, mut out_signal) in
-            itertools::izip!(inputs.iter_input(0), outputs.iter_output(0))
+            itertools::izip!(inputs.iter_input(0), outputs.iter_output_mut(0))
         {
             if let Some(in_signal) = in_signal {
                 if self.last.as_ref() != in_signal {
@@ -1186,7 +1186,7 @@ impl Processor for OrElse {
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         for (in_signal, mut out_signal) in
-            itertools::izip!(inputs.iter_input(0), outputs.iter_output(0))
+            itertools::izip!(inputs.iter_input(0), outputs.iter_output_mut(0))
         {
             if let Some(in_signal) = in_signal {
                 if in_signal.is_some() {

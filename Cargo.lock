@@ -1037,12 +1037,22 @@ dependencies = [
  "midir",
  "petgraph",
  "rand",
+ "raug-macros",
  "rustc-hash 2.0.0",
  "serde",
  "serde_json",
  "smallvec",
  "thiserror",
  "typetag",
+]
+
+[[package]]
+name = "raug-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

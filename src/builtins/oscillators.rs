@@ -611,13 +611,11 @@ impl Processor for KarplusStrong {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, trig, frequency, damping) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_bools(0)?,
-            inputs.iter_input_as_floats(1)?,
-            inputs.iter_input_as_floats(2)?
+        for (trig, frequency, damping, out) in iter_proc_io_as!(
+            inputs as [bool, Float, Float],
+            outputs as [Float]
         ) {
             self.frequency = frequency.unwrap_or(self.frequency);
             if self.frequency <= 0.0 {

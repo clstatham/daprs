@@ -176,7 +176,7 @@ impl Processor for Pack {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (sample_index, out) in outputs.iter_output_as::<List>(0).unwrap().enumerate() {
+        for (sample_index, out) in outputs.iter_output_mut_as::<List>(0).unwrap().enumerate() {
             let num_inputs = self.inputs.len();
             for input_index in 0..num_inputs {
                 let input = inputs.input(input_index);
