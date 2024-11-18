@@ -1,16 +1,13 @@
 //! Utility processors.
 
-use std::{
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::{
     prelude::{GraphBuilder, Node, Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
     processor::ProcessorError,
-    signal::{Float, Signal, SignalType},
+    signal::{AnySignal, Float, Signal, SignalType},
 };
 
 use super::lerp;
@@ -28,23 +25,27 @@ use super::lerp;
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Any` | The output signal.
-#[derive(Clone, Debug, Default)]
-pub struct Passthrough<S: Signal + Clone>(PhantomData<S>);
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Passthrough {
+    signal_type: SignalType,
+}
 
-impl<S: Signal + Clone> Passthrough<S> {
+impl Passthrough {
     /// Create a new `Passthrough` processor.
-    pub fn new() -> Self {
-        Self(PhantomData)
+    pub fn new(signal_type: SignalType) -> Self {
+        Self { signal_type }
     }
 }
 
-impl<S: Signal + Clone> Processor for Passthrough<S> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Passthrough {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::signal_type())]
+        vec![SignalSpec::new("in", self.signal_type.clone())]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::signal_type())]
+        vec![SignalSpec::new("out", self.signal_type.clone())]
     }
 
     fn process(
@@ -58,11 +59,9 @@ impl<S: Signal + Clone> Processor for Passthrough<S> {
 
         let mut out_signal = outputs.output(0);
 
-        let in_signal = in_signal.as_type::<S>().unwrap();
-        let out_signal = out_signal.iter_mut::<S>();
-
-        for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
-            *out_signal = in_signal.clone();
+        for (mut out_signal, in_signal) in itertools::izip!(out_signal.iter_mut(), in_signal.iter())
+        {
+            out_signal.set(in_signal.to_owned());
         }
 
         Ok(())
@@ -82,27 +81,28 @@ impl<S: Signal + Clone> Processor for Passthrough<S> {
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `T` | The output signal.
-#[derive(Clone, Debug, Default)]
-pub struct Cast<S: Signal + Clone, T: Signal + Clone> {
-    _phantom: PhantomData<(S, T)>,
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Cast {
+    from: SignalType,
+    to: SignalType,
 }
 
-impl<S: Signal + Clone, T: Signal + Clone> Cast<S, T> {
+impl Cast {
     /// Create a new `Cast` processor.
-    pub fn new() -> Self {
-        Self {
-            _phantom: PhantomData,
-        }
+    pub fn new(from: SignalType, to: SignalType) -> Self {
+        Self { from, to }
     }
 }
 
-impl<S: Signal + Clone, T: Signal + Clone> Processor for Cast<S, T> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Cast {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::signal_type())]
+        vec![SignalSpec::new("in", self.from.clone())]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", T::signal_type())]
+        vec![SignalSpec::new("out", self.to.clone())]
     }
 
     fn process(
@@ -114,16 +114,18 @@ impl<S: Signal + Clone, T: Signal + Clone> Processor for Cast<S, T> {
             return Ok(());
         };
 
-        let in_signal = in_signal.as_type::<S>().unwrap();
-
         let mut out_signal = outputs.output(0);
-        let out_signal = out_signal.iter_mut::<T>();
 
-        for (in_signal, out_signal) in itertools::izip!(in_signal, out_signal) {
-            if let Some(in_signal) = in_signal {
-                let in_signal = S::into_any_signal(in_signal.to_owned());
-                *out_signal = in_signal.cast();
-            }
+        for (in_signal, mut out_signal) in itertools::izip!(in_signal.iter(), out_signal.iter_mut())
+        {
+            let in_signal = in_signal.to_owned();
+            let Some(cast) = in_signal.cast(self.to.clone()) else {
+                return Err(ProcessorError::InvalidCast(
+                    in_signal.signal_type(),
+                    self.to.clone(),
+                ));
+            };
+            out_signal.set(cast);
         }
 
         Ok(())
@@ -145,27 +147,31 @@ impl<S: Signal + Clone, T: Signal + Clone> Processor for Cast<S, T> {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Any` | The output signal. |
 #[derive(Clone, Debug)]
-pub struct Message<S: Signal + Clone> {
-    message: S,
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Message {
+    message: AnySignal,
 }
 
-impl<S: Signal + Clone> Message<S> {
+impl Message {
     /// Create a new `MessageSender` processor with the given message.
-    pub fn new(message: S) -> Self {
-        Self { message }
+    pub fn new(message: impl Signal) -> Self {
+        Self {
+            message: message.into_any_signal(),
+        }
     }
 }
 
-impl<S: Signal + Clone> Processor for Message<S> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Message {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("trig", SignalType::Bool),
-            SignalSpec::new("message", S::signal_type()),
+            SignalSpec::new("message", self.message.signal_type()),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::signal_type())]
+        vec![SignalSpec::new("out", self.message.signal_type())]
     }
 
     fn process(
@@ -173,23 +179,26 @@ impl<S: Signal + Clone> Processor for Message<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (bang, message, out) in itertools::izip!(
+        for (bang, message, mut out) in itertools::izip!(
             inputs.iter_input_as_bools(0)?,
-            inputs.iter_input_as::<S>(1)?,
-            outputs.iter_output_as::<S>(0)?
+            inputs.iter_input(1),
+            outputs.iter_output(0),
         ) {
             if let Some(message) = message {
-                self.message.clone_from(message);
+                if message.signal_type() != self.message.signal_type() {
+                    return Err(ProcessorError::InputSpecMismatch {
+                        index: 1,
+                        expected: self.message.signal_type(),
+                        actual: message.signal_type(),
+                    });
+                }
+                self.message = message.to_owned();
             }
 
-            if let Some(true) = bang {
-                if let Some(out) = out {
-                    out.clone_from(&self.message);
-                } else {
-                    *out = Some(self.message.clone());
-                }
+            if bang.unwrap_or(false) {
+                out.set(self.message.to_owned());
             } else {
-                *out = None;
+                out.set_none();
             }
         }
 
@@ -210,49 +219,33 @@ impl<S: Signal + Clone> Processor for Message<S> {
 ///
 /// # Outputs
 #[derive(Clone, Debug)]
-pub struct Print<S: Signal + Clone> {
-    msg: S,
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Print {
+    msg: AnySignal,
 }
 
-impl<S: Signal + Default + Clone> Default for Print<S> {
-    fn default() -> Self {
-        Self { msg: S::default() }
+impl Print {
+    /// Create a new `Print` processor with the given message.
+    pub fn with_message(message: impl Signal) -> Self {
+        Self {
+            msg: message.into_any_signal(),
+        }
+    }
+
+    /// Create a new `Print` processor with an empty message.
+    pub fn new(signal_type: SignalType) -> Self {
+        Self {
+            msg: AnySignal::default_of_type(&signal_type),
+        }
     }
 }
 
-impl Print<String> {
-    /// Create a new `Print` processor that prints a string.
-    pub fn new(msg: impl Into<String>) -> Self {
-        Self { msg: msg.into() }
-    }
-}
-
-impl Print<Float> {
-    /// Create a new `Print` processor that prints a float.
-    pub fn new(msg: impl Into<Float>) -> Self {
-        Self { msg: msg.into() }
-    }
-}
-
-impl Print<bool> {
-    /// Create a new `Print` processor that prints a boolean.
-    pub fn new(msg: impl Into<bool>) -> Self {
-        Self { msg: msg.into() }
-    }
-}
-
-impl Print<i64> {
-    /// Create a new `Print` processor that prints an integer.
-    pub fn new(msg: impl Into<i64>) -> Self {
-        Self { msg: msg.into() }
-    }
-}
-
-impl<S: Signal + Clone> Processor for Print<S> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Print {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("trig", SignalType::Bool),
-            SignalSpec::new("message", S::signal_type()),
+            SignalSpec::new("message", self.msg.signal_type()),
         ]
     }
 
@@ -265,16 +258,23 @@ impl<S: Signal + Clone> Processor for Print<S> {
         inputs: ProcessorInputs,
         _outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (bang, message) in itertools::izip!(
-            inputs.iter_input_as_bools(0)?,
-            inputs.iter_input_as::<S>(1)?
-        ) {
+        for (bang, message) in
+            itertools::izip!(inputs.iter_input_as_bools(0)?, inputs.iter_input(1))
+        {
             if let Some(message) = message {
-                self.msg.clone_from(message);
+                self.msg = message.to_owned();
             }
 
             if bang.unwrap_or(false) {
-                println!("{:?}", self.msg);
+                if let AnySignal::String(msg) = &self.msg {
+                    if let Some(msg) = msg {
+                        println!("{}", msg);
+                    } else {
+                        println!();
+                    }
+                } else {
+                    println!("{:?}", self.msg);
+                }
             }
         }
 
@@ -294,10 +294,12 @@ impl<S: Signal + Clone> Processor for Print<S> {
 /// | --- | --- | --- | --- |
 /// | `0` | `sample_rate` | `Float` | The sample rate. |
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SampleRate {
     sample_rate: Float,
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for SampleRate {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -346,11 +348,13 @@ impl GraphBuilder {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The smoothed output signal. |
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Smooth {
     current: Float,
     factor: Float,
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Smooth {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -404,6 +408,7 @@ impl Processor for Smooth {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Bool` | The change signal. |
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Changed {
     last: Float,
     threshold: Float,
@@ -419,6 +424,7 @@ impl Changed {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Changed {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -475,10 +481,12 @@ impl Processor for Changed {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Bool` | The zero crossing signal. |
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ZeroCrossing {
     last: Float,
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for ZeroCrossing {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("in", SignalType::Float)]
@@ -527,42 +535,18 @@ impl Processor for ZeroCrossing {
 ///
 /// None.
 #[derive(Clone, Debug)]
-pub struct SignalTx<S: Signal + Clone> {
-    tx: Sender<S>,
+pub struct SignalTx {
+    tx: Sender<AnySignal>,
 }
 
-impl<S: Signal + Clone> SignalTx<S> {
-    pub(crate) fn new(tx: Sender<S>) -> Self {
+impl SignalTx {
+    pub(crate) fn new(tx: Sender<AnySignal>) -> Self {
         Self { tx }
     }
 
     /// Sends a message to the receiver.
-    pub fn send(&self, message: S) {
+    pub fn send(&self, message: AnySignal) {
         self.tx.try_send(message).ok();
-    }
-}
-
-impl<S: Signal + Clone> Processor for SignalTx<S> {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::signal_type())]
-    }
-
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![]
-    }
-
-    fn process(
-        &mut self,
-        inputs: ProcessorInputs,
-        _outputs: ProcessorOutputs,
-    ) -> Result<(), ProcessorError> {
-        let in_signal = inputs.iter_input_as::<S>(0)?;
-
-        for message in in_signal.flatten() {
-            self.send(message.clone());
-        }
-
-        Ok(())
     }
 }
 
@@ -578,54 +562,30 @@ impl<S: Signal + Clone> Processor for SignalTx<S> {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Any` | The output signal. |
 #[derive(Clone, Debug)]
-pub struct SignalRx<S: Signal + Clone> {
-    rx: Receiver<S>,
+pub struct SignalRx {
+    rx: Receiver<AnySignal>,
 }
 
-impl<S: Signal + Clone> SignalRx<S> {
-    pub(crate) fn new(rx: Receiver<S>) -> Self {
+impl SignalRx {
+    pub(crate) fn new(rx: Receiver<AnySignal>) -> Self {
         Self { rx }
     }
 
     /// Receives a message from the transmitter.
-    pub fn recv(&mut self) -> Option<S> {
+    pub fn recv(&mut self) -> Option<AnySignal> {
         self.rx.try_recv().ok()
-    }
-}
-
-impl<S: Signal + Clone> Processor for SignalRx<S> {
-    fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![]
-    }
-
-    fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::signal_type())]
-    }
-
-    fn process(
-        &mut self,
-        _inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
-    ) -> Result<(), ProcessorError> {
-        let out = outputs.iter_output_as::<S>(0)?;
-
-        for out in out {
-            *out = self.recv();
-        }
-
-        Ok(())
     }
 }
 
 /// A wrapper around a [`SignalRx`] receiver that stores the last received message. Used as part of a [`Param`] processor.
 #[derive(Clone, Debug)]
-pub struct ParamRx<S: Signal + Clone> {
-    rx: SignalRx<S>,
-    last: Arc<Mutex<Option<S>>>,
+pub struct ParamRx {
+    rx: SignalRx,
+    last: Arc<Mutex<Option<AnySignal>>>,
 }
 
-impl<S: Signal + Clone> ParamRx<S> {
-    pub(crate) fn new(rx: SignalRx<S>) -> Self {
+impl ParamRx {
+    pub(crate) fn new(rx: SignalRx) -> Self {
         Self {
             rx,
             last: Arc::new(Mutex::new(None)),
@@ -633,7 +593,7 @@ impl<S: Signal + Clone> ParamRx<S> {
     }
 
     /// Receives a message from the transmitter and stores it as the last message.
-    pub fn recv(&mut self) -> Option<S> {
+    pub fn recv(&mut self) -> Option<AnySignal> {
         let mut last = self.last.try_lock().ok()?;
         if let Some(msg) = self.rx.recv() {
             if let Some(last) = &mut *last {
@@ -649,20 +609,29 @@ impl<S: Signal + Clone> ParamRx<S> {
     }
 
     /// Returns the last received message.
-    pub fn last(&self) -> Option<S> {
+    pub fn last(&self) -> Option<AnySignal> {
         self.last.try_lock().ok()?.clone()
     }
 }
 
 /// Creates a new set of connected [`SignalTx`] and [`SignalRx`] transmitters and receivers.
-pub fn signal_channel<S: Signal + Clone>() -> (SignalTx<S>, SignalRx<S>) {
+pub fn signal_channel() -> (SignalTx, SignalRx) {
     let (tx, rx) = crossbeam_channel::unbounded();
     (SignalTx::new(tx), SignalRx::new(rx))
 }
 
-pub(crate) fn param_channel<S: Signal + Clone>() -> (SignalTx<S>, ParamRx<S>) {
+pub(crate) fn param_channel() -> (SignalTx, ParamRx) {
     let (tx, rx) = crossbeam_channel::unbounded();
     (SignalTx::new(tx), ParamRx::new(SignalRx::new(rx)))
+}
+
+#[cfg(feature = "serde")]
+fn param_channel_deserialize<'de, D>(_: D) -> Result<(SignalTx, ParamRx), D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let (tx, rx) = param_channel();
+    Ok((tx, rx))
 }
 
 /// A processor that can be used to control a parameter from outside the graph.
@@ -679,20 +648,26 @@ pub(crate) fn param_channel<S: Signal + Clone>() -> (SignalTx<S>, ParamRx<S>) {
 /// | --- | --- | --- | --- |
 /// | `0` | `get` | `Any` | The current value of the parameter. |
 #[derive(Clone, Debug)]
-pub struct Param<S: Signal + Clone> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Param {
     name: String,
-    channels: (SignalTx<S>, ParamRx<S>),
+    #[cfg_attr(
+        feature = "serde",
+        serde(skip_serializing, deserialize_with = "param_channel_deserialize")
+    )]
+    channels: (SignalTx, ParamRx),
+    signal_type: SignalType,
 }
 
-impl<S: Signal + Clone> Param<S> {
+impl Param {
     /// Creates a new `Param` processor with the given name and optional initial value.
-    pub fn new(name: impl Into<String>, initial_value: impl Into<Option<S>>) -> Self {
+    pub fn new<S: Signal>(name: impl Into<String>, initial_value: impl Into<Option<S>>) -> Self {
         let this = Self {
             name: name.into(),
             channels: param_channel(),
+            signal_type: S::signal_type(),
         };
-        let initial_value = initial_value.into();
-        if let Some(initial_value) = initial_value {
+        if let Some(initial_value) = initial_value.into() {
             this.send(initial_value);
         }
         this
@@ -704,44 +679,44 @@ impl<S: Signal + Clone> Param<S> {
     }
 
     /// Returns the transmitter for the parameter.
-    pub fn tx(&self) -> &SignalTx<S> {
+    pub fn tx(&self) -> &SignalTx {
         &self.channels.0
     }
 
     /// Returns the receiver for the parameter.
-    pub fn rx(&self) -> &ParamRx<S> {
+    pub fn rx(&self) -> &ParamRx {
         &self.channels.1
     }
 
     /// Returns a mutable reference to the receiver for the parameter.
-    pub fn rx_mut(&mut self) -> &mut ParamRx<S> {
+    pub fn rx_mut(&mut self) -> &mut ParamRx {
         &mut self.channels.1
     }
 
     /// Sends a value to the parameter.
-    pub fn send(&self, message: impl Into<S>) {
-        let message = message.into();
-        self.tx().send(message);
+    pub fn send(&self, message: impl Signal) {
+        self.tx().send(message.into_any_signal());
     }
 
     /// Receives the value of the parameter.
-    pub fn recv(&mut self) -> Option<S> {
+    pub fn recv(&mut self) -> Option<AnySignal> {
         self.rx_mut().recv()
     }
 
     /// Returns the last received value of the parameter.
-    pub fn last(&self) -> Option<S> {
+    pub fn last(&self) -> Option<AnySignal> {
         self.rx().last()
     }
 }
 
-impl<S: Signal + Clone> Processor for Param<S> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Param {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("set", S::signal_type())]
+        vec![SignalSpec::new("set", self.signal_type.clone())]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("get", S::signal_type())]
+        vec![SignalSpec::new("get", self.signal_type.clone())]
     }
 
     fn process(
@@ -749,15 +724,16 @@ impl<S: Signal + Clone> Processor for Param<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (set, get) in itertools::izip!(
-            inputs.iter_input_as::<S>(0)?,
-            outputs.iter_output_as::<S>(0)?
-        ) {
+        for (set, mut get) in itertools::izip!(inputs.iter_input(0), outputs.iter_output(0)) {
             if let Some(set) = set {
-                self.send(set.clone());
+                self.tx().send(set.to_owned());
             }
 
-            *get = self.recv();
+            if let Some(msg) = self.rx_mut().recv() {
+                get.set(msg);
+            } else {
+                get.set_none();
+            }
         }
 
         Ok(())
@@ -781,10 +757,12 @@ impl<S: Signal + Clone> Processor for Param<S> {
 /// | --- | --- | --- | --- |
 /// | `0` | `count` | `Int` | The current count. |
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Counter {
     count: i64,
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Counter {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -837,10 +815,12 @@ impl Processor for Counter {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The output signal. |
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SampleAndHold {
     last: Option<Float>,
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for SampleAndHold {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -888,6 +868,7 @@ impl Processor for SampleAndHold {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The input signal passed through. |
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CheckFinite {
     context: String,
 }
@@ -901,6 +882,7 @@ impl CheckFinite {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for CheckFinite {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("in", SignalType::Float)]
@@ -949,8 +931,10 @@ impl Processor for CheckFinite {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The input signal passed through, or 0.0 if the input signal is NaN or infinite. |
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FiniteOrZero;
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for FiniteOrZero {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("in", SignalType::Float)]
@@ -1003,30 +987,28 @@ impl Processor for FiniteOrZero {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Any` | The deduplicated output signal. |
 #[derive(Clone, Debug)]
-pub struct Dedup<S: Signal + Clone> {
-    last: Option<S>,
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Dedup {
+    last: AnySignal,
 }
 
-impl<S: Signal + Clone> Dedup<S> {
+impl Dedup {
     /// Create a new `Dedup` processor.
-    pub fn new() -> Self {
-        Self { last: None }
+    pub fn new(signal_type: SignalType) -> Self {
+        Self {
+            last: AnySignal::default_of_type(&signal_type),
+        }
     }
 }
 
-impl<S: Signal + Clone> Default for Dedup<S> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<S: Signal + Clone> Processor for Dedup<S> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Dedup {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", S::signal_type())]
+        vec![SignalSpec::new("in", self.last.signal_type())]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::signal_type())]
+        vec![SignalSpec::new("out", self.last.signal_type())]
     }
 
     fn process(
@@ -1034,19 +1016,17 @@ impl<S: Signal + Clone> Processor for Dedup<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (in_signal, out_signal) in itertools::izip!(
-            inputs.iter_input_as::<S>(0)?,
-            outputs.iter_output_as::<S>(0)?
-        ) {
+        for (in_signal, mut out_signal) in
+            itertools::izip!(inputs.iter_input(0), outputs.iter_output(0))
+        {
             if let Some(in_signal) = in_signal {
-                if self.last.as_ref() != Some(in_signal) {
-                    *out_signal = Some(in_signal.clone());
-                    self.last = Some(in_signal.clone());
+                if self.last.as_ref() != in_signal {
+                    out_signal.set(in_signal.to_owned());
                 } else {
-                    *out_signal = None;
+                    out_signal.set_none();
                 }
             } else {
-                *out_signal = None;
+                out_signal.set_none();
             }
         }
 

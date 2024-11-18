@@ -7,7 +7,13 @@ use itertools::Either;
 use rustc_hash::FxHashMap;
 use thiserror::Error;
 
-use crate::signal::{AnySignal, Float, MidiMessage, Signal, SignalBuffer, SignalType};
+use crate::{
+    signal::{
+        AnySignal, AnySignalMut, AnySignalRef, Float, MidiMessage, Signal, SignalBuffer,
+        SignalBufferIterMut, SignalType,
+    },
+    GraphSerde,
+};
 
 /// Error type for [`Processor`] operations.
 #[derive(Debug, Clone, Error)]
@@ -45,10 +51,15 @@ pub enum ProcessorError {
     /// Invalid value.
     #[error("Invalid value: {0}")]
     InvalidValue(&'static str),
+
+    /// Invalid cast.
+    #[error("Invalid cast: {0:?} to {1:?}")]
+    InvalidCast(SignalType, SignalType),
 }
 
 /// Information about an input or output of a [`Processor`].
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SignalSpec {
     /// The name of the input or output.
     pub name: String,
@@ -118,8 +129,18 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    /// Returns an iterator over the output signal.
+    pub fn iter_mut(&'a mut self) -> impl Iterator<Item = AnySignalMut> {
+        match self {
+            ProcessorOutput::Block(buffer) => Either::Left(buffer.iter_mut()),
+            ProcessorOutput::Sample(buffer, sample_index) => {
+                Either::Right(std::iter::once(buffer.get_mut(*sample_index).unwrap()))
+            }
+        }
+    }
+
     /// Returns an iterator over the output signal, if it is of the given type.
-    pub fn iter_mut<S: Signal>(&'a mut self) -> impl Iterator<Item = &mut Option<S>> {
+    pub fn iter_mut_as<S: Signal>(&'a mut self) -> impl Iterator<Item = &mut Option<S>> {
         match self {
             ProcessorOutput::Block(buffer) => {
                 Either::Left(buffer.as_type_mut().unwrap().iter_mut())
@@ -127,6 +148,44 @@ impl<'a> ProcessorOutput<'a> {
             ProcessorOutput::Sample(buffer, sample_index) => Either::Right(std::iter::once(
                 &mut buffer.as_type_mut::<S>().unwrap()[*sample_index],
             )),
+        }
+    }
+
+    pub fn set(&mut self, index: usize, value: impl Into<AnySignal>) {
+        match self {
+            ProcessorOutput::Block(buffer) => {
+                buffer.set(index, value.into());
+            }
+            ProcessorOutput::Sample(buffer, sample_index) => {
+                buffer.set(*sample_index, value.into())
+            }
+        }
+    }
+
+    pub fn set_as<S: Signal>(&mut self, index: usize, value: impl Into<Option<S>>) {
+        match self {
+            ProcessorOutput::Block(buffer) => {
+                buffer.as_type_mut::<S>().unwrap()[index] = value.into();
+            }
+            ProcessorOutput::Sample(buffer, sample_index) => {
+                buffer.as_type_mut::<S>().unwrap()[*sample_index] = value.into();
+            }
+        }
+    }
+
+    pub fn set_none(&mut self, index: usize) {
+        match self {
+            ProcessorOutput::Block(buffer) => buffer.set_none(index),
+            ProcessorOutput::Sample(buffer, sample_index) => buffer.set_none(*sample_index),
+        }
+    }
+
+    pub fn fill<S: Signal + Clone>(&mut self, value: impl Into<Option<S>>) {
+        match self {
+            ProcessorOutput::Block(buffer) => buffer.as_type_mut::<S>().unwrap().fill(value.into()),
+            ProcessorOutput::Sample(buffer, sample_index) => {
+                buffer.as_type_mut::<S>().unwrap()[*sample_index] = value.into();
+            }
         }
     }
 }
@@ -177,6 +236,20 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
             .get(index)
             .and_then(|input| input.as_ref())
             .copied()
+    }
+
+    #[inline]
+    pub fn iter_input(&self, index: usize) -> impl Iterator<Item = Option<AnySignalRef>> {
+        let buffer = &self.inputs[index];
+        if let Some(buffer) = buffer.as_ref() {
+            if let Some(sample_index) = self.sample_index {
+                Ternary::B(std::iter::once(buffer.get(sample_index)))
+            } else {
+                Ternary::A(buffer.iter().map(Some))
+            }
+        } else {
+            Ternary::C(std::iter::repeat(None))
+        }
     }
 
     /// Returns an iterator over the input signal at the given index, if it is of the given type.
@@ -251,7 +324,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
 
     /// Returns an iterator over the input signal at the given index, if it is a list signal.
     #[inline]
-    pub fn iter_input_as_buffers(
+    pub fn iter_input_as_lists(
         &self,
         index: usize,
     ) -> Result<impl Iterator<Item = Option<&SignalBuffer>> + '_, ProcessorError> {
@@ -308,6 +381,11 @@ impl<'a> ProcessorOutputs<'a> {
     #[inline]
     pub fn output_spec(&self, index: usize) -> &SignalSpec {
         &self.output_spec[index]
+    }
+
+    #[inline]
+    pub fn iter_output(&mut self, index: usize) -> SignalBufferIterMut {
+        self.outputs[index].iter_mut()
     }
 
     /// Returns an iterator over the output signal at the given index, if it is of the given type.
@@ -460,21 +538,45 @@ impl ProcessorState {
     }
 
     /// Returns a reference to the custom value with the given name, if it exists and is of the given type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the custom value does not exist or is not of the given type.
     #[inline]
-    pub fn get<S: Signal>(&self, name: &str) -> Option<&S> {
+    pub fn get<S: Signal>(&self, name: &str) -> &S {
         self.custom
             .get(name)
-            .and_then(|s| s.as_type::<S>())
-            .and_then(Option::as_ref)
+            .unwrap_or_else(|| panic!("Custom value not found: {}", name))
+            .as_type::<S>()
+            .unwrap_or_else(|| panic!("Custom value type mismatch: {}", name))
+            .as_ref()
+            .expect("Custom value should be Some")
+    }
+
+    /// Returns a copy of the custom value with the given name, if it exists and is of the given type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the custom value does not exist or is not of the given type.
+    #[inline]
+    pub fn get_copy<S: Signal + Copy>(&self, name: &str) -> S {
+        *self.get(name)
     }
 
     /// Returns a mutable reference to the custom value with the given name, if it exists and is of the given type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the custom value does not exist or is not of the given type.
     #[inline]
-    pub fn get_mut<S: Signal>(&mut self, name: &str) -> Option<&mut S> {
+    pub fn get_mut<S: Signal>(&mut self, name: &str) -> &mut S {
         self.custom
             .get_mut(name)
-            .and_then(|s| s.as_type_mut::<S>())
-            .and_then(Option::as_mut)
+            .unwrap_or_else(|| panic!("Custom value not found: {}", name))
+            .as_type_mut::<S>()
+            .unwrap_or_else(|| panic!("Custom value type mismatch: {}", name))
+            .as_mut()
+            .expect("Custom value should be Some")
     }
 
     /// Sets the custom value with the given name.
@@ -485,7 +587,11 @@ impl ProcessorState {
 }
 
 /// A processor that can process audio signals.
-pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
+#[cfg_attr(feature = "serde", typetag::serde(tag = "type"))]
+pub trait Processor
+where
+    Self: DowncastSync + ProcessorClone + GraphSerde,
+{
     /// Returns the name of the processor.
     fn name(&self) -> &str {
         let type_name = std::any::type_name::<Self>();
@@ -525,7 +631,7 @@ pub trait Processor: 'static + Send + Sync + ProcessClone + DowncastSync {
     ///
     /// This method is called once before processing begins.
     #[allow(unused)]
-    fn prepare(&mut self, state: &mut ProcessorState) {}
+    fn prepare(&mut self) {}
 
     /// Called anytime the sample rate or block size changes.
     #[allow(unused)]
@@ -547,11 +653,11 @@ mod sealed {
 }
 
 #[doc(hidden)]
-pub trait ProcessClone: sealed::Sealed {
+pub trait ProcessorClone: sealed::Sealed {
     fn clone_boxed(&self) -> Box<dyn Processor>;
 }
 
-impl<T> ProcessClone for T
+impl<T> ProcessorClone for T
 where
     T: Clone + Processor,
 {

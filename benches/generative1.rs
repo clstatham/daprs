@@ -14,13 +14,13 @@ pub fn pick_randomly(graph: &GraphBuilder, trig: &Node, options: &[Node]) -> Nod
     let index = index % options.len() as Float;
     let index = index.cast(SignalType::Int);
 
-    let pack = graph.add(Pack::<Float>::new(options.len()));
+    let pack = graph.add(Pack::new(SignalType::Float, options.len()));
 
     for (i, option) in options.iter().enumerate() {
         pack.input(i as u32).connect(option.dedup());
     }
 
-    let get = graph.add(Get::<Float>::default());
+    let get = graph.add(Get::new(SignalType::Float));
 
     get.input("list").connect(pack.output(0));
     get.input("index").connect(index.output(0));
@@ -164,7 +164,7 @@ pub fn generative1(num_tones: usize) -> GraphBuilder {
     let out2 = graph.add_audio_output();
 
     let amp = graph
-        .add_param(Param::<Float>::new("amp", Some(0.5)))
+        .add_param(Param::new::<Float>("amp", Some(0.5)))
         .make_register();
 
     let mut tones = vec![];

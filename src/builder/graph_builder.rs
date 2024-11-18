@@ -9,7 +9,6 @@ use crate::{
     graph::Graph,
     prelude::{Param, Processor},
     runtime::Runtime,
-    signal::Signal,
 };
 
 use super::node_builder::{IntoInputIdx, IntoNode, IntoOutputIdx, Node};
@@ -59,7 +58,7 @@ impl GraphBuilder {
     }
 
     /// Adds a parameter node to the graph.
-    pub fn add_param<S: Signal + Clone>(&self, value: Param<S>) -> Node {
+    pub fn add_param(&self, value: Param) -> Node {
         self.with_graph_mut(|graph| Node {
             graph: self.clone(),
             node_id: graph.add_param(value),

@@ -23,6 +23,7 @@ use super::lerp;
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Bool` | The pulse signal. |
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Metro {
     period: Float,
     last_time: u64,
@@ -64,6 +65,7 @@ impl Default for Metro {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Metro {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -125,6 +127,7 @@ impl Processor for Metro {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The delayed signal. |
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnitDelay {
     value: Option<Float>,
 }
@@ -136,6 +139,7 @@ impl UnitDelay {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for UnitDelay {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("in", SignalType::Float)]
@@ -177,6 +181,7 @@ impl Processor for UnitDelay {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The delayed signal. |
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SampleDelay {
     ring_buffer: Vec<Float>,
     head: usize,
@@ -198,6 +203,7 @@ impl SampleDelay {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for SampleDelay {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -256,6 +262,7 @@ impl Processor for SampleDelay {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The delayed signal. |
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FractDelay {
     ring_buffer: Vec<Float>,
     head: usize,
@@ -280,6 +287,7 @@ impl FractDelay {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for FractDelay {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -345,6 +353,7 @@ impl Processor for FractDelay {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The envelope signal. |
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DecayEnv {
     last_trig: bool,
     tau: Float,
@@ -372,6 +381,7 @@ impl Default for DecayEnv {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for DecayEnv {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -443,6 +453,7 @@ impl Processor for DecayEnv {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The envelope signal. |
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LinearDecayEnv {
     last_trig: bool,
     decay: Float,
@@ -470,6 +481,7 @@ impl Default for LinearDecayEnv {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for LinearDecayEnv {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -539,6 +551,7 @@ impl Processor for LinearDecayEnv {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The envelope signal. |
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AREnv {
     last_trig: bool,
     attack: Float,
@@ -564,10 +577,11 @@ impl AREnv {
 
 impl Default for AREnv {
     fn default() -> Self {
-        Self::new(1.0, 1.0)
+        Self::new(0.0, 0.0)
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for AREnv {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![

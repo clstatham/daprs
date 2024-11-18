@@ -16,10 +16,12 @@ use crate::prelude::*;
 /// | --- | --- | --- | --- |
 /// | `0` | `note` | `Float` | The note number of the input MIDI message. |
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MidiNote {
     note: Float,
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for MidiNote {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("midi", SignalType::Midi)]
@@ -64,10 +66,12 @@ impl Processor for MidiNote {
 /// | --- | --- | --- | --- |
 /// | `0` | `velocity` | `Float` | The velocity of the input MIDI message. |
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MidiVelocity {
     velocity: Float,
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for MidiVelocity {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("midi", SignalType::Midi)]
@@ -110,10 +114,12 @@ impl Processor for MidiVelocity {
 /// | --- | --- | --- | --- |
 /// | `0` | `gate` | `Bool` | The gate signal. |
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MidiGate {
     gate: bool,
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for MidiGate {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("midi", SignalType::Midi)]
@@ -161,8 +167,10 @@ impl Processor for MidiGate {
 /// | --- | --- | --- | --- |
 /// | `0` | `trigger` | `Bool` | The trigger signal. |
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MidiTrigger;
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for MidiTrigger {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("midi", SignalType::Midi)]
@@ -206,8 +214,10 @@ impl Processor for MidiTrigger {
 /// | --- | --- | --- | --- |
 /// | `0` | `channel` | `Float` | The channel number of the input MIDI message. |
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MidiChannel;
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for MidiChannel {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("midi", SignalType::Midi)]

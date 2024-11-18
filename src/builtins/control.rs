@@ -1,8 +1,6 @@
 //! Control flow processors.
 
-use std::marker::PhantomData;
-
-use crate::{prelude::*, signal::Signal};
+use crate::prelude::*;
 
 /// A processor that outputs the value of the second input if the first input is `true`, otherwise the value of the third input.
 ///
@@ -19,27 +17,37 @@ use crate::{prelude::*, signal::Signal};
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Any` | The output value. |
-#[derive(Debug, Clone, Default)]
-pub struct Cond<S: Signal + Clone>(PhantomData<S>);
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Cond {
+    cond: bool,
+    then: AnySignal,
+    else_: AnySignal,
+}
 
-impl<S: Signal + Clone> Cond<S> {
+impl Cond {
     /// Creates a new `Cond` processor.
-    pub fn new() -> Self {
-        Self(PhantomData)
+    pub fn new(signal_type: SignalType) -> Self {
+        Self {
+            cond: false,
+            then: AnySignal::default_of_type(&signal_type),
+            else_: AnySignal::default_of_type(&signal_type),
+        }
     }
 }
 
-impl<S: Signal + Clone> Processor for Cond<S> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Cond {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new("cond", SignalType::Bool),
-            SignalSpec::new("then", S::signal_type()),
-            SignalSpec::new("else", S::signal_type()),
+            SignalSpec::new("then", self.then.signal_type()),
+            SignalSpec::new("else", self.else_.signal_type()),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::signal_type())]
+        vec![SignalSpec::new("out", self.then.signal_type())]
     }
 
     fn process(
@@ -48,21 +56,42 @@ impl<S: Signal + Clone> Processor for Cond<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, cond, if_true, if_false) in itertools::izip!(
-            outputs.iter_output_as::<S>(0)?,
+        for (mut out, cond, then, else_) in itertools::izip!(
+            outputs.iter_output(0),
             inputs.iter_input_as_bools(0)?,
-            inputs.iter_input_as::<S>(1)?,
-            inputs.iter_input_as::<S>(2)?
+            inputs.iter_input(1),
+            inputs.iter_input(2)
         ) {
-            let Some(cond) = cond else {
-                *out = None;
-                continue;
-            };
+            if let Some(cond) = cond {
+                self.cond = cond;
+            }
 
-            if cond {
-                out.clone_from(if_true);
+            if let Some(then) = then {
+                if then.signal_type() != self.then.signal_type() {
+                    return Err(ProcessorError::InputSpecMismatch {
+                        index: 1,
+                        expected: self.then.signal_type(),
+                        actual: then.signal_type(),
+                    });
+                }
+                self.then = then.to_owned();
+            }
+
+            if let Some(else_) = else_ {
+                if else_.signal_type() != self.else_.signal_type() {
+                    return Err(ProcessorError::InputSpecMismatch {
+                        index: 2,
+                        expected: self.else_.signal_type(),
+                        actual: else_.signal_type(),
+                    });
+                }
+                self.else_ = else_.to_owned();
+            }
+
+            if self.cond {
+                out.set(self.then.to_owned());
             } else {
-                out.clone_from(if_false);
+                out.set(self.else_.to_owned());
             }
         }
 
@@ -71,23 +100,32 @@ impl<S: Signal + Clone> Processor for Cond<S> {
 }
 
 macro_rules! comparison_op {
-    ($doc:literal, $name:ident, $invert:literal, $op:tt) => {
-        #[derive(Debug, Clone, Default)]
+    ($doc:literal, $name:ident, $op:tt) => {
+        #[derive(Debug, Clone)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[doc = $doc]
-        pub struct $name<S: Signal + Clone + PartialEq + PartialOrd>(PhantomData<S>);
+        pub struct $name {
+            a: AnySignal,
+            b: AnySignal,
+        }
 
-        impl<S: Signal + Clone + PartialEq + PartialOrd> $name<S> {
-            #[doc = concat!("Creates a new `", stringify!($name), "` processor.")]
-            pub fn new() -> Self {
-                Self(PhantomData)
+        impl $name {
+            #[doc = concat!("Creates a new `", stringify!($name), "` processor for the given type.")]
+            pub fn new(signal_type: SignalType) -> Self {
+                assert!(!matches!(signal_type, SignalType::List { .. }), "List comparison not supported");
+                Self {
+                    a: AnySignal::default_of_type(&signal_type),
+                    b: AnySignal::default_of_type(&signal_type),
+                }
             }
         }
 
-        impl<S: Signal + Clone + PartialEq + PartialOrd> Processor for $name<S> {
+        #[cfg_attr(feature = "serde", typetag::serde)]
+        impl Processor for $name {
             fn input_spec(&self) -> Vec<SignalSpec> {
                 vec![
-                    SignalSpec::new("a", S::signal_type()),
-                    SignalSpec::new("b", S::signal_type()),
+                    SignalSpec::new("a", self.a.signal_type()),
+                    SignalSpec::new("b", self.b.signal_type()),
                 ]
             }
 
@@ -103,16 +141,64 @@ macro_rules! comparison_op {
             ) -> Result<(), ProcessorError> {
                 for (out, a, b) in itertools::izip!(
                     outputs.iter_output_mut_as_bools(0)?,
-                    inputs.iter_input_as::<S>(0)?,
-                    inputs.iter_input_as::<S>(1)?
+                    inputs.iter_input(0),
+                    inputs.iter_input(1)
                 ) {
-                    if let (Some(a), Some(b)) = (a, b) {
-                        *out = match a.partial_cmp(&b) {
-                            Some(std::cmp::Ordering::$op) => Some(!$invert),
-                            _ => Some($invert),
-                        };
-                    } else {
+                    if let Some(a) = a {
+                        if a.signal_type() != self.a.signal_type() {
+                            return Err(ProcessorError::InputSpecMismatch {
+                                index: 0,
+                                expected: self.a.signal_type(),
+                                actual: a.signal_type(),
+                            });
+                        }
+                        self.a = a.to_owned();
+                    }
+
+                    if let Some(b) = b {
+                        if b.signal_type() != self.b.signal_type() {
+                            return Err(ProcessorError::InputSpecMismatch {
+                                index: 1,
+                                expected: self.b.signal_type(),
+                                actual: b.signal_type(),
+                            });
+                        }
+                        self.b = b.to_owned();
+                    }
+
+                    if self.a.is_none() || self.b.is_none() {
                         *out = None;
+                        continue;
+                    }
+
+                    if self.a.signal_type() != self.b.signal_type() {
+                        return Err(ProcessorError::InputSpecMismatch {
+                            index: 0,
+                            expected: self.b.signal_type(),
+                            actual: self.a.signal_type(),
+                        });
+                    }
+
+                    match (&self.a, &self.b) {
+                        (AnySignal::Bool(Some(a)), AnySignal::Bool(Some(b))) => {
+                            *out = Some(*a $op *b);
+                        }
+                        (AnySignal::Int(Some(a)), AnySignal::Int(Some(b))) => {
+                            *out = Some(*a $op *b);
+                        }
+                        (AnySignal::Float(Some(a)), AnySignal::Float(Some(b))) => {
+                            *out = Some(*a $op *b);
+                        }
+                        (AnySignal::String(Some(a)), AnySignal::String(Some(b))) => {
+                            *out = Some(*a $op *b);
+                        }
+                        (AnySignal::Midi(Some(a)), AnySignal::Midi(Some(b))) => {
+                            *out = Some(*a $op *b);
+                        }
+                        (AnySignal::List(Some(_)), AnySignal::List(Some(_))) => {
+                            unimplemented!("List comparison not supported");
+                        }
+                        _ => unreachable!(),
                     }
                 }
 
@@ -140,8 +226,7 @@ A processor that outputs `true` if `a` is less than `b`, otherwise `false`.
 | `0` | `out` | `Any` | The result of the comparison. |
 "#,
     Less,
-    false,
-    Less
+    <
 );
 
 comparison_op!(
@@ -162,8 +247,7 @@ A processor that outputs `true` if `a` is greater than `b`, otherwise `false`.
 | `0` | `out` | `Any` | The result of the comparison. |
 "#,
     Greater,
-    false,
-    Greater
+    >
 );
 
 comparison_op!(
@@ -184,8 +268,7 @@ A processor that outputs `true` if `a` is equal to `b`, otherwise `false`.
 | `0` | `out` | `Any` | The result of the comparison. |
 "#,
     Equal,
-    false,
-    Equal
+    ==
 );
 
 comparison_op!(
@@ -206,8 +289,7 @@ A processor that outputs `true` if `a` is not equal to `b`, otherwise `false`.
 | `0` | `out` | `Any` | The result of the comparison. |
 "#,
     NotEqual,
-    true,
-    Equal
+    !=
 );
 
 comparison_op!(
@@ -228,8 +310,7 @@ A processor that outputs `true` if `a` is less than or equal to `b`, otherwise `
 | `0` | `out` | `Any` | The result of the comparison. |
 "#,
     LessOrEqual,
-    true,
-    Greater
+    <=
 );
 
 comparison_op!(
@@ -250,6 +331,5 @@ A processor that outputs `true` if `a` is greater than or equal to `b`, otherwis
 | `0` | `out` | `Any` | The result of the comparison. |
 "#,
     GreaterOrEqual,
-    true,
-    Less
+    >=
 );

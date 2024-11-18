@@ -1039,6 +1039,7 @@ dependencies = [
  "rand",
  "rustc-hash 2.0.0",
  "serde",
+ "serde_json",
  "smallvec",
  "thiserror",
  "typetag",

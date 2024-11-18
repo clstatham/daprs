@@ -20,6 +20,7 @@ const THERMAL: Float = 0.000025;
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The output signal. |
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MoogLadder {
     sample_rate: Float,
     stage: [Float; 4],
@@ -63,6 +64,7 @@ impl MoogLadder {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for MoogLadder {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -164,6 +166,7 @@ impl Processor for MoogLadder {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The output signal. |
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Biquad {
     sample_rate: Float,
 
@@ -222,6 +225,7 @@ impl Biquad {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Biquad {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -295,6 +299,7 @@ impl Processor for Biquad {
 
 /// A type of biquad filter.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BiquadType {
     /// A lowpass filter.
     LowPass,
@@ -345,6 +350,7 @@ impl std::fmt::Display for BiquadType {
 
 /// A bi-quad filter with automatic coefficient calculation.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AutoBiquad {
     sample_rate: Float,
 
@@ -555,6 +561,7 @@ impl AutoBiquad {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for AutoBiquad {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -638,6 +645,7 @@ impl Processor for AutoBiquad {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The output signal. |
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OnePole {
     sample_rate: Float,
     cutoff: Float,
@@ -668,6 +676,7 @@ impl OnePole {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for OnePole {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![

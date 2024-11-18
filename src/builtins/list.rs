@@ -1,7 +1,5 @@
 //! Processors for working with lists.
 
-use std::marker::PhantomData;
-
 use crate::{error_once, prelude::*};
 
 /// A processor that computes the length of a list.
@@ -18,8 +16,10 @@ use crate::{error_once, prelude::*};
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Int` | The length of the input list. |
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Len;
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Len {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new(
@@ -42,7 +42,7 @@ impl Processor for Len {
     ) -> Result<(), ProcessorError> {
         for (out, list) in itertools::izip!(
             outputs.iter_output_mut_as_ints(0)?,
-            inputs.iter_input_as_buffers(0)?
+            inputs.iter_input_as_lists(0)?
         ) {
             let Some(list) = list else {
                 *out = None;
@@ -70,24 +70,30 @@ impl Processor for Len {
 /// | Index | Name | Type | Description |
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Any` | The element at the specified index. |
-#[derive(Default, Debug, Clone)]
-pub struct Get<S: Signal + Copy>(PhantomData<S>);
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Get {
+    value: AnySignal,
+}
 
-impl<S: Signal + Copy> Get<S> {
+impl Get {
     /// Creates a new `Get` processor.
-    pub fn new() -> Self {
-        Self(PhantomData)
+    pub fn new(signal_type: SignalType) -> Self {
+        Self {
+            value: AnySignal::default_of_type(&signal_type),
+        }
     }
 }
 
-impl<S: Signal + Copy> Processor for Get<S> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Get {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
             SignalSpec::new(
                 "list",
                 SignalType::List {
                     size: None,
-                    element_type: Some(Box::new(S::signal_type())),
+                    element_type: Some(Box::new(self.value.signal_type())),
                 },
             ),
             SignalSpec::new("index", SignalType::Int),
@@ -95,7 +101,7 @@ impl<S: Signal + Copy> Processor for Get<S> {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::signal_type())]
+        vec![SignalSpec::new("out", self.value.signal_type())]
     }
 
     fn process(
@@ -103,35 +109,32 @@ impl<S: Signal + Copy> Processor for Get<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, list, index) in itertools::izip!(
-            outputs.iter_output_as::<S>(0)?,
-            inputs.iter_input_as_buffers(0)?,
+        let mut out = outputs.output(0);
+        for (i, (list, index)) in itertools::izip!(
+            inputs.iter_input_as_lists(0)?,
             inputs.iter_input_as_ints(1)?
-        ) {
+        )
+        .enumerate()
+        {
             let Some(list) = list else {
-                *out = None;
+                out.set_none(i);
                 continue;
             };
 
-            if list.signal_type() != S::signal_type() {
+            if list.signal_type() != self.value.signal_type() {
                 return Err(ProcessorError::InputSpecMismatch {
                     index: 0,
-                    expected: S::signal_type(),
+                    expected: self.value.signal_type(),
                     actual: list.signal_type(),
                 });
             }
 
             let Some(index) = index else {
-                *out = None;
+                out.set_none(i);
                 continue;
             };
 
-            *out = list
-                .as_type::<S>()
-                .unwrap()
-                .get(index as usize)
-                .copied()
-                .flatten();
+            out.set(i, list.get(index as usize).unwrap().to_owned());
         }
 
         Ok(())
@@ -154,23 +157,25 @@ impl<S: Signal + Copy> Processor for Get<S> {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `List` | The packed list. |
 #[derive(Debug, Clone)]
-pub struct Pack<S: Signal + Copy> {
-    inputs: Vec<Option<S>>,
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Pack {
+    inputs: SignalBuffer,
 }
 
-impl<S: Signal + Copy> Pack<S> {
+impl Pack {
     /// Creates a new `Pack` processor with the specified type and number of inputs.
-    pub fn new(num_inputs: usize) -> Self {
+    pub fn new(signal_type: SignalType, num_inputs: usize) -> Self {
         Self {
-            inputs: vec![None; num_inputs],
+            inputs: SignalBuffer::new_of_type(&signal_type, num_inputs),
         }
     }
 }
 
-impl<S: Signal + Copy> Processor for Pack<S> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Pack {
     fn input_spec(&self) -> Vec<SignalSpec> {
         (0..self.inputs.len())
-            .map(|i| SignalSpec::new(i.to_string(), S::signal_type()))
+            .map(|i| SignalSpec::new(i.to_string(), self.inputs.signal_type()))
             .collect()
     }
 
@@ -179,7 +184,7 @@ impl<S: Signal + Copy> Processor for Pack<S> {
             "out",
             SignalType::List {
                 size: Some(self.inputs.len()),
-                element_type: Some(Box::new(S::signal_type())),
+                element_type: Some(Box::new(self.inputs.signal_type())),
             },
         )]
     }
@@ -194,32 +199,57 @@ impl<S: Signal + Copy> Processor for Pack<S> {
             .unwrap()
             .enumerate()
         {
-            let mut any_some = false;
             let num_inputs = self.inputs.len();
             for input_index in 0..num_inputs {
                 let input = inputs.input(input_index);
                 if let Some(buf) = input.as_ref() {
-                    let buf = buf.as_type::<S>().unwrap();
+                    if buf.signal_type() != self.inputs.signal_type() {
+                        return Err(ProcessorError::InputSpecMismatch {
+                            index: input_index,
+                            expected: self.inputs.signal_type(),
+                            actual: buf.signal_type(),
+                        });
+                    }
 
-                    self.inputs[input_index] = buf[sample_index];
-
-                    if self.inputs[input_index].is_some() {
-                        any_some = true;
+                    match self.inputs.signal_type() {
+                        SignalType::Float => {
+                            let buf = buf.as_type::<Float>().unwrap();
+                            self.inputs.as_type_mut::<Float>().unwrap()[input_index] =
+                                buf.get(sample_index).copied().flatten();
+                        }
+                        SignalType::Int => {
+                            let buf = buf.as_type::<i64>().unwrap();
+                            self.inputs.as_type_mut::<i64>().unwrap()[input_index] =
+                                buf.get(sample_index).copied().flatten();
+                        }
+                        SignalType::Bool => {
+                            let buf = buf.as_type::<bool>().unwrap();
+                            self.inputs.as_type_mut::<bool>().unwrap()[input_index] =
+                                buf.get(sample_index).copied().flatten();
+                        }
+                        SignalType::String => {
+                            let buf = buf.as_type::<String>().unwrap();
+                            self.inputs.as_type_mut::<String>().unwrap()[input_index] =
+                                buf.get(sample_index).cloned().flatten();
+                        }
+                        SignalType::List { .. } => {
+                            let buf = buf.as_list().unwrap();
+                            self.inputs.as_list_mut().unwrap()[input_index] =
+                                buf.get(sample_index).cloned().flatten();
+                        }
+                        SignalType::Midi => {
+                            let buf = buf.as_type::<MidiMessage>().unwrap();
+                            self.inputs.as_type_mut::<MidiMessage>().unwrap()[input_index] =
+                                buf.get(sample_index).cloned().flatten();
+                        }
                     }
                 }
-            }
-
-            if !any_some {
-                // be lazy if all inputs are None
-                // this saves us from allocating a list or cloning the inputs
-                continue;
             }
 
             if let Some(out) = out {
                 // avoid reallocation if the list is already initialized with the correct length
                 if out.len() == self.inputs.len() {
-                    let out = out.as_type_mut::<S>().unwrap();
-                    out.copy_from(&self.inputs);
+                    out.clone_from(&self.inputs);
 
                     continue;
                 }
@@ -227,14 +257,7 @@ impl<S: Signal + Copy> Processor for Pack<S> {
 
             // we should only get here if the list is not initialized or has the wrong length
             error_once!("pack_list" => "list is not initialized or has the wrong length");
-
-            let mut buf = SignalBuffer::new_of_type(&S::signal_type(), self.inputs.len());
-            {
-                let buf = buf.as_type_mut::<S>().unwrap();
-                buf.copy_from(&self.inputs);
-            }
-
-            *out = Some(buf);
+            *out = Some(self.inputs.clone());
         }
 
         Ok(())
@@ -257,35 +280,37 @@ impl<S: Signal + Copy> Processor for Pack<S> {
 /// | --- | --- | --- | --- |
 /// | `0..n` | `0..n` | `Any` | The unpacked signals. |
 #[derive(Debug, Clone)]
-pub struct Unpack<S: Signal + Copy> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Unpack {
     num_outputs: usize,
-    _phantom: PhantomData<S>,
+    signal_type: SignalType,
 }
 
-impl<S: Signal + Copy> Unpack<S> {
+impl Unpack {
     /// Creates a new `Unpack` processor with the specified type and number of outputs.
-    pub fn new(num_outputs: usize) -> Self {
+    pub fn new(signal_type: SignalType, num_outputs: usize) -> Self {
         Self {
             num_outputs,
-            _phantom: PhantomData,
+            signal_type,
         }
     }
 }
 
-impl<S: Signal + Copy> Processor for Unpack<S> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Unpack {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new(
             "list",
             SignalType::List {
                 size: Some(self.num_outputs),
-                element_type: Some(Box::new(S::signal_type())),
+                element_type: Some(Box::new(self.signal_type.clone())),
             },
         )]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         (0..self.num_outputs)
-            .map(|i| SignalSpec::new(i.to_string(), S::signal_type()))
+            .map(|i| SignalSpec::new(i.to_string(), self.signal_type.clone()))
             .collect()
     }
 
@@ -305,10 +330,8 @@ impl<S: Signal + Copy> Processor for Unpack<S> {
             {
                 for output_index in 0..self.num_outputs {
                     let mut output_buf = outputs.output(output_index);
-                    let mut output_buf = output_buf.iter_mut::<S>();
-                    let list = list.as_type::<S>().unwrap();
-                    let out = output_buf.nth(sample_index).unwrap();
-                    out.clone_from(&list.get(output_index).copied().flatten());
+
+                    output_buf.set(sample_index, list.get(output_index).unwrap().to_owned());
                 }
             }
         }

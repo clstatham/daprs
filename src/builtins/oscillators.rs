@@ -2,8 +2,6 @@
 
 use std::collections::VecDeque;
 
-use rand::prelude::Distribution;
-
 use crate::{
     prelude::*,
     processor::ProcessorOutputs,
@@ -27,6 +25,7 @@ use crate::{
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The phase accumulator value. |
 #[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PhaseAccumulator {
     // phase accumulator
     t: Float,
@@ -34,6 +33,7 @@ pub struct PhaseAccumulator {
     t_step: Float,
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for PhaseAccumulator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -89,6 +89,7 @@ impl Processor for PhaseAccumulator {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The sine wave value. |
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SineOscillator {
     // phase accumulator
     t: Float,
@@ -126,6 +127,7 @@ impl Default for SineOscillator {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for SineOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -197,6 +199,7 @@ impl Processor for SineOscillator {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The sawtooth wave value. |
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SawOscillator {
     // phase accumulator
     t: Float,
@@ -234,6 +237,7 @@ impl SawOscillator {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for SawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -299,16 +303,13 @@ impl Processor for SawOscillator {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The white noise value. |
 #[derive(Clone, Debug)]
-pub struct NoiseOscillator {
-    distribution: rand::distributions::Uniform<f64>,
-}
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NoiseOscillator;
 
 impl NoiseOscillator {
     /// Creates a new [`NoiseOscillator`] processor.
     pub fn new() -> Self {
-        NoiseOscillator {
-            distribution: rand::distributions::Uniform::new(0.0, 1.0),
-        }
+        Self
     }
 }
 
@@ -318,6 +319,7 @@ impl Default for NoiseOscillator {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for NoiseOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![]
@@ -332,10 +334,11 @@ impl Processor for NoiseOscillator {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
+        use rand::Rng;
         let mut rng = rand::thread_rng();
         for out in outputs.iter_output_mut_as_floats(0)? {
             // generate a random number
-            *out = Some(self.distribution.sample(&mut rng) as Float);
+            *out = Some(rng.gen_range(0.0..1.0));
         }
 
         Ok(())
@@ -356,6 +359,7 @@ impl Processor for NoiseOscillator {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The sawtooth wave value. |
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlSawOscillator {
     p: Float,
     dp: Float,
@@ -388,6 +392,7 @@ impl BlSawOscillator {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for BlSawOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("frequency", SignalType::Float)]
@@ -461,6 +466,7 @@ const BL_SQUARE_MAX_HARMONICS: usize = 512;
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The square wave value. |
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlSquareOscillator {
     sample_rate: Float,
 
@@ -470,7 +476,7 @@ pub struct BlSquareOscillator {
     t_step: Float,
 
     // band-limited square wave coefficients
-    coeff: Box<[Float; BL_SQUARE_MAX_HARMONICS]>,
+    coeff: Box<[Float]>,
 
     /// The frequency of the square wave.
     pub frequency: Float,
@@ -499,6 +505,7 @@ impl BlSquareOscillator {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for BlSquareOscillator {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -580,6 +587,7 @@ impl Processor for BlSquareOscillator {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The string value. |
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct KarplusStrong {
     sample_rate: Float,
 
@@ -611,6 +619,7 @@ impl Default for KarplusStrong {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for KarplusStrong {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![

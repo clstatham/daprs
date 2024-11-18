@@ -1,8 +1,6 @@
 //! Storage-related processors.
 
-use std::marker::PhantomData;
-
-use crate::{prelude::*, signal::Signal};
+use crate::prelude::*;
 
 /// A processor that reads from and writes to a buffer of audio samples.
 ///
@@ -20,6 +18,7 @@ use crate::{prelude::*, signal::Signal};
 /// | `0` | `out` | `Float` | The value of the sample at the current index. |
 /// | `1` | `length` | `Int` | The length of the buffer. |
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AudioBuffer {
     buffer: Buffer<Float>,
     sample_rate: Float,
@@ -37,6 +36,7 @@ impl AudioBuffer {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for AudioBuffer {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
@@ -111,37 +111,31 @@ impl Processor for AudioBuffer {
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Any` | The stored value. |
 #[derive(Clone, Debug)]
-pub struct Register<S: Signal + Clone> {
-    value: Option<S>,
-    _phantom: PhantomData<S>,
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Register {
+    value: AnySignal,
 }
 
-impl<S: Signal + Clone> Register<S> {
+impl Register {
     /// Creates a new [`Register`] processor.
-    pub fn new() -> Self {
+    pub fn new(signal_type: SignalType) -> Self {
         Self {
-            value: None,
-            _phantom: PhantomData,
+            value: AnySignal::default_of_type(&signal_type),
         }
     }
 }
 
-impl<S: Signal + Clone> Default for Register<S> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<S: Signal + Clone> Processor for Register<S> {
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Register {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![
-            SignalSpec::new("set", S::signal_type()),
+            SignalSpec::new("set", self.value.signal_type()),
             SignalSpec::new("clear", SignalType::Bool),
         ]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", S::signal_type())]
+        vec![SignalSpec::new("out", self.value.signal_type())]
     }
 
     fn process(
@@ -149,24 +143,20 @@ impl<S: Signal + Clone> Processor for Register<S> {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (set, clear, out) in itertools::izip!(
-            inputs.iter_input_as::<S>(0)?,
+        for (set, clear, mut out) in itertools::izip!(
+            inputs.iter_input(0),
             inputs.iter_input_as_bools(1)?,
-            outputs.iter_output_as::<S>(0)?,
+            outputs.iter_output(0),
         ) {
             if let Some(set) = set {
-                if let Some(value) = self.value.as_mut() {
-                    value.clone_from(set);
-                } else {
-                    self.value = Some(set.clone());
-                }
+                self.value = set.to_owned();
             }
 
             if clear.is_some() {
-                self.value = None;
+                self.value.as_mut().set_none();
             }
 
-            out.clone_from(&self.value);
+            out.set(self.value.to_owned());
         }
 
         Ok(())

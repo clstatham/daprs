@@ -10,11 +10,11 @@ use crate::{
 
 /// A node in the audio graph that processes signals.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProcessorNode {
     pub(crate) processor: Box<dyn Processor>,
     input_spec: Vec<SignalSpec>,
     output_spec: Vec<SignalSpec>,
-    state: ProcessorState,
 }
 
 impl Debug for ProcessorNode {
@@ -33,13 +33,10 @@ impl ProcessorNode {
     pub fn new_from_boxed(processor: Box<dyn Processor>) -> Self {
         let input_spec = processor.input_spec();
         let output_spec = processor.output_spec();
-        let mut state = ProcessorState::default();
-        processor.init_state(&mut state);
         Self {
             processor,
             input_spec,
             output_spec,
-            state,
         }
     }
 
@@ -76,16 +73,17 @@ impl ProcessorNode {
     /// Resizes the internal buffers of the processor and updates the sample rate and block size.
     #[inline]
     pub fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) {
-        self.state.set_sample_rate(sample_rate);
-        self.state.set_block_size(block_size);
         self.processor.resize_buffers(sample_rate, block_size);
     }
 
     /// Prepares the processor for processing.
     #[inline]
     pub fn prepare(&mut self) {
-        self.processor.prepare(&mut self.state);
+        self.processor.prepare();
     }
+
+    #[inline]
+    pub(crate) fn set_sample_index(&mut self, sample_index: Option<usize>) {}
 
     /// Processes the input signals and writes the output signals to the given buffers.
     #[inline]

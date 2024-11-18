@@ -457,9 +457,9 @@ impl Input {
         &self,
         name: impl Into<String>,
         initial_value: impl Into<Option<S>>,
-    ) -> Param<S> {
+    ) -> Param {
         let name = name.into();
-        let param = Param::<S>::new(&name, initial_value);
+        let param = Param::new::<S>(&name, initial_value);
         let proc = self.node.graph().add_param(param.clone());
         proc.output(0).connect(self);
         param
@@ -513,47 +513,7 @@ impl Output {
         if current_type == signal_type {
             return self.node.clone();
         }
-        let cast = match (current_type, signal_type) {
-            // bool <-> int
-            (SignalType::Bool, SignalType::Int) => self.node.graph().add(Cast::<bool, i64>::new()),
-            (SignalType::Int, SignalType::Bool) => self.node.graph().add(Cast::<i64, bool>::new()),
-
-            // bool <-> sample
-            (SignalType::Bool, SignalType::Float) => {
-                self.node.graph().add(Cast::<bool, Float>::new())
-            }
-            (SignalType::Float, SignalType::Bool) => {
-                self.node.graph().add(Cast::<Float, bool>::new())
-            }
-
-            // int <-> sample
-            (SignalType::Int, SignalType::Float) => {
-                self.node.graph().add(Cast::<i64, Float>::new())
-            }
-            (SignalType::Float, SignalType::Int) => {
-                self.node.graph().add(Cast::<Float, i64>::new())
-            }
-
-            // string <-> sample
-            (SignalType::String, SignalType::Float) => {
-                self.node.graph().add(Cast::<String, Float>::new())
-            }
-            (SignalType::Float, SignalType::String) => {
-                self.node.graph().add(Cast::<Float, String>::new())
-            }
-
-            // string <-> int
-            (SignalType::String, SignalType::Int) => {
-                self.node.graph().add(Cast::<String, i64>::new())
-            }
-            (SignalType::Int, SignalType::String) => {
-                self.node.graph().add(Cast::<i64, String>::new())
-            }
-
-            (current_type, signal_type) => {
-                panic!("cannot cast from {:?} to {:?}", current_type, signal_type)
-            }
-        };
+        let cast = self.node.graph().add(Cast::new(current_type, signal_type));
 
         cast.input(0).connect(self);
         cast
@@ -565,14 +525,7 @@ impl Output {
     #[inline]
     pub fn make_node(&self) -> Node {
         let signal_type = self.signal_type();
-        let node = match signal_type {
-            SignalType::Bool => self.node.graph().add(Passthrough::<bool>::new()),
-            SignalType::Int => self.node.graph().add(Passthrough::<i64>::new()),
-            SignalType::Float => self.node.graph().add(Passthrough::<Float>::new()),
-            SignalType::String => self.node.graph().add(Passthrough::<String>::new()),
-            SignalType::List { .. } => self.node.graph().add(Passthrough::<SignalBuffer>::new()),
-            SignalType::Midi => self.node.graph().add(Passthrough::<MidiMessage>::new()),
-        };
+        let node = self.node.graph().add(Passthrough::new(signal_type));
         node.input(0).connect(self);
         node
     }
@@ -584,14 +537,7 @@ impl Output {
     #[inline]
     pub fn make_register(&self) -> Node {
         let signal_type = self.signal_type();
-        let node = match signal_type {
-            SignalType::Bool => self.node.graph().add(Register::<bool>::new()),
-            SignalType::Int => self.node.graph().add(Register::<i64>::new()),
-            SignalType::Float => self.node.graph().add(Register::<Float>::new()),
-            SignalType::String => self.node.graph().add(Register::<String>::new()),
-            SignalType::List { .. } => self.node.graph().add(Register::<SignalBuffer>::new()),
-            SignalType::Midi => self.node.graph().add(Register::<MidiMessage>::new()),
-        };
+        let node = self.node.graph().add(Register::new(signal_type));
         node.input(0).connect(self);
         node
     }
@@ -639,14 +585,11 @@ impl Output {
         let else_ = else_.into_output(self.node.graph());
         let signal_type = then.signal_type();
         assert_signals_compatible(&signal_type, &else_.signal_type(), "cond");
-        let cond = match signal_type {
-            SignalType::Bool => self.node.graph().add(Cond::<bool>::new()),
-            SignalType::Int => self.node.graph().add(Cond::<i64>::new()),
-            SignalType::Float => self.node.graph().add(Cond::<Float>::new()),
-            SignalType::String => self.node.graph().add(Cond::<String>::new()),
-            SignalType::List { .. } => self.node.graph().add(Cond::<SignalBuffer>::new()),
-            SignalType::Midi => self.node.graph().add(Cond::<MidiMessage>::new()),
-        };
+        assert!(
+            self.signal_type() == SignalType::Bool,
+            "condition signal must be a boolean"
+        );
+        let cond = self.node.graph().add(Cond::new(signal_type));
         cond.input("cond").connect(self);
         cond.input("then").connect(&then);
         cond.input("else").connect(&else_);
@@ -668,14 +611,8 @@ impl Output {
     /// Creates a [`Dedup`] processor and connects it to the output.
     #[inline]
     pub fn dedup(&self) -> Node {
-        let proc = match self.signal_type() {
-            SignalType::Bool => self.node.graph().add(Dedup::<bool>::new()),
-            SignalType::Int => self.node.graph().add(Dedup::<i64>::new()),
-            SignalType::Float => self.node.graph().add(Dedup::<Float>::new()),
-            SignalType::String => self.node.graph().add(Dedup::<String>::new()),
-            SignalType::List { .. } => self.node.graph().add(Dedup::<SignalBuffer>::new()),
-            SignalType::Midi => self.node.graph().add(Dedup::<MidiMessage>::new()),
-        };
+        let signal_type = self.signal_type();
+        let proc = self.node.graph().add(Dedup::new(signal_type));
         proc.input(0).connect(self);
         proc
     }
@@ -692,7 +629,7 @@ impl Output {
             matches!(self.signal_type(), SignalType::Float),
             "output signal must be a float"
         );
-        let proc = self.node.graph().add(Print::<Float>::default());
+        let proc = self.node.graph().add(Print::new(SignalType::Float));
         let changed = self.node().graph().add(Changed::new(0.0));
         changed.input(0).connect(self);
         proc.input("trig").connect(changed);
@@ -745,7 +682,7 @@ mod sealed {
     impl Sealed for super::Output {}
     impl Sealed for &super::Output {}
     impl Sealed for super::AnySignal {}
-    impl<S: crate::signal::Signal + Clone> Sealed for crate::builtins::util::Param<S> {}
+    impl Sealed for crate::builtins::util::Param {}
     impl Sealed for crate::signal::Float {}
     impl Sealed for i32 {}
     impl Sealed for i64 {}
@@ -803,7 +740,7 @@ impl IntoNode for &Node {
     }
 }
 
-impl<S: Signal + Clone> IntoNode for Param<S> {
+impl IntoNode for Param {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.add(self)
     }
@@ -926,10 +863,7 @@ macro_rules! impl_binary_node_ops {
                 );
 
                 let signal_type = self.signal_type();
-                let node = match signal_type {
-                    $(SignalType::$signal_type => self.node().graph().add(<math::$proc<$data>>::default()),)*
-                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), signal_type),
-                };
+                let node = self.node().graph().add(<math::$proc>::new(signal_type));
 
                 node.input(0).connect(self);
                 node.input(1).connect(&other);
@@ -961,11 +895,7 @@ macro_rules! impl_binary_node_ops {
                 );
 
                 let signal_type = self.signal_type();
-
-                let node = match signal_type {
-                    $(SignalType::$signal_type => self.node().graph().add(<math::$proc<$data>>::default()),)*
-                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), signal_type),
-                };
+                let node = self.node().graph().add(<math::$proc>::new(signal_type));
 
                 node.input(0).connect(self);
                 node.input(1).connect(&other);
@@ -1004,7 +934,6 @@ macro_rules! impl_binary_node_ops {
                 Output::$name(self, other)
             }
         }
-
 
         impl<T> std::ops::$std_op<T> for Node
         where
@@ -1067,18 +996,7 @@ macro_rules! impl_comparison_node_ops {
                 );
 
                 let signal_type = self.signal_type();
-
-                let node = match signal_type {
-                    SignalType::Bool => self.node().graph().add(control::$proc::<bool>::default()),
-                    SignalType::Int => self.node().graph().add(control::$proc::<i64>::default()),
-                    SignalType::Float => {
-                        self.node().graph().add(control::$proc::<Float>::default())
-                    }
-                    SignalType::String => {
-                        self.node().graph().add(control::$proc::<String>::default())
-                    }
-                    _ => panic!("unsupported signal type"),
-                };
+                let node = self.node().graph().add(<control::$proc>::new(signal_type));
 
                 node.input(0).connect(self);
                 node.input(1).connect(&other);
@@ -1132,11 +1050,7 @@ macro_rules! impl_unary_node_ops {
             #[doc = $doc]
             pub fn $name(&self) -> Node {
                 let signal_type = self.signal_type();
-
-                let node = match signal_type {
-                    $(SignalType::$signal_type => self.node().graph().add(<math::$proc<$data>>::default()),)*
-                    _ => panic!("unsupported signal type for {:?}: {:?}", stringify!($name), signal_type),
-                };
+                let node = self.node().graph().add(<math::$proc>::new(signal_type));
 
                 node.input(0).connect(self);
 

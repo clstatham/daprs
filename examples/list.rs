@@ -16,7 +16,7 @@ fn main() {
     let counter = graph.add(Counter::default());
     counter.input("trig").connect(&metro);
 
-    let cond = graph.add(Cond::<bool>::new());
+    let cond = graph.add(Cond::new(SignalType::Bool));
     let should_reset = counter.ge(&len);
     cond.input("cond").connect(&should_reset);
     cond.input("then").connect(graph.constant(true));
@@ -24,11 +24,11 @@ fn main() {
 
     counter.input("reset").connect(cond);
 
-    let get = graph.add(Get::<Float>::new());
+    let get = graph.add(Get::new(SignalType::Float));
     get.input("list").connect(&list);
     get.input("index").connect(&counter);
 
-    let print = graph.add(Print::<Float>::default());
+    let print = graph.add(Print::new(SignalType::Float));
     print.input("trig").connect(&metro);
     print.input("message").connect(&get);
 

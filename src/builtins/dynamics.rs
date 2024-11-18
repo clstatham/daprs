@@ -19,6 +19,7 @@ use crate::prelude::*;
 /// | --- | --- | --- | --- |
 /// | `0` | `out` | `Float` | The output signal. |
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PeakLimiter {
     gain: Float,
     sample_rate: Float,
@@ -60,6 +61,7 @@ impl Default for PeakLimiter {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for PeakLimiter {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![

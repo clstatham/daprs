@@ -306,10 +306,10 @@ pub trait Signal: Sized + Debug + Send + Sync + PartialEq + 'static {
     fn try_from_any_signal(signal: AnySignal) -> Option<Self>;
 
     /// Attempts to convert an [`AnySignal`] into the signal type.
-    fn try_from_any_signal_ref(signal: &AnySignal) -> Option<&Option<Self>>;
+    fn try_from_any_signal_ref(signal: AnySignalRef) -> Option<&Option<Self>>;
 
     /// Attempts to convert a mutable [`AnySignal`] into a mutable signal of the signal type.
-    fn try_from_any_signal_mut(signal: &mut AnySignal) -> Option<&mut Option<Self>>;
+    fn try_from_any_signal_mut(signal: AnySignalMut) -> Result<&mut Option<Self>, AnySignalMut>;
 
     /// Attempts to convert a [`SignalBuffer`] into a buffer of the signal type.
     fn try_convert_buffer(buffer: &SignalBuffer) -> Option<&Buffer<Self>>;
@@ -339,24 +339,26 @@ macro_rules! impl_signal {
             }
 
             #[inline]
-            fn try_from_any_signal_ref(signal: &AnySignal) -> Option<&Option<Self>>
+            fn try_from_any_signal_ref(signal: AnySignalRef) -> Option<&Option<Self>>
             where
                 Self: Sized,
             {
                 match signal {
-                    AnySignal::$variant(s) => Some(s),
+                    AnySignalRef::$variant(s) => Some(s),
                     _ => None,
                 }
             }
 
             #[inline]
-            fn try_from_any_signal_mut(signal: &mut AnySignal) -> Option<&mut Option<Self>>
+            fn try_from_any_signal_mut(
+                signal: AnySignalMut,
+            ) -> Result<&mut Option<Self>, AnySignalMut>
             where
                 Self: Sized,
             {
                 match signal {
-                    AnySignal::$variant(s) => Some(s),
-                    _ => None,
+                    AnySignalMut::$variant(s) => Ok(s),
+                    signal => Err(signal),
                 }
             }
 
@@ -397,9 +399,6 @@ impl_signal!(MidiMessage, SignalType::Midi, Midi);
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AnySignal {
-    /// No signal. The inner value is the expected signal type.
-    None(SignalType),
-
     /// A floating-point value.
     Float(Option<Float>),
 
@@ -430,11 +429,6 @@ impl AnySignal {
             SignalType::List { .. } => AnySignal::List(None),
             SignalType::Midi => AnySignal::Midi(None),
         }
-    }
-
-    /// Creates a new signal of the given type with no value.
-    pub const fn new_none(signal_type: SignalType) -> Self {
-        Self::None(signal_type)
     }
 
     /// Creates a new floating-point signal.
@@ -470,7 +464,15 @@ impl AnySignal {
     /// Returns `true` if the signal is [`None`](AnySignal::None).
     #[inline]
     pub fn is_none(&self) -> bool {
-        matches!(self, Self::None(_))
+        matches!(
+            self,
+            Self::Float(None)
+                | Self::Int(None)
+                | Self::Bool(None)
+                | Self::String(None)
+                | Self::List(None)
+                | Self::Midi(None)
+        )
     }
 
     /// Returns `true` if the signal is a floating-point value.
@@ -552,7 +554,7 @@ impl AnySignal {
 
     /// Returns the buffer value if the signal is a buffer, without casting.
     #[inline]
-    pub fn as_buffer(&self) -> Option<&SignalBuffer> {
+    pub fn as_list(&self) -> Option<&SignalBuffer> {
         match self {
             Self::List(buf) => buf.as_ref(),
             _ => None,
@@ -561,31 +563,29 @@ impl AnySignal {
 
     /// Returns the MIDI message if the signal is a MIDI message, without casting.
     #[inline]
-    pub fn as_midi(&self) -> Option<&MidiMessage> {
+    pub fn as_midi(&self) -> Option<MidiMessage> {
         match self {
-            Self::Midi(midi) => midi.as_ref(),
+            Self::Midi(midi) => *midi,
             _ => None,
         }
     }
 
     /// Returns `true` if the signal is of the same type as the other signal.
     pub fn is_same_type(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::None(signal_type), Self::None(other_kind)) => signal_type == other_kind,
-            (Self::Float(_), Self::Float(_)) => true,
-            (Self::Int(_), Self::Int(_)) => true,
-            (Self::Bool(_), Self::Bool(_)) => true,
-            (Self::String(_), Self::String(_)) => true,
-            (Self::List(_), Self::List(_)) => true,
-            (Self::Midi(_), Self::Midi(_)) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (Self::Float(_), Self::Float(_))
+                | (Self::Int(_), Self::Int(_))
+                | (Self::Bool(_), Self::Bool(_))
+                | (Self::String(_), Self::String(_))
+                | (Self::List(_), Self::List(_))
+                | (Self::Midi(_), Self::Midi(_))
+        )
     }
 
     /// Returns the type of the signal.
     pub fn signal_type(&self) -> SignalType {
         match self {
-            Self::None(signal_type) => signal_type.clone(),
             Self::Float(_) => SignalType::Float,
             Self::Int(_) => SignalType::Int,
             Self::Bool(_) => SignalType::Bool,
@@ -617,60 +617,117 @@ impl AnySignal {
     /// | String    | Yes   | Yes | Yes  | -      | -    | -    |
     /// | List      | -     | -   | -    | -      | -    | -    |
     /// | Midi      | -     | -   | -    | -      | -    | -    |
-    pub fn cast<T: Signal>(&self) -> Option<T> {
-        if self.signal_type() == T::signal_type() {
-            T::try_from_any_signal(self.clone())
-        } else {
-            match (self, T::signal_type()) {
-                (Self::None(_), _) => None,
-
-                // float <-> int
-                (Self::Float(float), SignalType::Int) => {
-                    T::try_from_any_signal(AnySignal::Int(float.map(|f| f as i64)))
-                }
-                (Self::Int(int), SignalType::Float) => {
-                    T::try_from_any_signal(AnySignal::Float(int.map(|i| i as Float)))
-                }
-
-                // float <-> bool
-                (Self::Float(float), SignalType::Bool) => {
-                    T::try_from_any_signal(AnySignal::Bool(float.map(|f| f != 0.0)))
-                }
-                (Self::Bool(bool), SignalType::Float) => T::try_from_any_signal(AnySignal::Float(
-                    bool.map(|b| if b { 1.0 } else { 0.0 }),
-                )),
-
-                // int <-> bool
-                (Self::Int(int), SignalType::Bool) => {
-                    T::try_from_any_signal(AnySignal::Bool(int.map(|i| i != 0)))
-                }
-                (Self::Bool(bool), SignalType::Int) => {
-                    T::try_from_any_signal(AnySignal::Int(bool.map(|b| if b { 1 } else { 0 })))
-                }
-
-                // string <-> float
-                (Self::String(string), SignalType::Float) => T::try_from_any_signal(
-                    AnySignal::Float(string.as_ref().and_then(|s| s.parse().ok())),
-                ),
-                (Self::Float(float), SignalType::String) => {
-                    T::try_from_any_signal(AnySignal::String(float.map(|f| f.to_string())))
-                }
-
-                // string <-> int
-                (Self::String(string), SignalType::Int) => T::try_from_any_signal(AnySignal::Int(
-                    string.as_ref().and_then(|s| s.parse().ok()),
-                )),
-                (Self::Int(int), SignalType::String) => {
-                    T::try_from_any_signal(AnySignal::String(int.map(|i| i.to_string())))
-                }
-
-                _ => None,
+    pub fn cast(&self, target: SignalType) -> Option<Self> {
+        match (self, target) {
+            (Self::Float(float), SignalType::Int) => float.map(|f| Self::Int(Some(f as i64))),
+            (Self::Float(float), SignalType::Bool) => float.map(|f| Self::Bool(Some(f != 0.0))),
+            (Self::Float(float), SignalType::String) => {
+                float.map(|f| Self::String(Some(f.to_string())))
             }
+            (Self::Int(int), SignalType::Float) => int.map(|i| Self::Float(Some(i as Float))),
+            (Self::Int(int), SignalType::Bool) => int.map(|i| Self::Bool(Some(i != 0))),
+            (Self::Int(int), SignalType::String) => int.map(|i| Self::String(Some(i.to_string()))),
+            (Self::Bool(bool), SignalType::Float) => {
+                bool.map(|b| Self::Float(Some(if b { 1.0 } else { 0.0 })))
+            }
+            (Self::Bool(bool), SignalType::Int) => {
+                bool.map(|b| Self::Int(Some(if b { 1 } else { 0 })))
+            }
+            (Self::Bool(bool), SignalType::String) => {
+                bool.map(|b| Self::String(Some(b.to_string())))
+            }
+            (Self::String(string), SignalType::Float) => string
+                .as_ref()
+                .and_then(|s| s.parse().ok().map(|f| Self::Float(Some(f)))),
+            (Self::String(string), SignalType::Int) => string
+                .as_ref()
+                .and_then(|s| s.parse().ok().map(|i| Self::Int(Some(i)))),
+            (Self::String(string), SignalType::Bool) => string
+                .as_ref()
+                .and_then(|s| s.parse().ok().map(|b| Self::Bool(Some(b)))),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn as_ref(&self) -> AnySignalRef {
+        match self {
+            Self::Float(float) => AnySignalRef::Float(float),
+            Self::Int(int) => AnySignalRef::Int(int),
+            Self::Bool(bool) => AnySignalRef::Bool(bool),
+            Self::String(string) => AnySignalRef::String(string),
+            Self::List(list) => AnySignalRef::List(list),
+            Self::Midi(midi) => AnySignalRef::Midi(midi),
+        }
+    }
+
+    #[inline]
+    pub fn as_mut(&mut self) -> AnySignalMut {
+        match self {
+            Self::Float(float) => AnySignalMut::Float(float),
+            Self::Int(int) => AnySignalMut::Int(int),
+            Self::Bool(bool) => AnySignalMut::Bool(bool),
+            Self::String(string) => AnySignalMut::String(string),
+            Self::List(list) => AnySignalMut::List(list),
+            Self::Midi(midi) => AnySignalMut::Midi(midi),
         }
     }
 
     /// Attempts to extract the signal as the given signal type.
+    #[inline]
     pub fn as_type<T: Signal>(&self) -> Option<&Option<T>> {
+        if self.signal_type() == T::signal_type() {
+            T::try_from_any_signal_ref(self.as_ref())
+        } else {
+            None
+        }
+    }
+
+    /// Attempts to mutably extract the signal as the given signal type.
+    #[inline]
+    pub fn as_type_mut<T: Signal>(&mut self) -> Option<&mut Option<T>> {
+        if self.signal_type() == T::signal_type() {
+            T::try_from_any_signal_mut(self.as_mut()).ok()
+        } else {
+            None
+        }
+    }
+}
+
+/// A reference to a signal that can hold any signal type.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AnySignalRef<'a> {
+    Float(&'a Option<Float>),
+    Int(&'a Option<i64>),
+    Bool(&'a Option<bool>),
+    String(&'a Option<String>),
+    List(&'a Option<SignalBuffer>),
+    Midi(&'a Option<MidiMessage>),
+}
+
+impl<'a> AnySignalRef<'a> {
+    pub fn signal_type(&self) -> SignalType {
+        match self {
+            Self::Float(_) => SignalType::Float,
+            Self::Int(_) => SignalType::Int,
+            Self::Bool(_) => SignalType::Bool,
+            Self::String(_) => SignalType::String,
+            Self::List(l) => SignalType::List {
+                size: l.as_ref().and_then(|l| {
+                    l.as_list()
+                        .and_then(|b| b.iter().find_map(|s| s.as_ref()).map(|s| s.len()))
+                }),
+                element_type: l
+                    .as_ref()
+                    .and_then(|l| l.as_list().and_then(|b| b.iter().find_map(|s| s.as_ref())))
+                    .map(|s| s.signal_type())
+                    .map(Box::new),
+            },
+            Self::Midi(_) => SignalType::Midi,
+        }
+    }
+
+    pub fn as_type<T: Signal>(self) -> Option<&'a Option<T>> {
         if self.signal_type() == T::signal_type() {
             T::try_from_any_signal_ref(self)
         } else {
@@ -678,12 +735,112 @@ impl AnySignal {
         }
     }
 
-    /// Attempts to mutably extract the signal as the given signal type.
-    pub fn as_type_mut<T: Signal>(&mut self) -> Option<&mut Option<T>> {
+    pub fn to_owned(self) -> AnySignal {
+        match self {
+            Self::Float(float) => AnySignal::Float(*float),
+            Self::Int(int) => AnySignal::Int(*int),
+            Self::Bool(bool) => AnySignal::Bool(*bool),
+            Self::String(string) => AnySignal::String(string.clone()),
+            Self::List(list) => AnySignal::List(list.clone()),
+            Self::Midi(midi) => AnySignal::Midi(*midi),
+        }
+    }
+}
+
+/// A mutable reference to a signal that can hold any signal type.
+#[derive(Debug, PartialEq)]
+pub enum AnySignalMut<'a> {
+    Float(&'a mut Option<Float>),
+    Int(&'a mut Option<i64>),
+    Bool(&'a mut Option<bool>),
+    String(&'a mut Option<String>),
+    List(&'a mut Option<SignalBuffer>),
+    Midi(&'a mut Option<MidiMessage>),
+}
+
+impl<'a> AnySignalMut<'a> {
+    pub fn signal_type(&self) -> SignalType {
+        match self {
+            Self::Float(_) => SignalType::Float,
+            Self::Int(_) => SignalType::Int,
+            Self::Bool(_) => SignalType::Bool,
+            Self::String(_) => SignalType::String,
+            Self::List(l) => SignalType::List {
+                size: l.as_ref().and_then(|l| {
+                    l.as_list()
+                        .and_then(|b| b.iter().find_map(|s| s.as_ref()).map(|s| s.len()))
+                }),
+                element_type: l
+                    .as_ref()
+                    .and_then(|l| l.as_list().and_then(|b| b.iter().find_map(|s| s.as_ref())))
+                    .map(|s| s.signal_type())
+                    .map(Box::new),
+            },
+            Self::Midi(_) => SignalType::Midi,
+        }
+    }
+
+    pub fn as_type<T: Signal>(self) -> Result<&'a mut Option<T>, Self> {
         if self.signal_type() == T::signal_type() {
             T::try_from_any_signal_mut(self)
         } else {
-            None
+            Err(self)
+        }
+    }
+
+    pub fn set_none(self) {
+        match self {
+            Self::Float(float) => *float = None,
+            Self::Int(int) => *int = None,
+            Self::Bool(bool) => *bool = None,
+            Self::String(string) => *string = None,
+            Self::List(list) => *list = None,
+            Self::Midi(midi) => *midi = None,
+        }
+    }
+
+    pub fn set_as<T: Signal>(self, value: T) -> Result<(), Self> {
+        match self.as_type() {
+            Ok(signal) => {
+                *signal = Some(value);
+                Ok(())
+            }
+            Err(this) => Err(this),
+        }
+    }
+
+    pub fn set(&mut self, value: AnySignal) {
+        match (self, value) {
+            (Self::Float(float), AnySignal::Float(new_float)) => {
+                **float = new_float;
+            }
+            (Self::Int(int), AnySignal::Int(new_int)) => {
+                **int = new_int;
+            }
+            (Self::Bool(bool), AnySignal::Bool(new_bool)) => {
+                **bool = new_bool;
+            }
+            (Self::String(string), AnySignal::String(new_string)) => {
+                **string = new_string;
+            }
+            (Self::List(list), AnySignal::List(new_list)) => {
+                **list = new_list;
+            }
+            (Self::Midi(midi), AnySignal::Midi(new_midi)) => {
+                **midi = new_midi;
+            }
+            _ => {}
+        }
+    }
+
+    pub fn to_owned(self) -> AnySignal {
+        match self {
+            Self::Float(float) => AnySignal::Float(*float),
+            Self::Int(int) => AnySignal::Int(*int),
+            Self::Bool(bool) => AnySignal::Bool(*bool),
+            Self::String(string) => AnySignal::String(string.clone()),
+            Self::List(list) => AnySignal::List(list.clone()),
+            Self::Midi(midi) => AnySignal::Midi(*midi),
         }
     }
 }
@@ -1104,16 +1261,69 @@ impl SignalBuffer {
         }
     }
 
+    pub fn get(&self, index: usize) -> Option<AnySignalRef> {
+        match self {
+            Self::Float(buffer) => buffer.get(index).map(AnySignalRef::Float),
+            Self::Int(buffer) => buffer.get(index).map(AnySignalRef::Int),
+            Self::Bool(buffer) => buffer.get(index).map(AnySignalRef::Bool),
+            Self::String(buffer) => buffer.get(index).map(AnySignalRef::String),
+            Self::List(buffer) => buffer.get(index).map(AnySignalRef::List),
+            Self::Midi(buffer) => buffer.get(index).map(AnySignalRef::Midi),
+        }
+    }
+
+    pub fn get_mut(&mut self, index: usize) -> Option<AnySignalMut> {
+        match self {
+            Self::Float(buffer) => buffer.get_mut(index).map(AnySignalMut::Float),
+            Self::Int(buffer) => buffer.get_mut(index).map(AnySignalMut::Int),
+            Self::Bool(buffer) => buffer.get_mut(index).map(AnySignalMut::Bool),
+            Self::String(buffer) => buffer.get_mut(index).map(AnySignalMut::String),
+            Self::List(buffer) => buffer.get_mut(index).map(AnySignalMut::List),
+            Self::Midi(buffer) => buffer.get_mut(index).map(AnySignalMut::Midi),
+        }
+    }
+
+    pub fn get_as<S: Signal>(&self, index: usize) -> Option<&Option<S>> {
+        S::try_convert_buffer(self)?.get(index)
+    }
+
+    pub fn get_copy_as<S: Signal + Copy>(&self, index: usize) -> Option<S> {
+        S::try_convert_buffer(self)?.get(index).copied().flatten()
+    }
+
     /// Returns a mutable reference to the signal at the given index.
-    pub fn get_mut<S: Signal>(&mut self, index: usize) -> Option<&mut Option<S>> {
+    pub fn get_mut_as<S: Signal>(&mut self, index: usize) -> Option<&mut Option<S>> {
         S::try_convert_buffer_mut(self)?.get_mut(index)
+    }
+
+    /// Sets the signal at the given index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the signal type does not match the buffer type.
+    pub fn set(&mut self, index: usize, value: AnySignal) {
+        match (self, value) {
+            (Self::Float(buffer), AnySignal::Float(value)) => buffer[index] = value,
+            (Self::Int(buffer), AnySignal::Int(value)) => buffer[index] = value,
+            (Self::Bool(buffer), AnySignal::Bool(value)) => buffer[index] = value,
+            (Self::String(buffer), AnySignal::String(value)) => buffer[index] = value,
+            (Self::List(buffer), AnySignal::List(value)) => buffer[index] = value,
+            (Self::Midi(buffer), AnySignal::Midi(value)) => buffer[index] = value,
+            (this, value) => {
+                panic!(
+                    "Cannot set signal of different type: {:?} != {:?}",
+                    this.signal_type(),
+                    value.signal_type()
+                );
+            }
+        }
     }
 
     /// Clones the given signal and stores it at the given index.
     /// Returns `true` if the signal was set successfully.
     #[cfg_attr(feature = "profiling", inline(never))]
     #[cfg_attr(not(feature = "profiling"), inline)]
-    pub fn set<S: Signal + Clone>(&mut self, index: usize, value: &Option<S>) -> bool {
+    pub fn set_as<S: Signal + Clone>(&mut self, index: usize, value: &Option<S>) -> bool {
         if let Some(buf) = S::try_convert_buffer_mut(self) {
             let slot = buf.get_mut(index).unwrap();
             slot.clone_from(value); // `clone_from` is used to possibly avoid cloning the value twice
@@ -1123,34 +1333,15 @@ impl SignalBuffer {
         }
     }
 
-    /// Clones the given signal and stores it at the given index, but only if the values are not equal.
-    /// Returns `true` if the signal was set successfully.
-    #[cfg_attr(feature = "profiling", inline(never))]
-    #[cfg_attr(not(feature = "profiling"), inline)]
-    pub fn set_if_ne<S: Signal + Clone>(&mut self, index: usize, value: &Option<S>) -> bool {
-        if let Some(buf) = S::try_convert_buffer_mut(self) {
-            let slot = buf.get_mut(index).unwrap();
-            if slot != value {
-                slot.clone_from(value); // `clone_from` is used to possibly avoid cloning the value twice
-                return true;
-            }
+    pub fn set_none(&mut self, index: usize) {
+        match self {
+            Self::Float(buffer) => buffer[index] = None,
+            Self::Int(buffer) => buffer[index] = None,
+            Self::Bool(buffer) => buffer[index] = None,
+            Self::String(buffer) => buffer[index] = None,
+            Self::List(buffer) => buffer[index] = None,
+            Self::Midi(buffer) => buffer[index] = None,
         }
-        false
-    }
-
-    /// Clones the given signal and stores it as `Some` at the given index, but only if the values are not equal.
-    /// Returns `true` if the signal was set successfully.
-    #[cfg_attr(feature = "profiling", inline(never))]
-    #[cfg_attr(not(feature = "profiling"), inline)]
-    pub fn set_some_if_ne<S: Signal + Clone>(&mut self, index: usize, value: &S) -> bool {
-        if let Some(buf) = S::try_convert_buffer_mut(self) {
-            let slot = buf.get_mut(index).unwrap();
-            if slot.as_ref() != Some(value) {
-                *slot = Some(value.clone());
-                return true;
-            }
-        }
-        false
     }
 
     /// Clones the contents of the other buffer into this buffer.
@@ -1208,6 +1399,118 @@ impl SignalBuffer {
                 panic!("Cannot copy list buffer; use `clone_from` instead");
             }
             _ => panic!("Cannot copy buffer of different type"),
+        }
+    }
+
+    /// Returns an iterator over the signals in the buffer.
+    pub fn iter(&self) -> SignalBufferIter {
+        SignalBufferIter {
+            buffer: self,
+            index: 0,
+        }
+    }
+
+    /// Returns a mutable iterator over the signals in the buffer.
+    pub fn iter_mut(&mut self) -> SignalBufferIterMut {
+        SignalBufferIterMut {
+            buffer: self,
+            index: 0,
+        }
+    }
+}
+
+/// An iterator over the signals in a buffer.
+pub struct SignalBufferIter<'a> {
+    buffer: &'a SignalBuffer,
+    index: usize,
+}
+
+impl<'a> Iterator for SignalBufferIter<'a> {
+    type Item = AnySignalRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.buffer.len() {
+            let signal = match self.buffer {
+                SignalBuffer::Float(buffer) => AnySignalRef::Float(&buffer[self.index]),
+                SignalBuffer::Int(buffer) => AnySignalRef::Int(&buffer[self.index]),
+                SignalBuffer::Bool(buffer) => AnySignalRef::Bool(&buffer[self.index]),
+                SignalBuffer::String(buffer) => AnySignalRef::String(&buffer[self.index]),
+                SignalBuffer::List(buffer) => AnySignalRef::List(&buffer[self.index]),
+                SignalBuffer::Midi(buffer) => AnySignalRef::Midi(&buffer[self.index]),
+            };
+            self.index += 1;
+            Some(signal)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a SignalBuffer {
+    type Item = AnySignalRef<'a>;
+    type IntoIter = SignalBufferIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SignalBufferIter {
+            buffer: self,
+            index: 0,
+        }
+    }
+}
+
+/// An mutable iterator over the signals in a buffer.
+pub struct SignalBufferIterMut<'a> {
+    buffer: &'a mut SignalBuffer,
+    index: usize,
+}
+
+impl<'a> Iterator for SignalBufferIterMut<'a> {
+    type Item = AnySignalMut<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.buffer.len() {
+            // SAFETY: We are borrowing the buffer mutably, so we can safely create a mutable reference to the signal.
+            // We are also only creating one mutable reference at a time, so there are no issues with aliasing.
+            // The lifetime of the mutable reference is limited to the lifetime of the iterator.
+            // This is similar to how `std::slice::IterMut` works.
+            unsafe {
+                let signal = match self.buffer {
+                    SignalBuffer::Float(buffer) => {
+                        AnySignalMut::Float(&mut *(&mut buffer[self.index] as *mut Option<Float>))
+                    }
+                    SignalBuffer::Int(buffer) => {
+                        AnySignalMut::Int(&mut *(&mut buffer[self.index] as *mut Option<i64>))
+                    }
+                    SignalBuffer::Bool(buffer) => {
+                        AnySignalMut::Bool(&mut *(&mut buffer[self.index] as *mut Option<bool>))
+                    }
+                    SignalBuffer::String(buffer) => {
+                        AnySignalMut::String(&mut *(&mut buffer[self.index] as *mut Option<String>))
+                    }
+                    SignalBuffer::List(buffer) => AnySignalMut::List(
+                        &mut *(&mut buffer[self.index] as *mut Option<SignalBuffer>),
+                    ),
+                    SignalBuffer::Midi(buffer) => AnySignalMut::Midi(
+                        &mut *(&mut buffer[self.index] as *mut Option<MidiMessage>),
+                    ),
+                };
+                self.index += 1;
+                Some(signal)
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a mut SignalBuffer {
+    type Item = AnySignalMut<'a>;
+    type IntoIter = SignalBufferIterMut<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SignalBufferIterMut {
+            buffer: self,
+            index: 0,
         }
     }
 }

@@ -20,7 +20,7 @@ fn main() {
     sine.output(0).connect(&bang.input("period"));
 
     // add a print node
-    let print = graph.add(Print::<Float>::default());
+    let print = graph.add(Print::new(SignalType::Float));
 
     // connect the metronome to trigger the print
     bang.output(0).connect(&print.input("trig"));

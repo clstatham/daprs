@@ -11,7 +11,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     prelude::{Param, Passthrough},
     processor::{Processor, ProcessorError},
-    signal::{Float, MidiMessage, Signal},
+    signal::{Float, MidiMessage, SignalType},
 };
 
 pub mod edge;
@@ -76,6 +76,7 @@ pub type GraphConstructionResult<T> = Result<T, GraphConstructionError>;
 
 /// A directed graph of [`Processor`]s connected by [`Edge`]s.
 #[derive(Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Graph {
     digraph: DiGraph,
 
@@ -90,6 +91,7 @@ pub struct Graph {
     output_nodes: Vec<NodeIndex>,
 
     // cached visitor state for graph traversal
+    #[cfg_attr(feature = "serde", serde(skip))]
     visitor: DfsPostOrder<NodeIndex, FxHashSet<NodeIndex>>,
     visit_path: Vec<NodeIndex>,
 
@@ -119,7 +121,7 @@ impl Graph {
     pub fn add_audio_input(&mut self) -> NodeIndex {
         let idx = self
             .digraph
-            .add_node(ProcessorNode::new(Passthrough::<Float>::default()));
+            .add_node(ProcessorNode::new(Passthrough::new(SignalType::Float)));
         self.input_nodes.push(idx);
         idx
     }
@@ -128,7 +130,7 @@ impl Graph {
     pub fn add_audio_output(&mut self) -> NodeIndex {
         let idx = self
             .digraph
-            .add_node(ProcessorNode::new(Passthrough::<Float>::default()));
+            .add_node(ProcessorNode::new(Passthrough::new(SignalType::Float)));
         self.output_nodes.push(idx);
         idx
     }
@@ -139,7 +141,7 @@ impl Graph {
     }
 
     /// Adds a parameter node to the graph.
-    pub fn add_param<S: Signal + Clone>(&mut self, param: Param<S>) -> NodeIndex {
+    pub fn add_param(&mut self, param: Param) -> NodeIndex {
         let name = param.name().to_string();
         let index = self.add_processor(param);
         self.params.insert(name, index);
@@ -148,7 +150,7 @@ impl Graph {
 
     /// Adds a MIDI input node to the graph.
     pub fn add_midi_input(&mut self, name: impl Into<String>) -> NodeIndex {
-        let param = Param::<MidiMessage>::new(name, None);
+        let param = Param::new::<MidiMessage>(name, None);
         let index = self.add_param(param);
         self.midi_params.push(index);
         index
@@ -316,7 +318,7 @@ impl Graph {
 
     /// Returns an iterator over the MIDI input parameters in the graph.
     #[inline]
-    pub fn midi_input_iter(&self) -> impl Iterator<Item = (&str, Param<MidiMessage>)> + '_ {
+    pub fn midi_input_iter(&self) -> impl Iterator<Item = (&str, Param)> + '_ {
         self.params
             .iter()
             .filter(|(name, _)| self.midi_params.contains(self.params.get(*name).unwrap()))
@@ -324,7 +326,7 @@ impl Graph {
                 (
                     name.as_str(),
                     (*self.digraph[*idx].processor)
-                        .downcast_ref::<Param<MidiMessage>>()
+                        .downcast_ref::<Param>()
                         .unwrap()
                         .clone(),
                 )

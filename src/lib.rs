@@ -34,6 +34,21 @@ pub mod prelude {
 }
 
 #[doc(hidden)]
+mod graph_serde {
+    #[cfg(feature = "serde")]
+    pub(crate) trait GraphSerde: erased_serde::Serialize {}
+    #[cfg(feature = "serde")]
+    impl<T: ?Sized> GraphSerde for T where T: erased_serde::Serialize {}
+
+    #[cfg(not(feature = "serde"))]
+    pub trait GraphSerde {}
+    #[cfg(not(feature = "serde"))]
+    impl<T: ?Sized> GraphSerde for T {}
+}
+
+pub(crate) use graph_serde::GraphSerde;
+
+#[doc(hidden)]
 mod logging {
     use std::{
         collections::HashSet,
