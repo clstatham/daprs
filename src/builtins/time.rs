@@ -246,16 +246,16 @@ impl Processor for SampleDelay {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FractDelay {
+    #[cfg_attr(feature = "serde", serde(skip))]
     ring_buffer: Vec<Float>,
     head: usize,
 }
 
 impl FractDelay {
     /// Creates a new `FractDelay` processor with the given maximum delay.
-    pub fn new(max_delay: usize) -> Self {
-        let ring_buffer = vec![0.0; max_delay];
+    pub fn new() -> Self {
         Self {
-            ring_buffer,
+            ring_buffer: vec![0.0; 2],
             head: 0,
         }
     }
@@ -266,6 +266,12 @@ impl FractDelay {
         let delay_frac = delay - delay_floor as Float;
         let index = (self.head + self.ring_buffer.len() - delay_floor) % self.ring_buffer.len();
         (index, delay_frac)
+    }
+}
+
+impl Default for FractDelay {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -280,6 +286,10 @@ impl Processor for FractDelay {
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("out", SignalType::Float)]
+    }
+
+    fn allocate(&mut self, sample_rate: Float, max_block_size: usize) {
+        self.ring_buffer.resize(sample_rate as usize * 2, 0.0);
     }
 
     fn process(

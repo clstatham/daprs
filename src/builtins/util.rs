@@ -648,13 +648,14 @@ pub(crate) fn param_channel() -> (SignalTx, ParamRx) {
     (SignalTx::new(tx), ParamRx::new(SignalRx::new(rx)))
 }
 
-#[cfg(feature = "serde")]
-fn param_channel_deserialize<'de, D>(_: D) -> Result<(SignalTx, ParamRx), D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let (tx, rx) = param_channel();
-    Ok((tx, rx))
+#[derive(Clone, Debug)]
+struct ParamChannel(SignalTx, ParamRx);
+
+impl Default for ParamChannel {
+    fn default() -> Self {
+        let (tx, rx) = param_channel();
+        Self(tx, rx)
+    }
 }
 
 /// A processor that can be used to control a parameter from outside the graph.
@@ -674,11 +675,8 @@ where
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Param {
     name: String,
-    #[cfg_attr(
-        feature = "serde",
-        serde(skip_serializing, deserialize_with = "param_channel_deserialize")
-    )]
-    channels: (SignalTx, ParamRx),
+    #[cfg_attr(feature = "serde", serde(skip))]
+    channel: ParamChannel,
     signal_type: SignalType,
     minimum: Option<Float>,
     maximum: Option<Float>,
@@ -689,7 +687,7 @@ impl Param {
     pub fn new<S: Signal>(name: impl Into<String>, initial_value: impl Into<Option<S>>) -> Self {
         let this = Self {
             name: name.into(),
-            channels: param_channel(),
+            channel: ParamChannel::default(),
             signal_type: S::signal_type(),
             minimum: None,
             maximum: None,
@@ -708,7 +706,7 @@ impl Param {
     ) -> Self {
         let this = Self {
             name: name.into(),
-            channels: param_channel(),
+            channel: ParamChannel::default(),
             signal_type: SignalType::Float,
             minimum: minimum.into(),
             maximum: maximum.into(),
@@ -726,17 +724,17 @@ impl Param {
 
     /// Returns the transmitter for the parameter.
     pub fn tx(&self) -> &SignalTx {
-        &self.channels.0
+        &self.channel.0
     }
 
     /// Returns the receiver for the parameter.
     pub fn rx(&self) -> &ParamRx {
-        &self.channels.1
+        &self.channel.1
     }
 
     /// Returns a mutable reference to the receiver for the parameter.
     pub fn rx_mut(&mut self) -> &mut ParamRx {
-        &mut self.channels.1
+        &mut self.channel.1
     }
 
     /// Sends a value to the parameter.
