@@ -53,17 +53,13 @@ impl Processor for Cond {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (mut out, cond, then, else_) in itertools::izip!(
-            outputs.iter_output_mut(0),
-            inputs.iter_input_as_bools(0)?,
-            inputs.iter_input(1),
-            inputs.iter_input(2)
+        for (cond, then, else_, mut out) in iter_proc_io_as!(
+            inputs as [bool, Any, Any],
+            outputs as [Any]
         ) {
-            if let Some(cond) = cond {
-                self.cond = cond;
-            }
+            self.cond = cond.unwrap_or(self.cond);
 
             if let Some(then) = then {
                 if then.signal_type() != self.then.signal_type() {
@@ -135,13 +131,9 @@ macro_rules! comparison_op {
             fn process(
                 &mut self,
                 inputs: ProcessorInputs,
-                mut outputs: ProcessorOutputs,
+                outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {
-                for (out, a, b) in itertools::izip!(
-                    outputs.iter_output_mut_as_bools(0)?,
-                    inputs.iter_input(0),
-                    inputs.iter_input(1)
-                ) {
+                for (a, b, out) in iter_proc_io_as!(inputs as [Any, Any], outputs as [bool]) {
                     if let Some(a) = a {
                         if a.signal_type() != self.a.signal_type() {
                             return Err(ProcessorError::InputSpecMismatch {

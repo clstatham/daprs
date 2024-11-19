@@ -3,12 +3,9 @@
 use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::{Receiver, Sender};
+use raug_macros::iter_proc_io_as;
 
-use crate::{
-    prelude::{GraphBuilder, Node, Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
-    processor::ProcessorError,
-    signal::{AnySignal, Float, Signal, SignalType},
-};
+use crate::prelude::*;
 
 use super::lerp;
 
@@ -51,19 +48,15 @@ impl Processor for Passthrough {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let Some(in_signal) = inputs.input(0) else {
-            return Ok(());
-        };
-
-        let mut out_signal = outputs.output(0);
-
-        for (mut out_signal, in_signal) in itertools::izip!(out_signal.iter_mut(), in_signal.iter())
-        {
-            out_signal.clone_from_ref(in_signal);
+        for (in_signal, mut out_signal) in iter_proc_io_as!(inputs as [Any], outputs as [Any]) {
+            if let Some(in_signal) = in_signal {
+                out_signal.clone_from_ref(in_signal);
+            } else {
+                out_signal.set_none();
+            }
         }
-
         Ok(())
     }
 }
@@ -108,16 +101,13 @@ impl Processor for Cast {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let Some(in_signal) = inputs.input(0) else {
-            return Ok(());
-        };
-
-        let mut out_signal = outputs.output(0);
-
-        for (in_signal, mut out_signal) in itertools::izip!(in_signal.iter(), out_signal.iter_mut())
-        {
+        for (in_signal, mut out_signal) in iter_proc_io_as!(inputs as [Any], outputs as [Any]) {
+            let Some(in_signal) = in_signal else {
+                out_signal.set_none();
+                continue;
+            };
             let in_signal = in_signal.to_owned();
             let Some(cast) = in_signal.cast(self.to.clone()) else {
                 return Err(ProcessorError::InvalidCast(
@@ -177,12 +167,11 @@ impl Processor for Message {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (bang, message, mut out) in itertools::izip!(
-            inputs.iter_input_as_bools(0)?,
-            inputs.iter_input(1),
-            outputs.iter_output_mut(0),
+        for (bang, message, mut out) in iter_proc_io_as!(
+            inputs as [bool, Any],
+            outputs as [Any]
         ) {
             if let Some(message) = message {
                 if message.signal_type() != self.message.signal_type() {
@@ -256,11 +245,9 @@ impl Processor for Print {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        _outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (bang, message) in
-            itertools::izip!(inputs.iter_input_as_bools(0)?, inputs.iter_input(1))
-        {
+        for (bang, message) in iter_proc_io_as!(inputs as [bool, Any], outputs as []) {
             if let Some(message) = message {
                 self.msg = message.to_owned();
             }
@@ -312,9 +299,7 @@ impl Processor for SampleRate {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for sample_rate in outputs.iter_output_mut_as_floats(0)? {
-            *sample_rate = Some(inputs.sample_rate());
-        }
+        outputs.output(0).fill_as::<Float>(inputs.sample_rate());
 
         Ok(())
     }
@@ -327,7 +312,9 @@ impl GraphBuilder {
     }
 }
 
-/// A processor that smooths a signal using linear interpolation.
+/// A processor that smooths a signal to a target value using a smoothing factor.
+///
+/// The output signal will converge to the target value with a speed determined by the smoothing factor.
 ///
 /// # Inputs
 ///
@@ -364,12 +351,11 @@ impl Processor for Smooth {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (target, factor, out) in itertools::izip!(
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?,
-            outputs.iter_output_mut_as_floats(0)?
+        for (target, factor, out) in iter_proc_io_as!(
+            inputs as [Float, Float],
+            outputs as [Float]
         ) {
             self.factor = factor.unwrap_or(self.factor).clamp(0.0, 1.0);
 
@@ -378,7 +364,7 @@ impl Processor for Smooth {
                 continue;
             };
 
-            self.current = lerp(self.current, target, self.factor);
+            self.current = lerp(self.current, *target, self.factor);
 
             *out = Some(self.current);
         }
@@ -436,12 +422,11 @@ impl Processor for Changed {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (in_signal, threshold, out_signal) in itertools::izip!(
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?,
-            outputs.iter_output_mut_as_bools(0)?
+        for (in_signal, threshold, out_signal) in iter_proc_io_as!(
+            inputs as [Float, Float],
+            outputs as [bool]
         ) {
             self.threshold = threshold.unwrap_or(self.threshold);
 
@@ -464,7 +449,7 @@ impl Processor for Changed {
                 }
             }
 
-            self.last = in_signal;
+            self.last = *in_signal;
         }
 
         Ok(())
@@ -503,13 +488,10 @@ impl Processor for ZeroCrossing {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (in_signal, out_signal) in itertools::izip!(
-            inputs.iter_input_as_floats(0)?,
-            outputs.iter_output_mut_as_bools(0)?
-        ) {
-            let Some(in_signal) = in_signal else {
+        for (in_signal, out_signal) in iter_proc_io_as!(inputs as [Float], outputs as [bool]) {
+            let Some(in_signal) = *in_signal else {
                 *out_signal = None;
                 continue;
             };
@@ -608,7 +590,6 @@ impl ParamRx {
             Some(msg)
         } else {
             None
-            // last.clone()
         }
     }
 
@@ -726,9 +707,9 @@ impl Processor for Param {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (set, mut get) in itertools::izip!(inputs.iter_input(0), outputs.iter_output_mut(0)) {
+        for (set, mut get) in iter_proc_io_as!(inputs as [Any], outputs as [Any]) {
             if let Some(set) = set {
                 self.tx().send(set.to_owned());
             }
@@ -784,12 +765,11 @@ impl Processor for Counter {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (trig, reset, count) in itertools::izip!(
-            inputs.iter_input_as_bools(0)?,
-            inputs.iter_input_as_bools(1)?,
-            outputs.iter_output_mut_as_ints(0)?
+        for (trig, reset, count) in iter_proc_io_as!(
+            inputs as [bool, bool],
+            outputs as [i64]
         ) {
             if let Some(true) = reset {
                 self.count = 0;
@@ -842,15 +822,14 @@ impl Processor for SampleAndHold {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (in_signal, trig, out_signal) in itertools::izip!(
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_bools(1)?,
-            outputs.iter_output_mut_as_floats(0)?
+        for (in_signal, trig, out_signal) in iter_proc_io_as!(
+            inputs as [Float, bool],
+            outputs as [Float]
         ) {
             if let Some(true) = trig {
-                self.last = in_signal;
+                self.last = *in_signal;
             }
 
             *out_signal = self.last;
@@ -901,11 +880,9 @@ impl Processor for CheckFinite {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs.iter_input_as_floats(0)?;
-        let out_signal = outputs.iter_output_mut_as_floats(0)?;
-        for (in_signal, out_signal) in in_signal.zip(out_signal) {
+        for (in_signal, out_signal) in iter_proc_io_as!(inputs as [Float], outputs as [Float]) {
             if let Some(in_signal) = in_signal {
                 if in_signal.is_nan() {
                     panic!("{}: signal is NaN: {:?}", self.context, in_signal);
@@ -915,7 +892,7 @@ impl Processor for CheckFinite {
                 }
             }
 
-            *out_signal = in_signal;
+            *out_signal = *in_signal;
         }
 
         Ok(())
@@ -953,12 +930,10 @@ impl Processor for FiniteOrZero {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let in_signal = inputs.iter_input_as_floats(0)?;
-        let out_signal = outputs.iter_output_mut_as_floats(0)?;
-        for (in_signal, out_signal) in in_signal.zip(out_signal) {
-            if let Some(in_signal) = in_signal {
+        for (in_signal, out_signal) in iter_proc_io_as!(inputs as [Float], outputs as [Float]) {
+            if let Some(in_signal) = *in_signal {
                 if in_signal.is_nan() || in_signal.is_infinite() {
                     *out_signal = Some(0.0);
                 } else {
@@ -1020,11 +995,9 @@ impl Processor for Dedup {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (in_signal, mut out_signal) in
-            itertools::izip!(inputs.iter_input(0), outputs.iter_output_mut(0))
-        {
+        for (in_signal, mut out_signal) in iter_proc_io_as!(inputs as [Any], outputs as [Any]) {
             if let Some(in_signal) = in_signal {
                 if self.last.as_ref() != in_signal {
                     out_signal.clone_from_ref(in_signal);
@@ -1079,11 +1052,9 @@ impl Processor for IsSome {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (in_signal, out_signal) in
-            itertools::izip!(inputs.iter_input(0), outputs.iter_output_mut_as_bools(0)?)
-        {
+        for (in_signal, out_signal) in iter_proc_io_as!(inputs as [Any], outputs as [bool]) {
             *out_signal = Some(in_signal.is_some_and(|signal| signal.is_some()));
         }
 
@@ -1130,11 +1101,9 @@ impl Processor for IsNone {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (in_signal, out_signal) in
-            itertools::izip!(inputs.iter_input(0), outputs.iter_output_mut_as_bools(0)?)
-        {
+        for (in_signal, out_signal) in iter_proc_io_as!(inputs as [Any], outputs as [bool]) {
             *out_signal = Some(!in_signal.is_some_and(|signal| signal.is_some()));
         }
 
@@ -1183,11 +1152,9 @@ impl Processor for OrElse {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (in_signal, mut out_signal) in
-            itertools::izip!(inputs.iter_input(0), outputs.iter_output_mut(0))
-        {
+        for (in_signal, mut out_signal) in iter_proc_io_as!(inputs as [Any], outputs as [Any]) {
             if let Some(in_signal) = in_signal {
                 if in_signal.is_some() {
                     out_signal.clone_from_ref(in_signal);

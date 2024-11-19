@@ -47,16 +47,15 @@ impl Processor for AudioBuffer {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, index, write) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?,
+        for (index, write, out) in iter_proc_io_as!(
+            inputs as [Float, Float],
+            outputs as [Float]
         ) {
             self.index = index.unwrap_or(self.index);
 
-            if let Some(write) = write {
+            if let Some(write) = *write {
                 self.buffer[self.index as usize] = Some(write);
             }
 
@@ -132,12 +131,11 @@ impl Processor for Register {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (set, clear, mut out) in itertools::izip!(
-            inputs.iter_input(0),
-            inputs.iter_input_as_bools(1)?,
-            outputs.iter_output_mut(0),
+        for (set, clear, mut out) in iter_proc_io_as!(
+            inputs as [Any, bool],
+            outputs as [Any]
         ) {
             if let Some(set) = set {
                 self.value.clone_from_ref(set);

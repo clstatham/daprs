@@ -142,6 +142,7 @@ impl<'a> ProcessorOutput<'a> {
     }
 
     /// Returns an iterator over the output signal.
+    #[inline]
     pub fn iter_mut(&'a mut self) -> impl Iterator<Item = AnySignalMut> {
         match self {
             ProcessorOutput::Block(buffer) => Either::Left(buffer.iter_mut()),
@@ -152,6 +153,7 @@ impl<'a> ProcessorOutput<'a> {
     }
 
     /// Returns an iterator over the output signal, if it is of the given type.
+    #[inline]
     pub fn iter_mut_as<S: Signal>(&'a mut self) -> impl Iterator<Item = &mut Option<S>> {
         match self {
             ProcessorOutput::Block(buffer) => {
@@ -163,6 +165,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    #[inline]
     pub fn set(&mut self, index: usize, value: AnySignalRef) {
         match self {
             ProcessorOutput::Block(buffer) => {
@@ -174,6 +177,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    #[inline]
     pub fn set_as<S: Signal>(&mut self, index: usize, value: impl Into<Option<S>>) {
         match self {
             ProcessorOutput::Block(buffer) => {
@@ -185,6 +189,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    #[inline]
     pub fn set_none(&mut self, index: usize) {
         match self {
             ProcessorOutput::Block(buffer) => buffer.set_none(index),
@@ -192,6 +197,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    #[inline]
     pub fn fill_as<S: Signal + Clone>(&mut self, value: impl Into<Option<S>>) {
         match self {
             ProcessorOutput::Block(buffer) => buffer.as_type_mut::<S>().unwrap().fill(value.into()),
@@ -201,6 +207,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    #[inline]
     pub fn fill(&mut self, value: AnySignal) {
         match self {
             ProcessorOutput::Block(buffer) => buffer.fill(value),

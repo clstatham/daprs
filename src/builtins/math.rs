@@ -46,8 +46,7 @@ impl Processor for Constant {
         _inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let mut out = outputs.output(0);
-        out.fill(self.value.to_owned());
+        outputs.output(0).fill(self.value.clone());
 
         Ok(())
     }
@@ -90,12 +89,9 @@ impl Processor for MidiToFreq {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (note, freq) in itertools::izip!(
-            inputs.iter_input_as_floats(0)?,
-            outputs.iter_output_mut_as_floats(0)?
-        ) {
+        for (note, freq) in iter_proc_io_as!(inputs as [Float], outputs as [Float]) {
             let note = note.unwrap_or_default();
             *freq = Some(Float::powf(2.0, (note - 69.0) / 12.0) * 440.0);
         }
@@ -134,12 +130,9 @@ impl Processor for FreqToMidi {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (freq, note) in itertools::izip!(
-            inputs.iter_input_as_floats(0)?,
-            outputs.iter_output_mut_as_floats(0)?
-        ) {
+        for (freq, note) in iter_proc_io_as!(inputs as [Float], outputs as [Float]) {
             let freq = freq.unwrap_or_default();
             *note = Some(69.0 + 12.0 * (freq / 440.0).log2());
         }
@@ -282,13 +275,9 @@ macro_rules! impl_binary_proc {
             fn process(
                 &mut self,
                 inputs: ProcessorInputs,
-                mut outputs: ProcessorOutputs,
+                outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {
-                for (sample, in1, in2) in itertools::izip!(
-                    outputs.iter_output_mut(0),
-                    inputs.iter_input(0),
-                    inputs.iter_input(1)
-                ) {
+                for (in1, in2, sample) in iter_proc_io_as!(inputs as [Any, Any], outputs as [Any]) {
                     if let Some(in1) = in1 {
                         if in1.signal_type() != self.a.signal_type() {
                             return Err(ProcessorError::InputSpecMismatch {
@@ -442,12 +431,9 @@ macro_rules! impl_unary_proc {
             fn process(
                 &mut self,
                 inputs: ProcessorInputs,
-                mut outputs: ProcessorOutputs,
+                outputs: ProcessorOutputs,
             ) -> Result<(), ProcessorError> {
-                for (sample, a) in itertools::izip!(
-                    outputs.iter_output_mut(0),
-                    inputs.iter_input(0)
-                ) {
+                for (a, sample) in iter_proc_io_as!(inputs as [Any], outputs as [Any]) {
                     if let Some(a) = a {
                         if a.signal_type() != self.a.signal_type() {
                             return Err(ProcessorError::InputSpecMismatch {

@@ -79,14 +79,12 @@ impl Processor for MoogLadder {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
         // based on: https://github.com/ddiakopoulos/MoogLadders/blob/fd147415573e723ba102dfc63dc46af0b7fe55b9/src/HuovilainenModel.h
-        for (out, in_signal, cutoff, resonance) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?,
-            inputs.iter_input_as_floats(2)?
+        for (in_signal, cutoff, resonance, out) in iter_proc_io_as!(
+            inputs as [Float, Float, Float],
+            outputs as [Float]
         ) {
             let Some(in_signal) = in_signal else {
                 *out = None;
@@ -236,16 +234,11 @@ impl Processor for Biquad {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, in_signal, a0, a1, a2, b1, b2) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?,
-            inputs.iter_input_as_floats(2)?,
-            inputs.iter_input_as_floats(3)?,
-            inputs.iter_input_as_floats(4)?,
-            inputs.iter_input_as_floats(5)?
+        for (in_signal, a0, a1, a2, b1, b2, out) in iter_proc_io_as!(
+            inputs as [Float, Float, Float, Float, Float, Float],
+            outputs as [Float]
         ) {
             let Some(in_signal) = in_signal else {
                 *out = None;
@@ -253,19 +246,19 @@ impl Processor for Biquad {
             };
 
             if let Some(a0) = a0 {
-                self.a0 = a0;
+                self.a0 = *a0;
             }
             if let Some(a1) = a1 {
-                self.a1 = a1;
+                self.a1 = *a1;
             }
             if let Some(a2) = a2 {
-                self.a2 = a2;
+                self.a2 = *a2;
             }
             if let Some(b1) = b1 {
-                self.b1 = b1;
+                self.b1 = *b1;
             }
             if let Some(b2) = b2 {
-                self.b2 = b2;
+                self.b2 = *b2;
             }
 
             let filtered = self.a0 * in_signal + self.a1 * self.x1 + self.a2 * self.x2
@@ -273,7 +266,7 @@ impl Processor for Biquad {
                 - self.b2 * self.y2;
 
             self.x2 = self.x1;
-            self.x1 = in_signal;
+            self.x1 = *in_signal;
             self.y2 = self.y1;
             self.y1 = filtered;
 
@@ -565,14 +558,11 @@ impl Processor for AutoBiquad {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, in_signal, frequency, q, gain) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?,
-            inputs.iter_input_as_floats(2)?,
-            inputs.iter_input_as_floats(3)?
+        for (in_signal, frequency, q, gain, out) in iter_proc_io_as!(
+            inputs as [Float, Float, Float, Float],
+            outputs as [Float]
         ) {
             let Some(in_signal) = in_signal else {
                 *out = None;
@@ -600,7 +590,7 @@ impl Processor for AutoBiquad {
                 - self.b2 * self.y2;
 
             self.x2 = self.x1;
-            self.x1 = in_signal;
+            self.x1 = *in_signal;
             self.y2 = self.y1;
             self.y1 = filtered;
 
@@ -671,12 +661,11 @@ impl Processor for OnePole {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, in_signal, cutoff) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?
+        for (in_signal, cutoff, out) in iter_proc_io_as!(
+            inputs as [Float, Float],
+            outputs as [Float]
         ) {
             self.cutoff = cutoff
                 .unwrap_or(self.cutoff)
@@ -691,7 +680,7 @@ impl Processor for OnePole {
 
             let filtered = self.a0 * in_signal + self.b1 * self.x1;
 
-            self.x1 = in_signal;
+            self.x1 = *in_signal;
 
             *out = Some(filtered);
         }

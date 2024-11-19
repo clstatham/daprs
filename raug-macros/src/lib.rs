@@ -63,138 +63,6 @@ pub fn split_outputs(input: TokenStream) -> TokenStream {
     output.into()
 }
 
-struct IterOutputsAs {
-    output: syn::Ident,
-    types: syn::punctuated::Punctuated<syn::Type, syn::Token![,]>,
-}
-
-impl syn::parse::Parse for IterOutputsAs {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let output = input.parse()?;
-        input.parse::<syn::Token![as]>()?;
-        let types;
-        syn::bracketed!(types in input);
-        let types = types.parse_terminated(syn::Type::parse, syn::Token![,])?;
-        Ok(Self { output, types })
-    }
-}
-
-#[proc_macro]
-pub fn iter_outputs_mut_as(input: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(input as IterOutputsAs);
-
-    let output = input.output;
-
-    let count = input.types.len();
-
-    let mut idents = vec![];
-    for i in 0..count {
-        let ident = syn::Ident::new(&format!("out{}", i), proc_macro2::Span::call_site());
-        idents.push(ident);
-    }
-
-    let start = quote! {
-        let raug::processor::ProcessorOutputs {
-            output_spec,
-            outputs,
-            mode,
-        } = #output;
-
-        let [#(#idents),*] = outputs else {
-            panic!("Expected {} outputs, got {}", #count, outputs.len());
-        };
-    };
-
-    let mut chunks = vec![];
-
-    for (i, (ident, typ)) in idents.iter().zip(input.types.iter()).enumerate() {
-        let chunk = quote! {
-            raug::processor::ProcessorOutputs::new(
-                std::slice::from_ref(&output_spec[#i]),
-                std::slice::from_mut(#ident),
-                mode,
-            ).iter_output_mut_as::<#typ>(0)?
-        };
-        chunks.push(chunk);
-    }
-
-    let output = quote! {{
-        #start
-
-        raug::__itertools::izip!(#(#chunks),*)
-    }};
-
-    output.into()
-}
-
-struct IterInputsAs {
-    inputs: syn::Ident,
-    types: syn::punctuated::Punctuated<syn::Type, syn::Token![,]>,
-}
-
-impl syn::parse::Parse for IterInputsAs {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let inputs = input.parse()?;
-        input.parse::<syn::Token![as]>()?;
-        let types;
-        syn::bracketed!(types in input);
-        let types = types.parse_terminated(syn::Type::parse, syn::Token![,])?;
-        Ok(Self { inputs, types })
-    }
-}
-
-#[proc_macro]
-pub fn iter_inputs_as(input: TokenStream) -> TokenStream {
-    let input = syn::parse_macro_input!(input as IterInputsAs);
-
-    let inputs = input.inputs;
-
-    let count = input.types.len();
-
-    let mut idents = vec![];
-    for i in 0..count {
-        let ident = syn::Ident::new(&format!("in{}", i), proc_macro2::Span::call_site());
-        idents.push(ident);
-    }
-
-    let start = quote! {
-        let raug::processor::ProcessorInputs {
-            input_specs,
-            inputs,
-            mode,
-            sample_rate,
-            block_size,
-        } = #inputs;
-
-        let [#(#idents),*] = inputs else {
-            panic!("Expected {} inputs, got {}", #count, inputs.len());
-        };
-    };
-
-    let mut chunks = vec![];
-
-    for (i, (ident, typ)) in idents.iter().zip(input.types.iter()).enumerate() {
-        let chunk = quote! {
-            raug::processor::ProcessorInputs::new(
-                std::slice::from_ref(&input_specs[#i]),
-                std::slice::from_ref(#ident),
-                mode,
-                sample_rate,
-                block_size,
-            ).iter_input_as::<#typ>(0)?
-        };
-        chunks.push(chunk);
-    }
-
-    let output = quote! {{
-        #start
-
-        raug::__itertools::izip!(#(#chunks),*)
-    }};
-
-    output.into()
-}
-
 struct IterProcIoAs {
     inputs: syn::Ident,
     input_types: syn::punctuated::Punctuated<syn::Type, syn::Token![,]>,
@@ -277,6 +145,21 @@ pub fn iter_proc_io_as(input: TokenStream) -> TokenStream {
         .zip(input.input_types.iter())
         .enumerate()
     {
+        if let syn::Type::Path(path) = input_typ {
+            if path.path.get_ident().unwrap() == "Any" {
+                let chunk = quote! {
+                    raug::processor::ProcessorInputs::new(
+                        std::slice::from_ref(&input_specs[#i]),
+                        std::slice::from_ref(#input_ident),
+                        mode,
+                        sample_rate,
+                        block_size,
+                    ).iter_input(0)
+                };
+                chunks.push(chunk);
+                continue;
+            }
+        }
         let chunk = quote! {
             raug::processor::ProcessorInputs::new(
                 std::slice::from_ref(&input_specs[#i]),
@@ -294,6 +177,19 @@ pub fn iter_proc_io_as(input: TokenStream) -> TokenStream {
         .zip(input.output_types.iter())
         .enumerate()
     {
+        if let syn::Type::Path(path) = output_typ {
+            if path.path.get_ident().unwrap() == "Any" {
+                let chunk = quote! {
+                    raug::processor::ProcessorOutputs::new(
+                        std::slice::from_ref(&output_spec[#i]),
+                        std::slice::from_mut(#output_ident),
+                        mode,
+                    ).iter_output_mut(0)
+                };
+                chunks.push(chunk);
+                continue;
+            }
+        }
         let chunk = quote! {
             raug::processor::ProcessorOutputs::new(
                 std::slice::from_ref(&output_spec[#i]),

@@ -92,17 +92,14 @@ impl Processor for Get {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let mut out = outputs.output(0);
-        for (i, (list, index)) in itertools::izip!(
-            inputs.iter_input_as_lists(0)?,
-            inputs.iter_input_as_ints(1)?
-        )
-        .enumerate()
-        {
+        for (list, index, mut out) in iter_proc_io_as!(
+            inputs as [List, i64],
+            outputs as [Any]
+        ) {
             let Some(list) = list else {
-                out.set_none(i);
+                out.set_none();
                 continue;
             };
 
@@ -115,11 +112,11 @@ impl Processor for Get {
             }
 
             let Some(index) = index else {
-                out.set_none(i);
+                out.set_none();
                 continue;
             };
 
-            out.set(i, list.get(index as usize).unwrap());
+            out.clone_from_ref(list.get(*index as usize).unwrap());
         }
 
         Ok(())

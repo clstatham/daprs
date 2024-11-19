@@ -31,7 +31,7 @@ pub mod prelude {
     pub use crate::signal::{
         AnySignal, Buffer, Float, List, MidiMessage, Signal, SignalBuffer, SignalType,
     };
-    pub use raug_macros::{iter_inputs_as, iter_outputs_mut_as, iter_proc_io_as, split_outputs};
+    pub use raug_macros::{iter_proc_io_as, split_outputs};
     pub use std::time::Duration;
 }
 

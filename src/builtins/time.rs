@@ -1,10 +1,8 @@
 //! Time-related processors.
 
-use crate::{
-    prelude::{Processor, ProcessorInputs, ProcessorOutputs, SignalSpec},
-    processor::ProcessorError,
-    signal::{Float, SignalType},
-};
+use raug_macros::iter_proc_io_as;
+
+use crate::prelude::*;
 
 use super::lerp;
 
@@ -79,12 +77,11 @@ impl Processor for Metro {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (period, reset, out) in itertools::izip!(
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_bools(1)?,
-            outputs.iter_output_mut_as_bools(0)?
+        for (period, reset, out) in iter_proc_io_as!(
+            inputs as [Float, bool],
+            outputs as [bool]
         ) {
             if reset.unwrap_or(false) {
                 self.time = 0;
@@ -146,14 +143,11 @@ impl Processor for UnitDelay {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, in_signal) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?
-        ) {
+        for (in_signal, out) in iter_proc_io_as!(inputs as [Float], outputs as [Float]) {
             *out = self.value;
-            self.value = in_signal;
+            self.value = *in_signal;
         }
 
         Ok(())
@@ -213,19 +207,13 @@ impl Processor for SampleDelay {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, in_signal, delay) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_ints(1)?
+        for (in_signal, delay, out) in iter_proc_io_as!(
+            inputs as [Float, i64],
+            outputs as [Float]
         ) {
-            let Some(in_signal) = in_signal else {
-                *out = None;
-                continue;
-            };
-
-            // let in_signal = in_signal.unwrap_or_default();
+            let in_signal = in_signal.unwrap_or_default();
 
             let delay = delay.unwrap_or_default() as usize;
 
@@ -297,12 +285,11 @@ impl Processor for FractDelay {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (out, in_signal, delay) in itertools::izip!(
-            outputs.iter_output_mut_as_floats(0)?,
-            inputs.iter_input_as_floats(0)?,
-            inputs.iter_input_as_floats(1)?
+        for (in_signal, delay, out) in iter_proc_io_as!(
+            inputs as [Float, Float],
+            outputs as [Float]
         ) {
             let delay = delay.unwrap_or_default();
 
@@ -389,12 +376,11 @@ impl Processor for DecayEnv {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (trig, tau, out) in itertools::izip!(
-            inputs.iter_input_as_bools(0)?,
-            inputs.iter_input_as_floats(1)?,
-            outputs.iter_output_mut_as_floats(0)?
+        for (trig, tau, out) in iter_proc_io_as!(
+            inputs as [bool, Float],
+            outputs as [Float]
         ) {
             self.tau = tau.unwrap_or(self.tau);
             let trig = trig.unwrap_or(false);
@@ -483,12 +469,11 @@ impl Processor for LinearDecayEnv {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (trig, decay, out) in itertools::izip!(
-            inputs.iter_input_as_bools(0)?,
-            inputs.iter_input_as_floats(1)?,
-            outputs.iter_output_mut_as_floats(0)?
+        for (trig, decay, out) in iter_proc_io_as!(
+            inputs as [bool, Float],
+            outputs as [Float]
         ) {
             self.decay = decay.unwrap_or(self.decay);
             if self.decay < 0.0 {
@@ -591,13 +576,11 @@ impl Processor for AREnv {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (trig, attack, release, out) in itertools::izip!(
-            inputs.iter_input_as_bools(0)?,
-            inputs.iter_input_as_floats(1)?,
-            inputs.iter_input_as_floats(2)?,
-            outputs.iter_output_mut_as_floats(0)?
+        for (trig, attack, release, out) in iter_proc_io_as!(
+            inputs as [bool, Float, Float],
+            outputs as [Float]
         ) {
             self.attack = attack.unwrap_or(self.attack);
             self.release = release.unwrap_or(self.release);
@@ -705,15 +688,11 @@ impl Processor for ADSREnv {
     fn process(
         &mut self,
         inputs: ProcessorInputs,
-        mut outputs: ProcessorOutputs,
+        outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (trig, attack, decay, sustain, release, out) in itertools::izip!(
-            inputs.iter_input_as_bools(0)?,
-            inputs.iter_input_as_floats(1)?,
-            inputs.iter_input_as_floats(2)?,
-            inputs.iter_input_as_floats(3)?,
-            inputs.iter_input_as_floats(4)?,
-            outputs.iter_output_mut_as_floats(0)?
+        for (trig, attack, decay, sustain, release, out) in iter_proc_io_as!(
+            inputs as [bool, Float, Float, Float, Float],
+            outputs as [Float]
         ) {
             self.attack = attack.unwrap_or(self.attack);
             self.decay = decay.unwrap_or(self.decay);
