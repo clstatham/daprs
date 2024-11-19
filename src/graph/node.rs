@@ -81,16 +81,17 @@ impl ProcessorNode {
         &mut *self.processor
     }
 
+    #[inline]
+    pub fn allocate(&mut self, sample_rate: Float, max_block_size: usize) {
+        self.processor.allocate(sample_rate, max_block_size);
+    }
+
     /// Resizes the internal buffers of the processor and updates the sample rate and block size.
+    ///
+    /// This function is NOT ALLOWED to allocate memory.
     #[inline]
     pub fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) {
         self.processor.resize_buffers(sample_rate, block_size);
-    }
-
-    /// Prepares the processor for processing.
-    #[inline]
-    pub fn prepare(&mut self) {
-        self.processor.prepare();
     }
 
     /// Processes the input signals and writes the output signals to the given buffers.

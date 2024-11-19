@@ -9,6 +9,42 @@ use crate::prelude::*;
 
 use super::lerp;
 
+/// A processor that does nothing.
+///
+/// This is used for audio inputs to the graph, since a buffer will be allocated for it, which will be filled by the audio backend.
+///
+/// # Inputs
+///
+/// None.
+///
+/// # Outputs
+///
+/// | Index | Name | Type | Description |
+/// | --- | --- | --- | --- |
+/// | `0` | `out` | `Float` | The output signal. |
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Null;
+
+#[cfg_attr(feature = "serde", typetag::serde)]
+impl Processor for Null {
+    fn input_spec(&self) -> Vec<SignalSpec> {
+        vec![]
+    }
+
+    fn output_spec(&self) -> Vec<SignalSpec> {
+        vec![SignalSpec::new("out", SignalType::Float)]
+    }
+
+    fn process(
+        &mut self,
+        _: ProcessorInputs,
+        _outputs: ProcessorOutputs,
+    ) -> Result<(), ProcessorError> {
+        Ok(())
+    }
+}
+
 /// A processor that passes its input to its output unchanged.
 ///
 /// # Inputs
@@ -644,6 +680,8 @@ pub struct Param {
     )]
     channels: (SignalTx, ParamRx),
     signal_type: SignalType,
+    minimum: Option<Float>,
+    maximum: Option<Float>,
 }
 
 impl Param {
@@ -653,6 +691,27 @@ impl Param {
             name: name.into(),
             channels: param_channel(),
             signal_type: S::signal_type(),
+            minimum: None,
+            maximum: None,
+        };
+        if let Some(initial_value) = initial_value.into() {
+            this.send(initial_value);
+        }
+        this
+    }
+
+    pub fn bounded(
+        name: impl Into<String>,
+        initial_value: impl Into<Option<Float>>,
+        minimum: impl Into<Option<Float>>,
+        maximum: impl Into<Option<Float>>,
+    ) -> Self {
+        let this = Self {
+            name: name.into(),
+            channels: param_channel(),
+            signal_type: SignalType::Float,
+            minimum: minimum.into(),
+            maximum: maximum.into(),
         };
         if let Some(initial_value) = initial_value.into() {
             this.send(initial_value);
@@ -682,17 +741,56 @@ impl Param {
 
     /// Sends a value to the parameter.
     pub fn send(&self, message: impl Signal) {
-        self.tx().send(message.into_any_signal());
+        let message = message.into_any_signal();
+        match (message, self.minimum, self.maximum) {
+            (AnySignal::Float(Some(value)), Some(min), Some(max)) => {
+                self.tx()
+                    .send(AnySignal::Float(Some(value.clamp(min, max))));
+            }
+            (AnySignal::Float(Some(value)), Some(min), None) => {
+                self.tx().send(AnySignal::Float(Some(value.max(min))));
+            }
+            (AnySignal::Float(Some(value)), None, Some(max)) => {
+                self.tx().send(AnySignal::Float(Some(value.min(max))));
+            }
+            (message, _, _) => self.tx().send(message),
+        }
     }
 
     /// Receives the value of the parameter.
     pub fn recv(&mut self) -> Option<AnySignal> {
-        self.rx_mut().recv()
+        let message = self.rx_mut().recv();
+
+        match (message, self.minimum, self.maximum) {
+            (Some(AnySignal::Float(Some(value))), Some(min), Some(max)) => {
+                Some(AnySignal::Float(Some(value.clamp(min, max))))
+            }
+            (Some(AnySignal::Float(Some(value))), Some(min), None) => {
+                Some(AnySignal::Float(Some(value.max(min))))
+            }
+            (Some(AnySignal::Float(Some(value))), None, Some(max)) => {
+                Some(AnySignal::Float(Some(value.min(max))))
+            }
+            (message, _, _) => message,
+        }
     }
 
     /// Returns the last received value of the parameter.
     pub fn last(&self) -> Option<AnySignal> {
-        self.rx().last()
+        let last = self.rx().last();
+
+        match (last, self.minimum, self.maximum) {
+            (Some(AnySignal::Float(Some(value))), Some(min), Some(max)) => {
+                Some(AnySignal::Float(Some(value.clamp(min, max))))
+            }
+            (Some(AnySignal::Float(Some(value))), Some(min), None) => {
+                Some(AnySignal::Float(Some(value.max(min))))
+            }
+            (Some(AnySignal::Float(Some(value))), None, Some(max)) => {
+                Some(AnySignal::Float(Some(value.min(max))))
+            }
+            (last, _, _) => last,
+        }
     }
 }
 

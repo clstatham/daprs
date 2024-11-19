@@ -594,17 +594,21 @@ where
         self.output_spec().len()
     }
 
-    /// Prepares the processor for processing.
+    /// Called once, before processing starts.
     ///
-    /// This method is called once before processing begins.
+    /// Do all of your preallocation here.
     #[allow(unused)]
-    fn prepare(&mut self) {}
+    fn allocate(&mut self, sample_rate: Float, max_block_size: usize) {}
 
     /// Called anytime the sample rate or block size changes.
+    ///
+    /// This function is NOT ALLOWED to allocate memory.
     #[allow(unused)]
     fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) {}
 
     /// Processes the input signals and writes the output signals.
+    ///
+    /// This function is NOT ALLOWED to allocate memory.
     fn process(
         &mut self,
         inputs: ProcessorInputs,

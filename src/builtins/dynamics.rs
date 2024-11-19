@@ -322,6 +322,11 @@ impl Processor for RmsCompressor {
         vec![SignalSpec::new("out", SignalType::Float)]
     }
 
+    fn allocate(&mut self, sample_rate: Float, _max_block_size: usize) {
+        self.window
+            .resize((self.window_size * sample_rate) as usize, 0.0);
+    }
+
     fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
         self.window.resize(sample_rate as usize, 0.0);
     }

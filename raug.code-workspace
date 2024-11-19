@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../raug-python"
+		},
+		{
+			"path": "../raug-plugin"
 		}
 	],
 }

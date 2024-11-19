@@ -9,7 +9,7 @@ use petgraph::{
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    prelude::{Param, Passthrough},
+    prelude::{Null, Param, Passthrough},
     processor::{Processor, ProcessorError},
     signal::{Float, MidiMessage, SignalType},
 };
@@ -119,9 +119,7 @@ impl Graph {
 
     /// Adds an audio input node to the graph.
     pub fn add_audio_input(&mut self) -> NodeIndex {
-        let idx = self
-            .digraph
-            .add_node(ProcessorNode::new(Passthrough::new(SignalType::Float)));
+        let idx = self.digraph.add_node(ProcessorNode::new(Null));
         self.input_nodes.push(idx);
         idx
     }
@@ -306,6 +304,13 @@ impl Graph {
         self.params.get(name).copied()
     }
 
+    /// Returns the parameter with the specified name.
+    #[inline]
+    pub fn param_named(&self, name: &str) -> Option<&Param> {
+        self.param_index(name)
+            .map(|idx| (*self.digraph[idx].processor()).downcast_ref().unwrap())
+    }
+
     /// Returns the index of the MIDI input with the specified name.
     #[inline]
     pub fn midi_input_index(&self, name: &str) -> Option<NodeIndex> {
@@ -388,23 +393,22 @@ impl Graph {
         Ok(())
     }
 
+    /// Calls [`Processor::allocate()`] on each node in the graph.
+    pub fn allocate(&mut self, sample_rate: Float, max_block_size: usize) {
+        self.visit(|graph, node| -> Result<(), ()> {
+            graph.digraph[node].allocate(sample_rate, max_block_size);
+            Ok(())
+        })
+        .unwrap();
+    }
+
     /// Calls [`Processor::resize_buffers()`] on each node in the graph.
-    pub fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) -> GraphRunResult<()> {
-        self.visit(|graph, node| {
+    pub fn resize_buffers(&mut self, sample_rate: Float, block_size: usize) {
+        self.visit(|graph, node| -> Result<(), ()> {
             graph.digraph[node].resize_buffers(sample_rate, block_size);
             Ok(())
         })
-    }
-
-    /// Calls [`Processor::prepare()`] on each node in the graph.
-    pub fn prepare(&mut self) -> GraphRunResult<()> {
-        self.reset_visitor();
-        self.visit(|graph, node| {
-            graph.digraph[node].prepare();
-            Ok(())
-        })?;
-
-        Ok(())
+        .unwrap();
     }
 
     /// Writes a DOT representation of the graph to the provided writer, suitable for rendering with Graphviz.

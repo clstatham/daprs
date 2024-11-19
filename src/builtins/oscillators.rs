@@ -587,7 +587,7 @@ impl Processor for KarplusStrong {
         vec![SignalSpec::new("out", SignalType::Float)]
     }
 
-    fn resize_buffers(&mut self, sample_rate: Float, _block_size: usize) {
+    fn allocate(&mut self, sample_rate: Float, _max_block_size: usize) {
         self.ringbuf = VecDeque::with_capacity(sample_rate as usize / 2);
     }
 

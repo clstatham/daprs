@@ -12,9 +12,9 @@ use rustc_hash::{FxBuildHasher, FxHashMap};
 use crate::{
     debug_once,
     graph::{Graph, GraphRunError, GraphRunErrorType, NodeIndex},
-    prelude::{ProcessorInputs, SignalSpec},
+    prelude::{Param, ProcessorInputs, SignalSpec},
     processor::{ProcessMode, ProcessorError, ProcessorOutputs},
-    signal::{Float, MidiMessage, SignalBuffer, SignalType},
+    signal::{Float, MidiMessage, SignalBuffer},
 };
 
 /// Errors that can occur related to the runtime.
@@ -61,8 +61,8 @@ pub enum RuntimeError {
     /// An error occurred while running the audio graph.
     GraphRunError(#[from] GraphRunError),
 
-    /// The runtime needs to be reset.
-    NeedsReset,
+    /// The runtime needs to reallocate buffers.
+    NeedsAlloc,
 
     /// An error occurred while processing a node in the audio graph.
     ProcessorError(#[from] ProcessorError),
@@ -138,6 +138,7 @@ pub struct Runtime {
     buffer_cache: FxHashMap<NodeIndex, NodeBuffers>,
     sample_rate: Float,
     block_size: usize,
+    max_block_size: usize,
 }
 
 impl Runtime {
@@ -146,7 +147,6 @@ impl Runtime {
         let mut buffer_cache =
             FxHashMap::with_capacity_and_hasher(graph.digraph().node_count(), FxBuildHasher);
 
-        graph.reset_visitor();
         graph
             .visit(|graph, node_id| -> RuntimeResult<()> {
                 let node = &graph.digraph()[node_id];
@@ -177,42 +177,59 @@ impl Runtime {
             graph,
             sample_rate: 0.0,
             block_size: 0,
+            max_block_size: 0,
         }
     }
 
-    /// Resets the runtime with the given sample rate and block size. This will allocate buffers for each node in the graph.
-    #[inline(never)]
-    pub fn reset(&mut self, sample_rate: Float, block_size: usize) -> RuntimeResult<()> {
-        self.graph.reset_visitor();
-
-        log::debug!(
-            "Resetting runtime with sample rate {} and block size {}",
-            sample_rate,
-            block_size
-        );
-
-        self.sample_rate = sample_rate;
-        self.block_size = block_size;
-
-        self.graph.visit(|graph, node_id| -> RuntimeResult<()> {
-            let node = &mut graph.digraph_mut()[node_id];
-            node.resize_buffers(sample_rate, block_size);
-
-            let buffers = self.buffer_cache.get_mut(&node_id);
-            if let Some(buffers) = buffers {
-                buffers.resize(block_size);
-            }
-
-            Ok(())
-        })?;
-
-        Ok(())
+    #[inline]
+    pub fn sample_rate(&self) -> Float {
+        self.sample_rate
     }
 
-    /// Prepares the runtime and audio graph for processing.
     #[inline]
-    pub fn prepare(&mut self) -> RuntimeResult<()> {
-        self.graph.prepare()?;
+    pub fn block_size(&self) -> usize {
+        self.block_size
+    }
+
+    /// Resets the runtime for the given sample rate and block size.
+    ///
+    /// This will reallocate buffers if necessary.
+    #[inline]
+    pub fn allocate_for_block_size(&mut self, sample_rate: Float, max_block_size: usize) {
+        self.graph.reset_visitor();
+
+        self.sample_rate = sample_rate;
+        self.block_size = max_block_size;
+        self.max_block_size = max_block_size;
+
+        self.graph.allocate(sample_rate, max_block_size);
+
+        for buffers in self.buffer_cache.values_mut() {
+            buffers.resize(max_block_size);
+        }
+    }
+
+    /// Resets the runtime for the given sample rate and block size.
+    ///
+    /// This is guaranteed to not allocate, assuming all processors are playing nicely. If it would need to allocate, it will return an error.
+    #[inline]
+    pub fn set_block_size(&mut self, block_size: usize) -> RuntimeResult<()> {
+        if block_size > self.max_block_size {
+            return Err(RuntimeError::NeedsAlloc);
+        }
+
+        if block_size == self.block_size {
+            return Ok(());
+        }
+
+        self.block_size = block_size;
+
+        self.graph.resize_buffers(self.sample_rate, block_size);
+
+        for buffers in self.buffer_cache.values_mut() {
+            buffers.resize(block_size);
+        }
+
         Ok(())
     }
 
@@ -231,8 +248,6 @@ impl Runtime {
     /// Runs the audio graph for one block of samples.
     #[cfg_attr(feature = "profiling", inline(never))]
     pub fn process(&mut self) -> RuntimeResult<()> {
-        self.graph.reset_visitor();
-
         for i in 0..self.graph.sccs().len() {
             if self.graph.sccs()[i].len() == 1 {
                 let node_id = self.graph.sccs()[i][0];
@@ -305,14 +320,26 @@ impl Runtime {
         Ok(())
     }
 
+    /// Returns a reference to the runtime's input buffer for the given input index.
+    #[inline]
+    pub fn get_input_mut(&mut self, input_index: usize) -> Option<&mut SignalBuffer> {
+        self.buffer_cache
+            .get_mut(self.graph.input_indices().get(input_index)?)
+            .map(|buffers| &mut buffers.outputs[0])
+    }
+
     /// Returns a reference to the runtime's output buffer for the given output index.
     #[inline]
-    pub(crate) fn get_output(&self, output_index: usize) -> &[SignalBuffer] {
-        &self
-            .buffer_cache
-            .get(&self.graph.output_indices()[output_index])
-            .unwrap()
-            .outputs
+    pub fn get_output(&self, output_index: usize) -> Option<&SignalBuffer> {
+        self.buffer_cache
+            .get(self.graph.output_indices().get(output_index)?)
+            .map(|buffers| &buffers.outputs[0])
+    }
+
+    /// Returns a reference to the [`Param`] with the given name.
+    #[inline]
+    pub fn param_named(&self, name: &str) -> Option<&Param> {
+        self.graph.param_named(name)
     }
 
     /// Runs the audio graph offline for the given duration and sample rate, returning the output buffers.
@@ -347,8 +374,7 @@ impl Runtime {
         let secs = duration.as_secs_f64() as Float;
         let samples = (sample_rate * secs) as usize;
 
-        self.reset(sample_rate, block_size)?;
-        self.prepare()?;
+        self.allocate_for_block_size(sample_rate, block_size);
 
         let num_outputs: usize = self.graph.num_audio_outputs();
 
@@ -361,21 +387,15 @@ impl Runtime {
         while sample_count < samples {
             let actual_block_size = (samples - sample_count).min(block_size);
             if actual_block_size != last_block_size {
-                self.graph.resize_buffers(sample_rate, actual_block_size)?;
+                self.set_block_size(actual_block_size)?;
                 last_block_size = actual_block_size;
             }
             self.process()?;
 
             for (i, output) in outputs.iter_mut().enumerate() {
                 let buffer = self.get_output(i);
-                let SignalBuffer::Float(buffer) = &buffer[0] else {
-                    return Err(RuntimeError::ProcessorError(
-                        ProcessorError::OutputSpecMismatch {
-                            index: i,
-                            expected: SignalType::Float,
-                            actual: buffer[0].signal_type(),
-                        },
-                    ));
+                let Some(SignalBuffer::Float(buffer)) = buffer else {
+                    return Err(RuntimeError::ChannelMismatch(0, i));
                 };
 
                 for (j, &sample) in buffer[..actual_block_size].iter().enumerate() {
@@ -512,7 +532,6 @@ impl Runtime {
         log::info!("Configuration: {:#?}", config);
 
         let audio_rate = config.sample_rate().0 as Float;
-        let initial_block_size = audio_rate as usize / 100;
 
         let midi_connection = midir::MidiInput::new("raug midir input")?;
 
@@ -541,9 +560,7 @@ impl Runtime {
             None
         };
 
-        self.reset(audio_rate, initial_block_size)?;
-
-        self.prepare()?;
+        self.allocate_for_block_size(audio_rate, audio_rate as usize / 10);
 
         let audio_runtime = self.clone();
         let midi_runtime = self.clone();
@@ -634,7 +651,6 @@ impl Runtime {
         T: cpal::SizedSample + cpal::FromSample<Float>,
     {
         let channels = config.channels as usize;
-        let audio_rate = config.sample_rate.0 as Float;
 
         let mut last_block_size = 0;
         let stream = device
@@ -643,7 +659,7 @@ impl Runtime {
                 move |data: &mut [T], _info: &cpal::OutputCallbackInfo| {
                     let block_size = data.len() / channels;
                     if block_size != last_block_size {
-                        self.reset(audio_rate, block_size).unwrap();
+                        self.set_block_size(block_size).unwrap();
                         last_block_size = block_size;
                     }
 
@@ -652,7 +668,7 @@ impl Runtime {
                     for (frame_idx, frame) in data.chunks_mut(channels).enumerate() {
                         for (channel_idx, sample) in frame.iter_mut().enumerate() {
                             let buffer = self.get_output(channel_idx);
-                            let SignalBuffer::Float(buffer) = &buffer[0] else {
+                            let Some(SignalBuffer::Float(buffer)) = buffer else {
                                 panic!("output {channel_idx} signal type mismatch");
                             };
                             let value = buffer[frame_idx].unwrap_or_default();
