@@ -252,6 +252,16 @@ impl<'a, T: Signal> IntoIterator for &'a mut Buffer<T> {
 pub struct List(Box<[AnySignal]>);
 
 impl List {
+    pub fn new<T: Signal>(signals: impl IntoIterator<Item = T>) -> Self {
+        Self(
+            signals
+                .into_iter()
+                .map(Signal::into_any_signal)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        )
+    }
+
     /// Creates a new empty list.
     pub fn new_of_type(signal_type: SignalType, length: usize) -> Self {
         Self(vec![AnySignal::default_of_type(&signal_type); length].into_boxed_slice())
@@ -544,6 +554,7 @@ impl AnySignal {
     }
 
     /// Returns the type of the signal.
+    #[inline]
     pub fn signal_type(&self) -> SignalType {
         match self {
             Self::Float(_) => SignalType::Float,
@@ -567,7 +578,11 @@ impl AnySignal {
     /// | String    | Yes   | Yes | Yes  | -      | -    | -    |
     /// | List      | -     | -   | -    | -      | -    | -    |
     /// | Midi      | -     | -   | -    | -      | -    | -    |
+    #[inline]
     pub fn cast(&self, target: SignalType) -> Option<Self> {
+        if self.signal_type() == target {
+            return Some(self.clone());
+        }
         match (self, target) {
             (Self::Float(float), SignalType::Int) => float.map(|f| Self::Int(Some(f as i64))),
             (Self::Float(float), SignalType::Bool) => float.map(|f| Self::Bool(Some(f != 0.0))),

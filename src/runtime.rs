@@ -194,8 +194,6 @@ impl Runtime {
         self.sample_rate = sample_rate;
         self.block_size = block_size;
 
-        let mut max_edges = 0;
-
         self.graph.visit(|graph, node_id| -> RuntimeResult<()> {
             let node = &mut graph.digraph_mut()[node_id];
             node.resize_buffers(sample_rate, block_size);
@@ -204,12 +202,6 @@ impl Runtime {
             if let Some(buffers) = buffers {
                 buffers.resize(block_size);
             }
-
-            let num_inputs = graph
-                .digraph()
-                .edges_directed(node_id, Direction::Incoming)
-                .count();
-            max_edges = max_edges.max(num_inputs);
 
             Ok(())
         })?;

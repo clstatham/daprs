@@ -702,9 +702,9 @@ impl Processor for ADSREnv {
 
             if trig && !self.last_trig {
                 self.value = 0.0;
-                self.state = ADSRState::Attack; // attack
+                self.state = ADSRState::Attack;
             } else if !trig && self.last_trig {
-                self.state = ADSRState::Release; // release
+                self.state = ADSRState::Release;
             }
 
             let slope = match self.state {
