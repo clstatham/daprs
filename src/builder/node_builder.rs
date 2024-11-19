@@ -783,6 +783,12 @@ pub trait IntoNode: sealed::Sealed {
     fn into_node(self, graph: &GraphBuilder) -> Node;
 }
 
+impl IntoNode for AnySignal {
+    fn into_node(self, graph: &GraphBuilder) -> Node {
+        graph.add(Constant::new_any(self))
+    }
+}
+
 impl IntoNode for bool {
     fn into_node(self, graph: &GraphBuilder) -> Node {
         graph.constant(self)

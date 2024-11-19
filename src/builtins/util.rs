@@ -145,9 +145,11 @@ pub struct Message {
 impl Message {
     /// Create a new `MessageSender` processor with the given message.
     pub fn new(message: impl Signal) -> Self {
-        Self {
-            message: message.into_any_signal(),
-        }
+        Self::new_any(message.into_any_signal())
+    }
+
+    pub fn new_any(message: AnySignal) -> Self {
+        Self { message }
     }
 }
 
