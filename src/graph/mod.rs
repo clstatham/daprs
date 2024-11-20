@@ -166,18 +166,6 @@ impl Graph {
         target: NodeIndex,
         target_input: u32,
     ) -> Result<(), GraphConstructionError> {
-        // check if the edge already exists
-        for edge in self.digraph.edges_directed(target, Direction::Incoming) {
-            let weight = edge.weight();
-            if edge.source() == source
-                && weight.source_output == source_output
-                && weight.target_input == target_input
-            {
-                // edge already exists
-                return Ok(());
-            }
-        }
-
         // check if there's already a connection to the target input
         if let Some(edge) = self
             .digraph

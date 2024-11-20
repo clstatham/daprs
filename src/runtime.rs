@@ -515,11 +515,11 @@ impl Runtime {
                 .find(|d| d.name().unwrap().contains(name)),
         };
 
-        let device = cpal_device.ok_or_else(|| RuntimeError::DeviceUnavailable(device))?;
+        let cpal_device = cpal_device.ok_or_else(|| RuntimeError::DeviceUnavailable(device))?;
 
-        log::info!("Using device: {}", device.name()?);
+        log::info!("Using device: {}", cpal_device.name()?);
 
-        let config = device.default_output_config()?;
+        let config = cpal_device.default_output_config()?;
 
         let channels = config.channels();
         if self.graph.num_audio_outputs() != channels as usize {
@@ -592,34 +592,34 @@ impl Runtime {
         std::thread::spawn(move || -> RuntimeResult<()> {
             let stream = match config.sample_format() {
                 cpal::SampleFormat::I8 => {
-                    audio_runtime.run_inner::<i8>(&device, &config.config())?
+                    audio_runtime.run_inner::<i8>(&cpal_device, &config.config())?
                 }
                 cpal::SampleFormat::I16 => {
-                    audio_runtime.run_inner::<i16>(&device, &config.config())?
+                    audio_runtime.run_inner::<i16>(&cpal_device, &config.config())?
                 }
                 cpal::SampleFormat::I32 => {
-                    audio_runtime.run_inner::<i32>(&device, &config.config())?
+                    audio_runtime.run_inner::<i32>(&cpal_device, &config.config())?
                 }
                 cpal::SampleFormat::I64 => {
-                    audio_runtime.run_inner::<i64>(&device, &config.config())?
+                    audio_runtime.run_inner::<i64>(&cpal_device, &config.config())?
                 }
                 cpal::SampleFormat::U8 => {
-                    audio_runtime.run_inner::<u8>(&device, &config.config())?
+                    audio_runtime.run_inner::<u8>(&cpal_device, &config.config())?
                 }
                 cpal::SampleFormat::U16 => {
-                    audio_runtime.run_inner::<u16>(&device, &config.config())?
+                    audio_runtime.run_inner::<u16>(&cpal_device, &config.config())?
                 }
                 cpal::SampleFormat::U32 => {
-                    audio_runtime.run_inner::<u32>(&device, &config.config())?
+                    audio_runtime.run_inner::<u32>(&cpal_device, &config.config())?
                 }
                 cpal::SampleFormat::U64 => {
-                    audio_runtime.run_inner::<u64>(&device, &config.config())?
+                    audio_runtime.run_inner::<u64>(&cpal_device, &config.config())?
                 }
                 cpal::SampleFormat::F32 => {
-                    audio_runtime.run_inner::<f32>(&device, &config.config())?
+                    audio_runtime.run_inner::<f32>(&cpal_device, &config.config())?
                 }
                 cpal::SampleFormat::F64 => {
-                    audio_runtime.run_inner::<f64>(&device, &config.config())?
+                    audio_runtime.run_inner::<f64>(&cpal_device, &config.config())?
                 }
 
                 sample_format => {

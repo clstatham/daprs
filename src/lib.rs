@@ -14,6 +14,21 @@ pub mod processor;
 pub mod runtime;
 pub mod signal;
 
+#[cfg(feature = "fft")]
+pub mod fft;
+
+#[cfg(all(feature = "serde", feature = "fft"))]
+compile_error!(
+    "The `serde` and `fft` features are not currently compatible. \
+    Please disable one of them to compile the library."
+);
+
+#[cfg(all(feature = "serde", feature = "expr"))]
+compile_error!(
+    "The `serde` and `expr` features are not currently compatible. \
+    Please disable one of them to compile the library."
+);
+
 /// Re-exports of commonly used types and traits from the crate.
 #[allow(unused_imports)]
 pub mod prelude {
@@ -33,6 +48,9 @@ pub mod prelude {
     };
     pub use raug_macros::{iter_proc_io_as, split_outputs};
     pub use std::time::Duration;
+
+    #[cfg(feature = "fft")]
+    pub use crate::fft::{builtins::*, Fft, FftGraphBuilder, FftNode, FftSubGraph};
 }
 
 #[doc(hidden)]
@@ -94,12 +112,20 @@ mod logging {
         ($val:expr => $($msg:tt)*) => {
             $crate::log_once!($val => error $($msg)*);
         };
+
+        ($($val:tt)*) => {
+            $crate::log_once!(format!($($val)*) => error $($val)*);
+        };
     }
 
     #[macro_export]
     macro_rules! warn_once {
         ($val:expr => $($msg:tt)*) => {
             $crate::log_once!($val => warn $($msg)*);
+        };
+
+        ($($val:tt)*) => {
+            $crate::log_once!(format!($($val)*) => warn $($val)*);
         };
     }
 
@@ -108,6 +134,10 @@ mod logging {
         ($val:expr => $($msg:tt)*) => {
             $crate::log_once!($val => info $($msg)*);
         };
+
+        ($($val:tt)*) => {
+            $crate::log_once!(format!($($val)*) => info $($val)*);
+        };
     }
 
     #[macro_export]
@@ -115,12 +145,20 @@ mod logging {
         ($val:expr => $($msg:tt)*) => {
             $crate::log_once!($val => debug $($msg)*);
         };
+
+        ($($val:tt)*) => {
+            $crate::log_once!(format!($($val)*) => debug $($val)*);
+        };
     }
 
     #[macro_export]
     macro_rules! trace_once {
         ($val:expr => $($msg:tt)*) => {
             $crate::log_once!($val => trace $($msg)*);
+        };
+
+        ($($val:tt)*) => {
+            $crate::log_once!(format!($($val)*) => trace $($val)*);
         };
     }
 }

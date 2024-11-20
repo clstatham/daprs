@@ -2,7 +2,7 @@
 
 use std::fmt::Debug;
 
-use downcast_rs::{impl_downcast, DowncastSync};
+use downcast_rs::{impl_downcast, Downcast};
 use itertools::Either;
 use thiserror::Error;
 
@@ -54,6 +54,11 @@ pub enum ProcessorError {
     /// Invalid cast.
     #[error("Invalid cast: {0:?} to {1:?}")]
     InvalidCast(SignalType, SignalType),
+
+    #[cfg(feature = "fft")]
+    /// FFT error.
+    #[error("FFT error: {0}")]
+    Fft(#[from] crate::fft::FftError),
 }
 
 /// Information about an input or output of a [`Processor`].
@@ -563,7 +568,7 @@ impl<'a> ProcessorOutputs<'a> {
 #[cfg_attr(feature = "serde", typetag::serde(tag = "type"))]
 pub trait Processor
 where
-    Self: DowncastSync + ProcessorClone + GraphSerde,
+    Self: Downcast + ProcessorClone + GraphSerde + Send,
 {
     /// Returns the name of the processor.
     fn name(&self) -> &str {
@@ -615,7 +620,7 @@ where
         outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError>;
 }
-impl_downcast!(sync Processor);
+impl_downcast!(Processor);
 
 mod sealed {
     pub trait Sealed {}

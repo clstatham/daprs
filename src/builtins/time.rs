@@ -288,7 +288,7 @@ impl Processor for FractDelay {
         vec![SignalSpec::new("out", SignalType::Float)]
     }
 
-    fn allocate(&mut self, sample_rate: Float, max_block_size: usize) {
+    fn allocate(&mut self, sample_rate: Float, _max_block_size: usize) {
         self.ring_buffer.resize(sample_rate as usize * 2, 0.0);
     }
 
