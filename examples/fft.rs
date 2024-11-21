@@ -9,14 +9,26 @@ fn main() {
     let out2 = graph.add_audio_output();
 
     let sine = graph.add(SineOscillator::new(440.0));
+    let saw = graph.add(SineOscillator::new(440.0));
 
-    let fft = graph.add(FftSubGraph::build(128, |fft| {
-        let input = fft.add_input();
-        let output = fft.add_output();
-        input.output(0).connect(output.input(0));
-    }));
+    let fft = graph.add(FftGraph::build(
+        512,
+        128,
+        raug::fft::WindowFunction::Hann,
+        |fft| {
+            let sine_input = fft.add_input();
+            let saw_input = fft.add_input();
+            let output = fft.add_output();
+
+            // let convolved = sine_input * saw_input;
+            let convolved = saw_input;
+
+            output.input(0).connect(convolved.output(0));
+        },
+    ));
 
     sine.output(0).connect(&fft.input(0));
+    saw.output(0).connect(&fft.input(1));
 
     let mix = fft.output(0);
 
@@ -26,7 +38,7 @@ fn main() {
     let mut runtime = graph.build_runtime();
 
     runtime
-        .run_offline_to_file("target/fft.wav", Duration::from_secs(5), 48000.0, 512)
+        .run_offline_to_file("target/fft.wav", Duration::from_secs(1), 48000.0, 480)
         .unwrap();
 
     // runtime

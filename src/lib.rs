@@ -50,7 +50,9 @@ pub mod prelude {
     pub use std::time::Duration;
 
     #[cfg(feature = "fft")]
-    pub use crate::fft::{builtins::*, Fft, FftGraphBuilder, FftNode, FftSubGraph};
+    pub use crate::fft::{
+        builtins::*, Fft, FftGraph, FftGraphBuilder, FftNode, FftProcessor, FftSpec,
+    };
 }
 
 #[doc(hidden)]

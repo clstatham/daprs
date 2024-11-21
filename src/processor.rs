@@ -146,6 +146,22 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    #[inline]
+    pub fn len(&self) -> usize {
+        match self {
+            ProcessorOutput::Block(buffer) => buffer.len(),
+            ProcessorOutput::Sample(buffer, _) => buffer.len(),
+        }
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ProcessorOutput::Block(buffer) => buffer.is_empty(),
+            ProcessorOutput::Sample(buffer, _) => buffer.is_empty(),
+        }
+    }
+
     /// Returns an iterator over the output signal.
     #[inline]
     pub fn iter_mut(&'a mut self) -> impl Iterator<Item = AnySignalMut> {
@@ -167,6 +183,16 @@ impl<'a> ProcessorOutput<'a> {
             ProcessorOutput::Sample(buffer, sample_index) => Either::Right(std::iter::once(
                 &mut buffer.as_type_mut::<S>().unwrap()[*sample_index],
             )),
+        }
+    }
+
+    #[inline]
+    pub fn get_as<S: Signal>(&self, index: usize) -> Option<&Option<S>> {
+        match self {
+            ProcessorOutput::Block(buffer) => buffer.as_type::<S>().unwrap().get(index),
+            ProcessorOutput::Sample(buffer, sample_index) => {
+                buffer.as_type::<S>().unwrap().get(*sample_index)
+            }
         }
     }
 

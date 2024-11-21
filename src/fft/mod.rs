@@ -1,5 +1,6 @@
 use std::{
-    ops::{Deref, DerefMut, MulAssign},
+    collections::VecDeque,
+    ops::{AddAssign, Deref, DerefMut, Mul, MulAssign},
     sync::{Arc, Mutex},
 };
 
@@ -9,7 +10,7 @@ use petgraph::prelude::*;
 use realfft::{ComplexToReal, RealToComplex};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::prelude::*;
+use crate::{prelude::*, signal::PI};
 
 pub mod builtins;
 
@@ -51,6 +52,38 @@ impl AsRef<[Float]> for FloatBuf {
 impl AsMut<[Float]> for FloatBuf {
     fn as_mut(&mut self) -> &mut [Float] {
         &mut self.0
+    }
+}
+
+impl AddAssign<Float> for FloatBuf {
+    fn add_assign(&mut self, rhs: Float) {
+        for x in self.iter_mut() {
+            *x += rhs;
+        }
+    }
+}
+
+impl AddAssign<&Self> for FloatBuf {
+    fn add_assign(&mut self, rhs: &Self) {
+        for (x, y) in self.iter_mut().zip(rhs.iter()) {
+            *x += *y;
+        }
+    }
+}
+
+impl MulAssign<Float> for FloatBuf {
+    fn mul_assign(&mut self, rhs: Float) {
+        for x in self.iter_mut() {
+            *x *= rhs;
+        }
+    }
+}
+
+impl MulAssign<&Self> for FloatBuf {
+    fn mul_assign(&mut self, rhs: &Self) {
+        for (x, y) in self.iter_mut().zip(rhs.iter()) {
+            *x *= *y;
+        }
     }
 }
 
@@ -150,11 +183,9 @@ impl FftPlan {
 
     pub fn forward(
         &mut self,
-        mut input: impl AsMut<[Float]>,
-        mut output: impl AsMut<[Complex<Float>]>,
+        input: &mut [Float],
+        output: &mut [Complex<Float>],
     ) -> Result<(), FftError> {
-        let input = input.as_mut();
-        let output = output.as_mut();
         self.forward
             .process_with_scratch(input, output, &mut self.forward_scratch)?;
         Ok(())
@@ -162,16 +193,13 @@ impl FftPlan {
 
     pub fn inverse(
         &mut self,
-        mut input: impl AsMut<[Complex<Float>]>,
-        mut output: impl AsMut<[Float]>,
+        input: &mut [Complex<Float>],
+        output: &mut [Float],
     ) -> Result<(), FftError> {
-        let input = input.as_mut();
-        let output = output.as_mut();
         self.inverse
             .process_with_scratch(input, output, &mut self.inverse_scratch)?;
-        let scale = 1.0 / self.fft_length as Float;
         for x in output.iter_mut() {
-            *x *= scale;
+            *x /= self.fft_length as Float;
         }
         Ok(())
     }
@@ -195,7 +223,13 @@ pub trait FftProcessor: Downcast + Send + FftProcessorClone {
     #[allow(unused)]
     fn allocate(&mut self, fft_length: usize) {}
 
-    fn process(&mut self, inputs: &[&Fft], outputs: &mut [Fft]) -> Result<(), ProcessorError>;
+    fn process(
+        &mut self,
+        fft_length: usize,
+        hop_length: usize,
+        inputs: &[&Fft],
+        outputs: &mut [Fft],
+    ) -> Result<(), ProcessorError>;
 }
 
 impl_downcast!(FftProcessor);
@@ -270,9 +304,22 @@ impl FftGraphNode {
         Self::Processor(FftProcessorNode::new(processor))
     }
 
-    pub fn process(&mut self, inputs: &[&Fft], outputs: &mut [Fft]) -> Result<(), ProcessorError> {
+    pub fn allocate(&mut self, fft_length: usize) {
         if let Self::Processor(proc) = self {
-            proc.processor.process(inputs, outputs)
+            proc.processor.allocate(fft_length);
+        }
+    }
+
+    pub fn process(
+        &mut self,
+        fft_length: usize,
+        hop_length: usize,
+        inputs: &[&Fft],
+        outputs: &mut [Fft],
+    ) -> Result<(), ProcessorError> {
+        if let Self::Processor(proc) = self {
+            proc.processor
+                .process(fft_length, hop_length, inputs, outputs)
         } else {
             for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
                 output.copy_from_slice(input);
@@ -291,19 +338,19 @@ pub struct FftEdge {
 #[derive(Clone)]
 pub enum FftNodeBuffers {
     Endpoint {
-        time_domain: FloatBuf,
-        frequency_domain: Fft,
+        ring_buffer: Box<[Float]>,
+        scratch: Box<[Float]>,
+        current_fft: Fft,
     },
     Processor(Vec<Fft>),
 }
 
 impl FftNodeBuffers {
     pub fn new_endpoint(fft_length: usize) -> Self {
-        let time_domain = vec![0.0; fft_length].into_boxed_slice();
-        let frequency_domain = vec![Complex::default(); fft_length / 2 + 1].into_boxed_slice();
         Self::Endpoint {
-            time_domain: FloatBuf(time_domain),
-            frequency_domain: Fft(frequency_domain),
+            ring_buffer: Box::new([]),
+            scratch: Box::new([]),
+            current_fft: Fft::new_for_real_length(fft_length),
         }
     }
 
@@ -317,15 +364,16 @@ impl FftNodeBuffers {
         Self::Processor(buffers)
     }
 
-    pub fn resize(&mut self, fft_length: usize, num_outputs: usize) {
+    pub fn resize(&mut self, fft_length: usize, num_outputs: usize, block_size: usize) {
         match self {
             Self::Endpoint {
-                time_domain,
-                frequency_domain,
+                ring_buffer,
+                scratch,
+                current_fft,
             } => {
-                time_domain.0 = vec![0.0; fft_length].into_boxed_slice();
-                frequency_domain.0 =
-                    vec![Complex::default(); fft_length / 2 + 1].into_boxed_slice();
+                *ring_buffer = vec![0.0; block_size + fft_length].into_boxed_slice();
+                *scratch = vec![0.0; fft_length].into_boxed_slice();
+                *current_fft = Fft::new_for_real_length(fft_length);
             }
             Self::Processor(buffers) => {
                 buffers.resize_with(num_outputs, || {
@@ -338,11 +386,54 @@ impl FftNodeBuffers {
 
 type FftGraphVisitor = DfsPostOrder<NodeIndex, FxHashSet<NodeIndex>>;
 
+#[derive(Clone, Default)]
+pub enum WindowFunction {
+    Rectangular,
+    Sine,
+    #[default]
+    Hann,
+    Custom(Arc<dyn Fn(usize, usize) -> Float + Send + Sync>),
+}
+
+impl WindowFunction {
+    pub fn generate(&self, length: usize) -> FloatBuf {
+        let mut buf = vec![0.0; length].into_boxed_slice();
+        match self {
+            Self::Rectangular => {
+                for x in buf.iter_mut() {
+                    *x = 1.0;
+                }
+            }
+            Self::Sine => {
+                for i in 0..length {
+                    buf[i] = (PI * i as Float / (length - 1) as Float).sin();
+                }
+            }
+            Self::Hann => {
+                for i in 0..length {
+                    buf[i] = 0.5 * (1.0 - (2.0 * PI * i as Float / (length - 1) as Float).cos());
+                }
+            }
+            Self::Custom(f) => {
+                for i in 0..length {
+                    buf[i] = f(i, length);
+                }
+            }
+        }
+        FloatBuf(buf)
+    }
+}
+
 #[derive(Clone)]
-pub struct FftSubGraph {
+pub struct FftGraph {
     digraph: StableDiGraph<FftGraphNode, FftEdge>,
 
     plan: FftPlan,
+
+    hop_length: usize,
+    window: FloatBuf,
+    window_sum: Float,
+
     inputs: Vec<NodeIndex>,
     outputs: Vec<NodeIndex>,
 
@@ -352,16 +443,21 @@ pub struct FftSubGraph {
     buffer_cache: FxHashMap<NodeIndex, FftNodeBuffers>,
 }
 
-impl FftSubGraph {
+impl FftGraph {
     #[track_caller]
-    pub fn new(fft_length: usize) -> Self {
+    pub fn new(fft_length: usize, hop_length: usize, window_function: WindowFunction) -> Self {
         debug_assert!(
             fft_length.is_power_of_two(),
             "FFT length must be a power of two"
         );
         let plan = FftPlan::new(fft_length);
+        let window = window_function.generate(fft_length);
+        let window_sum = window.iter().sum();
         Self {
             plan,
+            hop_length,
+            window,
+            window_sum,
             digraph: StableDiGraph::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
@@ -371,8 +467,13 @@ impl FftSubGraph {
         }
     }
 
-    pub fn build(fft_length: usize, f: impl FnOnce(&mut FftGraphBuilder)) -> Self {
-        let mut builder = FftGraphBuilder::new(fft_length);
+    pub fn build(
+        fft_length: usize,
+        hop_length: usize,
+        window_function: WindowFunction,
+        f: impl FnOnce(&mut FftGraphBuilder),
+    ) -> Self {
+        let mut builder = FftGraphBuilder::new(fft_length, hop_length, window_function);
         f(&mut builder);
         builder.build()
     }
@@ -380,23 +481,18 @@ impl FftSubGraph {
     pub fn add_input(&mut self) -> NodeIndex {
         let node = self.digraph.add_node(FftGraphNode::new_endpoint());
         self.inputs.push(node);
-        self.reset_visitor();
         node
     }
 
     pub fn add_output(&mut self) -> NodeIndex {
         let node = self.digraph.add_node(FftGraphNode::new_endpoint());
         self.outputs.push(node);
-        self.reset_visitor();
         node
     }
 
     pub fn add(&mut self, processor: impl FftProcessor) -> NodeIndex {
-        let index = self
-            .digraph
-            .add_node(FftGraphNode::new_processor(processor));
-        self.reset_visitor();
-        index
+        self.digraph
+            .add_node(FftGraphNode::new_processor(processor))
     }
 
     pub fn connect(
@@ -446,7 +542,7 @@ impl FftSubGraph {
         self.visit_path.reverse();
     }
 
-    pub fn allocate(&mut self) {
+    pub fn allocate(&mut self, block_size: usize) {
         self.reset_visitor();
 
         for node_id in &self.visit_path {
@@ -457,64 +553,85 @@ impl FftSubGraph {
                         .buffer_cache
                         .entry(*node_id)
                         .or_insert_with(|| FftNodeBuffers::new_endpoint(self.plan.fft_length));
-                    buffers.resize(self.plan.fft_length, 0);
+                    buffers.resize(self.plan.fft_length, 0, block_size);
                 }
                 FftGraphNode::Processor(proc) => {
                     let buffers = self.buffer_cache.entry(*node_id).or_insert_with(|| {
                         FftNodeBuffers::new_processor(self.plan.fft_length, proc.output_spec.len())
                     });
-                    buffers.resize(self.plan.fft_length, proc.output_spec.len());
+                    buffers.resize(self.plan.fft_length, proc.output_spec.len(), block_size);
                 }
             }
+
+            let node = self.digraph.node_weight_mut(*node_id).unwrap();
+            node.allocate(self.plan.fft_length);
         }
     }
 
+    #[allow(clippy::needless_range_loop)]
     pub fn process_inner(
         &mut self,
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let sample_count = inputs.block_size();
-        let num_ffts = sample_count / self.plan.fft_length;
-        let num_samples_leftover = sample_count % self.plan.fft_length;
-        if num_samples_leftover != 0 {
-            crate::warn_once!(
-                "Block size {} is not a multiple of FFT length {}",
-                sample_count,
-                self.plan.fft_length
-            );
+        let fft_length = self.plan.fft_length;
+
+        // first, copy the inputs into the ring buffers
+        for input_index in 0..self.inputs.len() {
+            let buffers = self
+                .buffer_cache
+                .get_mut(&self.inputs[input_index])
+                .unwrap();
+            let FftNodeBuffers::Endpoint { ring_buffer, .. } = buffers else {
+                unreachable!()
+            };
+
+            let input = inputs
+                .input(input_index)
+                .ok_or(ProcessorError::NumInputsMismatch)?;
+
+            let input = input.as_type::<Float>().unwrap();
+
+            for sample_index in 0..inputs.block_size() {
+                let input_sample = match input.get(sample_index) {
+                    Some(Some(x)) => *x,
+                    _ => 0.0,
+                };
+
+                ring_buffer[sample_index] = input_sample;
+            }
         }
 
-        for fft_index in 0..num_ffts {
+        // then, if we have enough data in the ring buffers, process the graph
+        let mut total_rotation = 0;
+        loop {
             for input_index in 0..self.inputs.len() {
                 let buffers = self
                     .buffer_cache
                     .get_mut(&self.inputs[input_index])
                     .unwrap();
                 let FftNodeBuffers::Endpoint {
-                    time_domain,
-                    frequency_domain,
+                    ring_buffer,
+                    scratch,
+                    current_fft,
                 } = buffers
                 else {
                     unreachable!()
                 };
 
-                let input = inputs
-                    .input(input_index)
-                    .ok_or(ProcessorError::NumInputsMismatch)?;
-                for i in 0..self.plan.fft_length {
-                    time_domain[i] = input
-                        .get_copy_as::<Float>(fft_index * self.plan.fft_length + i)
-                        .unwrap_or_default();
+                for i in 0..fft_length {
+                    scratch[i] = ring_buffer[i] * self.window[i];
                 }
 
-                self.plan
-                    .forward(time_domain.as_mut(), frequency_domain.as_mut())?;
+                self.plan.forward(scratch, current_fft)?;
+
+                // advance the ring buffer
+                ring_buffer.rotate_left(self.hop_length);
             }
 
-            // Process the FFTs
             for i in 0..self.visit_path.len() {
-                self.process_node(self.visit_path[i])?;
+                let node_id = self.visit_path[i];
+                self.process_node(node_id)?;
             }
 
             for output_index in 0..self.outputs.len() {
@@ -523,20 +640,49 @@ impl FftSubGraph {
                     .get_mut(&self.outputs[output_index])
                     .unwrap();
                 let FftNodeBuffers::Endpoint {
-                    time_domain,
-                    frequency_domain,
+                    current_fft,
+                    ring_buffer,
+                    scratch,
                 } = buffers
                 else {
                     unreachable!()
                 };
 
-                self.plan
-                    .inverse(frequency_domain.as_mut(), time_domain.as_mut())?;
+                self.plan.inverse(current_fft, scratch)?;
 
-                let mut output = outputs.output(output_index);
-                for i in 0..self.plan.fft_length {
-                    output.set_as::<Float>(fft_index * self.plan.fft_length + i, time_domain[i]);
+                // overlap-add
+                for i in 0..fft_length {
+                    ring_buffer[i] += scratch[i] * self.window[i];
                 }
+
+                // advance the ring buffer
+                ring_buffer.rotate_left(self.hop_length);
+            }
+
+            total_rotation += self.hop_length;
+
+            if total_rotation >= inputs.block_size() {
+                break;
+            }
+        }
+
+        // finally, copy the outputs from the ring buffers
+        for output_index in 0..self.outputs.len() {
+            let buffers = self
+                .buffer_cache
+                .get_mut(&self.outputs[output_index])
+                .unwrap();
+            let FftNodeBuffers::Endpoint { ring_buffer, .. } = buffers else {
+                unreachable!()
+            };
+
+            let mut output = outputs.output(output_index);
+
+            for sample_index in 0..inputs.block_size() {
+                let output_sample =
+                    ring_buffer[sample_index] * self.window_sum / self.window.len() as Float;
+                output.set_as(sample_index, output_sample);
+                ring_buffer[sample_index] = 0.0;
             }
         }
 
@@ -554,10 +700,8 @@ impl FftSubGraph {
         {
             let source_buffers = self.buffer_cache.get(&source).unwrap();
             match source_buffers {
-                FftNodeBuffers::Endpoint {
-                    frequency_domain, ..
-                } => {
-                    inputs.push(frequency_domain);
+                FftNodeBuffers::Endpoint { current_fft, .. } => {
+                    inputs.push(current_fft);
                 }
                 FftNodeBuffers::Processor(buffers) => {
                     inputs.push(&buffers[edge.source_output]);
@@ -567,13 +711,16 @@ impl FftSubGraph {
 
         {
             let outputs = match &mut outputs {
-                FftNodeBuffers::Endpoint {
-                    frequency_domain, ..
-                } => std::slice::from_mut(frequency_domain),
+                FftNodeBuffers::Endpoint { current_fft, .. } => std::slice::from_mut(current_fft),
                 FftNodeBuffers::Processor(buffers) => buffers.as_mut(),
             };
 
-            self.digraph[node_id].process(&inputs, outputs)?;
+            self.digraph[node_id].process(
+                self.plan.fft_length,
+                self.hop_length,
+                &inputs,
+                outputs,
+            )?;
         }
 
         drop(inputs);
@@ -584,7 +731,7 @@ impl FftSubGraph {
     }
 }
 
-impl Processor for FftSubGraph {
+impl Processor for FftGraph {
     fn input_spec(&self) -> Vec<SignalSpec> {
         let mut specs = Vec::new();
         for i in 0..self.inputs.len() {
@@ -601,8 +748,8 @@ impl Processor for FftSubGraph {
         specs
     }
 
-    fn allocate(&mut self, _sample_rate: Float, _max_block_size: usize) {
-        self.allocate();
+    fn allocate(&mut self, _sample_rate: Float, max_block_size: usize) {
+        self.allocate(max_block_size);
     }
 
     fn process(
@@ -616,25 +763,35 @@ impl Processor for FftSubGraph {
 
 #[derive(Clone)]
 pub struct FftGraphBuilder {
-    graph: Arc<Mutex<FftSubGraph>>,
+    graph: Arc<Mutex<FftGraph>>,
+}
+
+impl Default for FftGraphBuilder {
+    fn default() -> Self {
+        Self::new(128, 64, WindowFunction::Hann)
+    }
 }
 
 impl FftGraphBuilder {
-    pub fn new(fft_length: usize) -> Self {
+    pub fn new(fft_length: usize, hop_length: usize, window_function: WindowFunction) -> Self {
         Self {
-            graph: Arc::new(Mutex::new(FftSubGraph::new(fft_length))),
+            graph: Arc::new(Mutex::new(FftGraph::new(
+                fft_length,
+                hop_length,
+                window_function,
+            ))),
         }
     }
 
     pub fn with_graph<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(&mut FftSubGraph) -> R,
+        F: FnOnce(&mut FftGraph) -> R,
     {
         let mut graph = self.graph.lock().unwrap();
         f(&mut graph)
     }
 
-    pub fn build(self) -> FftSubGraph {
+    pub fn build(self) -> FftGraph {
         self.with_graph(|graph| graph.clone())
     }
 
@@ -744,5 +901,27 @@ impl FftOutput {
         self.node.graph.with_graph(|graph| {
             graph.connect(self.node.id(), self.index, input.node.id(), input.index)
         });
+    }
+}
+
+impl Mul for FftNode {
+    type Output = FftNode;
+
+    fn mul(self, rhs: FftNode) -> Self::Output {
+        let node = self.graph.add(builtins::FftPhaseVocoder::default());
+        node.input(0).connect(self.output(0));
+        node.input(1).connect(rhs.output(0));
+        node
+    }
+}
+
+impl Mul for &FftNode {
+    type Output = FftNode;
+
+    fn mul(self, rhs: &FftNode) -> Self::Output {
+        let node = self.graph.add(builtins::FftPhaseVocoder::default());
+        node.input(0).connect(self.output(0));
+        node.input(1).connect(rhs.output(0));
+        node
     }
 }
