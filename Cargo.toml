@@ -49,6 +49,7 @@ erased-serde = { version = "0.4", optional = true }
 raug-macros = { path = "raug-macros" }
 realfft = { version = "3.4", optional = true }
 num = { version = "0.4.3", features = [] }
+apodize = "1.0.0"
 
 [dev-dependencies]
 env_logger = "0.11"

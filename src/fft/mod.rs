@@ -401,7 +401,6 @@ type FftGraphVisitor = DfsPostOrder<NodeIndex, FxHashSet<NodeIndex>>;
 #[derive(Clone, Default)]
 pub enum WindowFunction {
     Rectangular,
-    Sine,
     #[default]
     Hann,
     Custom(Arc<dyn Fn(usize, usize) -> Float + Send + Sync>),
@@ -416,15 +415,8 @@ impl WindowFunction {
                     *x = 1.0;
                 }
             }
-            Self::Sine => {
-                for i in 0..length {
-                    buf[i] = (PI * i as Float / (length - 1) as Float).sin();
-                }
-            }
             Self::Hann => {
-                for i in 0..length {
-                    buf[i] = 0.5 * (1.0 - (2.0 * PI * i as Float / (length - 1) as Float).cos());
-                }
+                buf = apodize::hanning_iter(length).collect();
             }
             Self::Custom(f) => {
                 for i in 0..length {
@@ -957,9 +949,9 @@ mod tests {
     use super::{WindowFunction, PI};
 
     const SAMPLE_RATE: usize = 48000;
-    const BLOCK_SIZE: usize = 480;
+    const BLOCK_SIZE: usize = 512;
     const FFT_SIZE: usize = 512;
-    const HOP_SIZE: usize = 256;
+    const HOP_SIZE: usize = 128;
     const TEST_LENGTH_SECONDS: usize = 5;
     const TEST_LENGTH_SAMPLES: usize = TEST_LENGTH_SECONDS * SAMPLE_RATE;
 
@@ -990,57 +982,70 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::needless_range_loop)]
     fn test_realtime_stft() {
         let mut planner = realfft::RealFftPlanner::<f64>::new();
         let rfft = planner.plan_fft_forward(FFT_SIZE);
         let irfft = planner.plan_fft_inverse(FFT_SIZE);
-        let window = WindowFunction::Hann.generate(FFT_SIZE).0;
-        let window_sum: f64 = window.iter().sum();
+        let window = WindowFunction::Hann.generate(FFT_SIZE);
 
-        let mut input_buffer = VecDeque::new();
-        let mut output_buffer = VecDeque::new();
+        // Circular streaming buffers for input and output
+        let mut input_buffer: VecDeque<f64> = VecDeque::new();
+        let mut scratch_buffer: VecDeque<f64> = VecDeque::new();
+        let mut output_buffer: VecDeque<f64> = VecDeque::new();
 
         let audio_input = generate_audio(TEST_LENGTH_SAMPLES);
         let mut audio_output = vec![];
 
-        for block in audio_input.chunks(BLOCK_SIZE) {
-            let mut block = block.to_vec();
-            if block.len() < BLOCK_SIZE {
-                block.resize(BLOCK_SIZE, 0.0);
+        for block_in in audio_input.chunks(BLOCK_SIZE) {
+            let mut block_in = block_in.to_vec();
+            if block_in.len() < BLOCK_SIZE {
+                block_in.resize(BLOCK_SIZE, 0.0); // Zero pad if necessary
             }
-            input_buffer.extend(block);
 
+            input_buffer.extend(block_in.iter().cloned());
+
+            let mut block_out = vec![0.0; BLOCK_SIZE];
+
+            // If we have enough samples of input, process as much as we can
             while input_buffer.len() >= FFT_SIZE {
-                let mut time_domain: Vec<f64> = input_buffer.make_contiguous()[..FFT_SIZE].to_vec();
-                for (samp, w) in time_domain.iter_mut().zip(window.iter()) {
-                    *samp *= w;
-                }
-                input_buffer.drain(..HOP_SIZE);
-
-                let mut freq_domain = vec![Complex64::default(); FFT_SIZE / 2 + 1];
-                rfft.process(&mut time_domain, &mut freq_domain).unwrap();
-
-                // do stuff here
-
-                irfft.process(&mut freq_domain, &mut time_domain).unwrap();
-
-                for samp in time_domain.iter_mut() {
-                    *samp /= FFT_SIZE as f64;
-                    *samp /= window_sum / FFT_SIZE as f64;
-                }
-
+                let mut time_domain = vec![0.0; FFT_SIZE];
                 for i in 0..FFT_SIZE {
-                    if i < output_buffer.len() {
-                        output_buffer[i] += time_domain[i];
+                    time_domain[i] = input_buffer[i] * window[i];
+                }
+                input_buffer.drain(0..HOP_SIZE);
+
+                let mut spectrum = vec![Complex64::new(0.0, 0.0); FFT_SIZE / 2 + 1];
+                rfft.process(&mut time_domain, &mut spectrum).unwrap();
+
+                irfft.process(&mut spectrum, &mut time_domain).unwrap();
+
+                // Overlap-add
+                for i in 0..FFT_SIZE {
+                    let denom = FFT_SIZE as f64 * 0.5 * (FFT_SIZE as f64 / HOP_SIZE as f64);
+                    let sample = time_domain[i] / denom;
+                    if i < scratch_buffer.len() {
+                        scratch_buffer[i] += sample;
                     } else {
-                        output_buffer.push_back(time_domain[i]);
+                        scratch_buffer.push_back(sample);
                     }
                 }
-                let hop_out: Vec<f64> = output_buffer.drain(..HOP_SIZE).collect();
-                audio_output.extend(hop_out);
+
+                output_buffer.extend(scratch_buffer.drain(0..HOP_SIZE));
             }
+
+            // Output as much as we can
+            for i in 0..BLOCK_SIZE {
+                if let Some(sample) = output_buffer.pop_front() {
+                    block_out[i] = sample;
+                }
+            }
+
+            // Add the processed block to the output
+            audio_output.extend_from_slice(&block_out);
         }
 
+        // Save input and output audio for comparison
         output_audio(&audio_input, "target/test_in.wav");
         output_audio(&audio_output, "target/test_out.wav");
     }
