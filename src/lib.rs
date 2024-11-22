@@ -13,9 +13,12 @@ pub mod graph;
 pub mod processor;
 pub mod runtime;
 pub mod signal;
+pub mod util;
 
 #[cfg(feature = "fft")]
 pub mod fft;
+
+extern crate self as raug;
 
 #[cfg(all(feature = "serde", feature = "fft"))]
 compile_error!(
@@ -32,7 +35,6 @@ compile_error!(
 /// Re-exports of commonly used types and traits from the crate.
 #[allow(unused_imports)]
 pub mod prelude {
-    pub(crate) use crate as raug;
     pub use crate::builder::{
         graph_builder::GraphBuilder,
         node_builder::{Input, IntoNode, Node, Output},
@@ -44,7 +46,7 @@ pub mod prelude {
     };
     pub use crate::runtime::{AudioBackend, AudioDevice, MidiPort, Runtime, RuntimeHandle};
     pub use crate::signal::{
-        AnySignal, Buffer, Float, List, MidiMessage, Signal, SignalBuffer, SignalType,
+        AnySignal, Buffer, Float, List, MidiMessage, Signal, SignalBuffer, SignalType, PI,
     };
     pub use raug_macros::{iter_proc_io_as, split_outputs};
     pub use std::time::Duration;

@@ -10,7 +10,7 @@ use petgraph::prelude::*;
 use realfft::{ComplexToReal, RealToComplex};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{prelude::*, signal::PI};
+use crate::prelude::*;
 
 pub mod builtins;
 
@@ -338,7 +338,8 @@ pub struct FftEdge {
 #[derive(Clone)]
 pub enum FftNodeBuffers {
     Endpoint {
-        ring_buffer: Box<[Float]>,
+        ring_buffer: VecDeque<Float>,
+        overlap_buffer: VecDeque<Float>,
         scratch: Box<[Float]>,
         current_fft: Fft,
     },
@@ -346,10 +347,12 @@ pub enum FftNodeBuffers {
 }
 
 impl FftNodeBuffers {
-    pub fn new_endpoint(fft_length: usize) -> Self {
+    pub fn new_endpoint(fft_length: usize, hop_length: usize) -> Self {
+        let overlap_length = fft_length - hop_length;
         Self::Endpoint {
-            ring_buffer: Box::new([]),
-            scratch: Box::new([]),
+            ring_buffer: VecDeque::from(vec![0.0; fft_length]),
+            overlap_buffer: VecDeque::from(vec![0.0; overlap_length]),
+            scratch: vec![0.0; fft_length].into_boxed_slice(),
             current_fft: Fft::new_for_real_length(fft_length),
         }
     }
@@ -364,14 +367,23 @@ impl FftNodeBuffers {
         Self::Processor(buffers)
     }
 
-    pub fn resize(&mut self, fft_length: usize, num_outputs: usize, block_size: usize) {
+    pub fn resize(
+        &mut self,
+        fft_length: usize,
+        hop_length: usize,
+        num_outputs: usize,
+        block_size: usize,
+    ) {
         match self {
             Self::Endpoint {
                 ring_buffer,
+                overlap_buffer,
                 scratch,
                 current_fft,
             } => {
-                *ring_buffer = vec![0.0; block_size + fft_length].into_boxed_slice();
+                let overlap_length = fft_length - hop_length;
+                *ring_buffer = VecDeque::from(vec![0.0; fft_length]);
+                *overlap_buffer = VecDeque::from(vec![0.0; overlap_length]);
                 *scratch = vec![0.0; fft_length].into_boxed_slice();
                 *current_fft = Fft::new_for_real_length(fft_length);
             }
@@ -478,6 +490,18 @@ impl FftGraph {
         builder.build()
     }
 
+    pub fn fft_length(&self) -> usize {
+        self.plan.fft_length
+    }
+
+    pub fn hop_length(&self) -> usize {
+        self.hop_length
+    }
+
+    pub fn overlap_length(&self) -> usize {
+        self.plan.fft_length - self.hop_length
+    }
+
     pub fn add_input(&mut self) -> NodeIndex {
         let node = self.digraph.add_node(FftGraphNode::new_endpoint());
         self.inputs.push(node);
@@ -549,17 +573,21 @@ impl FftGraph {
             let node = self.digraph.node_weight(*node_id).unwrap();
             match node {
                 FftGraphNode::Endpoint => {
-                    let buffers = self
-                        .buffer_cache
-                        .entry(*node_id)
-                        .or_insert_with(|| FftNodeBuffers::new_endpoint(self.plan.fft_length));
-                    buffers.resize(self.plan.fft_length, 0, block_size);
+                    let buffers = self.buffer_cache.entry(*node_id).or_insert_with(|| {
+                        FftNodeBuffers::new_endpoint(self.plan.fft_length, self.hop_length)
+                    });
+                    buffers.resize(self.plan.fft_length, self.hop_length, 0, block_size);
                 }
                 FftGraphNode::Processor(proc) => {
                     let buffers = self.buffer_cache.entry(*node_id).or_insert_with(|| {
                         FftNodeBuffers::new_processor(self.plan.fft_length, proc.output_spec.len())
                     });
-                    buffers.resize(self.plan.fft_length, proc.output_spec.len(), block_size);
+                    buffers.resize(
+                        self.plan.fft_length,
+                        self.hop_length,
+                        proc.output_spec.len(),
+                        block_size,
+                    );
                 }
             }
 
@@ -574,9 +602,10 @@ impl FftGraph {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        let fft_length = self.plan.fft_length;
+        let fft_length = self.fft_length();
+        let hop_length = self.hop_length();
+        let overlap_length = self.overlap_length();
 
-        // first, copy the inputs into the ring buffers
         for input_index in 0..self.inputs.len() {
             let buffers = self
                 .buffer_cache
@@ -586,103 +615,96 @@ impl FftGraph {
                 unreachable!()
             };
 
-            let input = inputs
-                .input(input_index)
-                .ok_or(ProcessorError::NumInputsMismatch)?;
-
+            let input = inputs.input(input_index).unwrap();
             let input = input.as_type::<Float>().unwrap();
 
-            for sample_index in 0..inputs.block_size() {
-                let input_sample = match input.get(sample_index) {
-                    Some(Some(x)) => *x,
-                    _ => 0.0,
-                };
-
-                ring_buffer[sample_index] = input_sample;
+            // fill the input buffer
+            for i in 0..input.len() {
+                ring_buffer.push_back(input[i].unwrap_or_default());
             }
         }
 
-        // then, if we have enough data in the ring buffers, process the graph
-        let mut total_rotation = 0;
+        let mut sample_index = 0;
         loop {
-            for input_index in 0..self.inputs.len() {
-                let buffers = self
-                    .buffer_cache
-                    .get_mut(&self.inputs[input_index])
-                    .unwrap();
-                let FftNodeBuffers::Endpoint {
-                    ring_buffer,
-                    scratch,
-                    current_fft,
-                } = buffers
-                else {
-                    unreachable!()
-                };
+            let should_break = {
+                let mut should_break = false;
+                for input_index in 0..self.inputs.len() {
+                    let buffers = self
+                        .buffer_cache
+                        .get_mut(&self.inputs[input_index])
+                        .unwrap();
+                    let FftNodeBuffers::Endpoint {
+                        ring_buffer,
+                        scratch,
+                        current_fft,
+                        ..
+                    } = buffers
+                    else {
+                        unreachable!()
+                    };
 
-                for i in 0..fft_length {
-                    scratch[i] = ring_buffer[i] * self.window[i];
+                    // zero-pad
+                    for _ in ring_buffer.len()..fft_length {
+                        ring_buffer.push_back(0.0);
+                    }
+
+                    // extract FFT-sized block and window
+                    for (i, sample) in ring_buffer.drain(..fft_length).enumerate() {
+                        scratch[i] = sample * self.window[i];
+                    }
+
+                    self.plan.forward(scratch, current_fft)?;
+
+                    should_break |= ring_buffer.len() < fft_length;
                 }
 
-                self.plan.forward(scratch, current_fft)?;
+                should_break
+            };
 
-                // advance the ring buffer
-                ring_buffer.rotate_left(self.hop_length);
-            }
-
+            // process the FFT signals
             for i in 0..self.visit_path.len() {
                 let node_id = self.visit_path[i];
                 self.process_node(node_id)?;
             }
 
-            for output_index in 0..self.outputs.len() {
-                let buffers = self
-                    .buffer_cache
-                    .get_mut(&self.outputs[output_index])
-                    .unwrap();
-                let FftNodeBuffers::Endpoint {
-                    current_fft,
-                    ring_buffer,
-                    scratch,
-                } = buffers
-                else {
-                    unreachable!()
-                };
+            {
+                for output_index in 0..self.outputs.len() {
+                    let buffers = self
+                        .buffer_cache
+                        .get_mut(&self.outputs[output_index])
+                        .unwrap();
+                    let FftNodeBuffers::Endpoint {
+                        ring_buffer,
+                        overlap_buffer,
+                        scratch,
+                        current_fft,
+                    } = buffers
+                    else {
+                        unreachable!()
+                    };
 
-                self.plan.inverse(current_fft, scratch)?;
+                    self.plan.inverse(current_fft, scratch)?;
 
-                // overlap-add
-                for i in 0..fft_length {
-                    ring_buffer[i] += scratch[i] * self.window[i];
+                    // overlap-add
+                    for i in 0..fft_length {
+                        ring_buffer[i] += scratch[i];
+                    }
+
+                    // output the samples
+                    let mut output = outputs.output(output_index);
+                    for (i, sample) in ring_buffer.drain(..hop_length).enumerate() {
+                        output.set_as(i + sample_index, sample);
+                    }
+
+                    ring_buffer.extend(overlap_buffer.drain(..));
+                    overlap_buffer.extend(std::iter::repeat(0.0).take(overlap_length));
                 }
-
-                // advance the ring buffer
-                ring_buffer.rotate_left(self.hop_length);
             }
 
-            total_rotation += self.hop_length;
+            sample_index += hop_length;
 
-            if total_rotation >= inputs.block_size() {
+            if should_break {
                 break;
-            }
-        }
-
-        // finally, copy the outputs from the ring buffers
-        for output_index in 0..self.outputs.len() {
-            let buffers = self
-                .buffer_cache
-                .get_mut(&self.outputs[output_index])
-                .unwrap();
-            let FftNodeBuffers::Endpoint { ring_buffer, .. } = buffers else {
-                unreachable!()
-            };
-
-            let mut output = outputs.output(output_index);
-
-            for sample_index in 0..inputs.block_size() {
-                let output_sample =
-                    ring_buffer[sample_index] * self.window_sum / self.window.len() as Float;
-                output.set_as(sample_index, output_sample);
-                ring_buffer[sample_index] = 0.0;
             }
         }
 
@@ -923,5 +945,103 @@ impl Mul for &FftNode {
         node.input(0).connect(self.output(0));
         node.input(1).connect(rhs.output(0));
         node
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::VecDeque, path::Path};
+
+    use num::complex::Complex64;
+
+    use super::{WindowFunction, PI};
+
+    const SAMPLE_RATE: usize = 48000;
+    const BLOCK_SIZE: usize = 480;
+    const FFT_SIZE: usize = 512;
+    const HOP_SIZE: usize = 256;
+    const TEST_LENGTH_SECONDS: usize = 5;
+    const TEST_LENGTH_SAMPLES: usize = TEST_LENGTH_SECONDS * SAMPLE_RATE;
+
+    fn generate_audio(len: usize) -> Vec<f64> {
+        let mut out = vec![];
+        for t in 0..len {
+            let t = t as f64 / SAMPLE_RATE as f64;
+            out.push((t * 440.0 * 2.0 * PI).sin());
+        }
+        out
+    }
+
+    fn output_audio(audio: &[f64], path: impl AsRef<Path>) {
+        let mut writer = hound::WavWriter::new(
+            std::fs::File::create(path).unwrap(),
+            hound::WavSpec {
+                channels: 1,
+                sample_rate: SAMPLE_RATE as u32,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            },
+        )
+        .unwrap();
+        for sample in audio {
+            writer.write_sample(*sample as f32).unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+
+    #[test]
+    fn test_realtime_stft() {
+        let mut planner = realfft::RealFftPlanner::<f64>::new();
+        let rfft = planner.plan_fft_forward(FFT_SIZE);
+        let irfft = planner.plan_fft_inverse(FFT_SIZE);
+        let window = WindowFunction::Hann.generate(FFT_SIZE).0;
+        let window_sum: f64 = window.iter().sum();
+
+        let mut input_buffer = VecDeque::new();
+        let mut output_buffer = VecDeque::new();
+
+        let audio_input = generate_audio(TEST_LENGTH_SAMPLES);
+        let mut audio_output = vec![];
+
+        for block in audio_input.chunks(BLOCK_SIZE) {
+            let mut block = block.to_vec();
+            if block.len() < BLOCK_SIZE {
+                block.resize(BLOCK_SIZE, 0.0);
+            }
+            input_buffer.extend(block);
+
+            while input_buffer.len() >= FFT_SIZE {
+                let mut time_domain: Vec<f64> = input_buffer.make_contiguous()[..FFT_SIZE].to_vec();
+                for (samp, w) in time_domain.iter_mut().zip(window.iter()) {
+                    *samp *= w;
+                }
+                input_buffer.drain(..HOP_SIZE);
+
+                let mut freq_domain = vec![Complex64::default(); FFT_SIZE / 2 + 1];
+                rfft.process(&mut time_domain, &mut freq_domain).unwrap();
+
+                // do stuff here
+
+                irfft.process(&mut freq_domain, &mut time_domain).unwrap();
+
+                for samp in time_domain.iter_mut() {
+                    *samp /= FFT_SIZE as f64;
+                    *samp /= window_sum / FFT_SIZE as f64;
+                }
+
+                for i in 0..FFT_SIZE {
+                    if i < output_buffer.len() {
+                        output_buffer[i] += time_domain[i];
+                    } else {
+                        output_buffer.push_back(time_domain[i]);
+                    }
+                }
+                let hop_out: Vec<f64> = output_buffer.drain(..HOP_SIZE).collect();
+                audio_output.extend(hop_out);
+            }
+        }
+
+        output_audio(&audio_input, "target/test_in.wav");
+        output_audio(&audio_output, "target/test_out.wav");
     }
 }

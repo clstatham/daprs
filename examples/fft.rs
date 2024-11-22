@@ -13,7 +13,7 @@ fn main() {
 
     let fft = graph.add(FftGraph::build(
         512,
-        128,
+        512,
         raug::fft::WindowFunction::Hann,
         |fft| {
             let sine_input = fft.add_input();
@@ -38,7 +38,7 @@ fn main() {
     let mut runtime = graph.build_runtime();
 
     runtime
-        .run_offline_to_file("target/fft.wav", Duration::from_secs(1), 48000.0, 480)
+        .run_offline_to_file("target/fft.wav", Duration::from_secs(1), 48000.0, 512)
         .unwrap();
 
     // runtime

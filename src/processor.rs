@@ -1,6 +1,6 @@
 //! Audio processing utilities and types.
 
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::DerefMut};
 
 use downcast_rs::{impl_downcast, Downcast};
 use itertools::Either;
