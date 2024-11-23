@@ -123,6 +123,24 @@ impl AsMut<[Complex<Float>]> for Fft {
     }
 }
 
+impl<'a> IntoIterator for &'a Fft {
+    type Item = &'a Complex<Float>;
+    type IntoIter = std::slice::Iter<'a, Complex<Float>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut Fft {
+    type Item = &'a mut Complex<Float>;
+    type IntoIter = std::slice::IterMut<'a, Complex<Float>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter_mut()
+    }
+}
+
 impl MulAssign<Float> for Fft {
     fn mul_assign(&mut self, rhs: Float) {
         for x in self.iter_mut() {
@@ -151,6 +169,7 @@ impl MulAssign<Self> for Fft {
 pub struct FftPlan {
     // frequency-domain `Fft` length will be `fft_length / 2 + 1`, as this is an RFFT
     fft_length: usize,
+    padded_length: usize,
     forward: Arc<dyn RealToComplex<Float>>,
     inverse: Arc<dyn ComplexToReal<Float>>,
     forward_scratch: Fft,
@@ -159,13 +178,15 @@ pub struct FftPlan {
 
 impl FftPlan {
     pub fn new(fft_length: usize) -> Self {
+        let padded_length = fft_length * 2;
         let mut plan = realfft::RealFftPlanner::new();
-        let forward = plan.plan_fft_forward(fft_length);
-        let inverse = plan.plan_fft_inverse(fft_length);
+        let forward = plan.plan_fft_forward(padded_length);
+        let inverse = plan.plan_fft_inverse(padded_length);
         let forward_scratch = forward.make_scratch_vec().into_boxed_slice();
         let inverse_scratch = inverse.make_scratch_vec().into_boxed_slice();
         Self {
             fft_length,
+            padded_length,
             forward,
             inverse,
             forward_scratch: Fft(forward_scratch),
@@ -179,6 +200,10 @@ impl FftPlan {
 
     pub fn complex_length(&self) -> usize {
         self.fft_length / 2 + 1
+    }
+
+    pub fn padded_length(&self) -> usize {
+        self.padded_length
     }
 
     pub fn forward(
@@ -223,7 +248,6 @@ pub trait FftProcessor: Downcast + Send + FftProcessorClone {
     fn process(
         &mut self,
         fft_length: usize,
-        hop_length: usize,
         inputs: &[&Fft],
         outputs: &mut [Fft],
     ) -> Result<(), ProcessorError>;
@@ -310,13 +334,11 @@ impl FftGraphNode {
     pub fn process(
         &mut self,
         fft_length: usize,
-        hop_length: usize,
         inputs: &[&Fft],
         outputs: &mut [Fft],
     ) -> Result<(), ProcessorError> {
         if let Self::Processor(proc) = self {
-            proc.processor
-                .process(fft_length, hop_length, inputs, outputs)
+            proc.processor.process(fft_length, inputs, outputs)
         } else {
             for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
                 output.copy_from_slice(input);
@@ -344,12 +366,12 @@ pub enum FftNodeBuffers {
 }
 
 impl FftNodeBuffers {
-    pub fn new_endpoint(fft_length: usize, hop_length: usize) -> Self {
+    pub fn new_endpoint(fft_length: usize) -> Self {
         Self::Endpoint {
             ring_buffer: VecDeque::new(),
             overlap_buffer: VecDeque::new(),
-            time_domain: FloatBuf(vec![0.0; fft_length].into_boxed_slice()),
-            frequency_domain: Fft::new_for_real_length(fft_length),
+            time_domain: FloatBuf(vec![0.0; fft_length * 2].into_boxed_slice()),
+            frequency_domain: Fft::new_for_real_length(fft_length * 2),
         }
     }
 
@@ -357,19 +379,13 @@ impl FftNodeBuffers {
         let mut buffers = Vec::new();
         for _ in 0..num_outputs {
             buffers.push(Fft(
-                vec![Complex::default(); fft_length / 2 + 1].into_boxed_slice()
+                vec![Complex::default(); fft_length + 1].into_boxed_slice()
             ));
         }
         Self::Processor(buffers)
     }
 
-    pub fn resize(
-        &mut self,
-        fft_length: usize,
-        hop_length: usize,
-        num_outputs: usize,
-        block_size: usize,
-    ) {
+    pub fn resize(&mut self, fft_length: usize, num_outputs: usize, block_size: usize) {
         match self {
             Self::Endpoint {
                 ring_buffer,
@@ -379,13 +395,12 @@ impl FftNodeBuffers {
             } => {
                 *ring_buffer = VecDeque::with_capacity(block_size);
                 *overlap_buffer = VecDeque::with_capacity(fft_length);
-                time_domain.0 = vec![0.0; fft_length].into_boxed_slice();
-                frequency_domain.0 =
-                    vec![Complex::default(); fft_length / 2 + 1].into_boxed_slice();
+                time_domain.0 = vec![0.0; fft_length * 2].into_boxed_slice();
+                frequency_domain.0 = vec![Complex::default(); fft_length + 1].into_boxed_slice();
             }
             Self::Processor(buffers) => {
                 buffers.resize_with(num_outputs, || {
-                    Fft(vec![Complex::default(); fft_length / 2 + 1].into_boxed_slice())
+                    Fft(vec![Complex::default(); fft_length + 1].into_boxed_slice())
                 });
             }
         }
@@ -436,10 +451,18 @@ pub struct FftGraph {
     inputs: Vec<NodeIndex>,
     outputs: Vec<NodeIndex>,
 
+    dbg_total_blocks: usize,
+
     visitor: FftGraphVisitor,
     visit_path: Vec<NodeIndex>,
 
     buffer_cache: FxHashMap<NodeIndex, FftNodeBuffers>,
+}
+
+impl Default for FftGraph {
+    fn default() -> Self {
+        Self::new(256, 64, WindowFunction::Hann)
+    }
 }
 
 impl FftGraph {
@@ -451,10 +474,32 @@ impl FftGraph {
         );
         let plan = FftPlan::new(fft_length);
         let window = window_function.generate(fft_length);
+        let window_sum = window.iter().sum::<Float>();
+        let window: Box<[Float]> = window.iter().map(|x| x / window_sum).collect();
+        // calculate the dual window for overlap-add
+        // from scipy source:
+        //
+        // DD = w2.copy()
+        // for k_ in range(hop, len(win), hop):
+        //     DD[k_:] += w2[:-k_]
+        //     DD[:-k_] += w2[k_:]
+        // let mut dd = window.clone();
+        // for k in (hop_length..window.len()).step_by(hop_length) {
+        //     for i in 0..window.len() {
+        //         dd[i] += window[(i + k) % window.len()];
+        //         dd[(i + k) % window.len()] += window[i];
+        //     }
+        // }
+        // // win /= DD
+        // for (x, y) in window.iter_mut().zip(dd.iter()) {
+        //     *x /= *y;
+        // }
+
         Self {
             plan,
             hop_length,
-            window,
+            window: FloatBuf(window),
+            dbg_total_blocks: 0,
             digraph: StableDiGraph::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
@@ -555,21 +600,17 @@ impl FftGraph {
             let node = self.digraph.node_weight(*node_id).unwrap();
             match node {
                 FftGraphNode::Endpoint => {
-                    let buffers = self.buffer_cache.entry(*node_id).or_insert_with(|| {
-                        FftNodeBuffers::new_endpoint(self.plan.fft_length, self.hop_length)
-                    });
-                    buffers.resize(self.plan.fft_length, self.hop_length, 0, block_size);
+                    let buffers = self
+                        .buffer_cache
+                        .entry(*node_id)
+                        .or_insert_with(|| FftNodeBuffers::new_endpoint(self.plan.fft_length));
+                    buffers.resize(self.plan.fft_length, 0, block_size);
                 }
                 FftGraphNode::Processor(proc) => {
                     let buffers = self.buffer_cache.entry(*node_id).or_insert_with(|| {
                         FftNodeBuffers::new_processor(self.plan.fft_length, proc.output_spec.len())
                     });
-                    buffers.resize(
-                        self.plan.fft_length,
-                        self.hop_length,
-                        proc.output_spec.len(),
-                        block_size,
-                    );
+                    buffers.resize(self.plan.fft_length, proc.output_spec.len(), block_size);
                 }
             }
 
@@ -608,7 +649,9 @@ impl FftGraph {
             input_buffer_len = ring_buffer.len();
         }
 
+        // while we still have enough samples to process
         while input_buffer_len >= fft_length {
+            // for each input, window the input, perform the FFT, and advance the ring buffer
             for input_index in 0..self.inputs.len() {
                 let buffers = self
                     .buffer_cache
@@ -624,22 +667,32 @@ impl FftGraph {
                     unreachable!()
                 };
 
-                // window the input
+                // pad the input buffer with zeros
                 for i in 0..fft_length {
                     time_domain[i] = ring_buffer[i] * self.window[i];
                 }
+                for i in fft_length..fft_length * 2 {
+                    time_domain[i] = 0.0;
+                }
 
-                ring_buffer.drain(0..hop_length);
-
+                // perform the FFT
                 self.plan
                     .forward(time_domain.as_mut(), frequency_domain.as_mut())?;
+
+                // advance the input buffer
+                ring_buffer.drain(..hop_length);
             }
 
+            // we just consumed `hop_length` samples from each input buffer
+            input_buffer_len -= hop_length;
+
+            // run the FFT processor nodes
             for i in 0..self.visit_path.len() {
                 let node_id = self.visit_path[i];
                 self.process_node(node_id)?;
             }
 
+            // for each output, perform the IFFT, overlap-add, and write to the output's ring buffer
             for output_index in 0..self.outputs.len() {
                 let buffers = self
                     .buffer_cache
@@ -655,12 +708,13 @@ impl FftGraph {
                     unreachable!()
                 };
 
+                // perform the IFFT
                 self.plan
                     .inverse(frequency_domain.as_mut(), time_domain.as_mut())?;
 
-                for i in 0..fft_length {
-                    let denom =
-                        fft_length as Float * 0.5 * (fft_length as Float / hop_length as Float);
+                // overlap-add
+                for i in 0..fft_length * 2 {
+                    let denom = 1.0;
                     let sample = time_domain[i] / denom;
                     if i < overlap_buffer.len() {
                         overlap_buffer[i] += sample;
@@ -669,12 +723,14 @@ impl FftGraph {
                     }
                 }
 
+                time_domain.fill(0.0);
+
+                // write to the output's ring buffer
                 ring_buffer.extend(overlap_buffer.drain(..hop_length));
             }
-
-            input_buffer_len -= hop_length;
         }
 
+        // for each output, write as much of the output's ring buffer as possible to the block's corresponding output buffer
         for output_index in 0..self.outputs.len() {
             let buffers = self
                 .buffer_cache
@@ -694,6 +750,8 @@ impl FftGraph {
                 }
             }
         }
+
+        self.dbg_total_blocks += 1;
 
         Ok(())
     }
@@ -730,12 +788,7 @@ impl FftGraph {
                 FftNodeBuffers::Processor(buffers) => buffers.as_mut(),
             };
 
-            self.digraph[node_id].process(
-                self.plan.fft_length,
-                self.hop_length,
-                &inputs,
-                outputs,
-            )?;
+            self.digraph[node_id].process(self.plan.fft_length, &inputs, outputs)?;
         }
 
         drop(inputs);
@@ -923,7 +976,7 @@ impl Mul for FftNode {
     type Output = FftNode;
 
     fn mul(self, rhs: FftNode) -> Self::Output {
-        let node = self.graph.add(builtins::FftPhaseVocoder::default());
+        let node = self.graph.add(builtins::FftConvolve);
         node.input(0).connect(self.output(0));
         node.input(1).connect(rhs.output(0));
         node
@@ -934,120 +987,9 @@ impl Mul for &FftNode {
     type Output = FftNode;
 
     fn mul(self, rhs: &FftNode) -> Self::Output {
-        let node = self.graph.add(builtins::FftPhaseVocoder::default());
+        let node = self.graph.add(builtins::FftConvolve);
         node.input(0).connect(self.output(0));
         node.input(1).connect(rhs.output(0));
         node
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{collections::VecDeque, path::Path};
-
-    use num::complex::Complex64;
-
-    use super::{WindowFunction, PI};
-
-    const SAMPLE_RATE: usize = 48000;
-    const BLOCK_SIZE: usize = 512;
-    const FFT_SIZE: usize = 512;
-    const HOP_SIZE: usize = 128;
-    const TEST_LENGTH_SECONDS: usize = 5;
-    const TEST_LENGTH_SAMPLES: usize = TEST_LENGTH_SECONDS * SAMPLE_RATE;
-
-    fn generate_audio(len: usize) -> Vec<f64> {
-        let mut out = vec![];
-        for t in 0..len {
-            let t = t as f64 / SAMPLE_RATE as f64;
-            out.push((t * 440.0 * 2.0 * PI).sin());
-        }
-        out
-    }
-
-    fn output_audio(audio: &[f64], path: impl AsRef<Path>) {
-        let mut writer = hound::WavWriter::new(
-            std::fs::File::create(path).unwrap(),
-            hound::WavSpec {
-                channels: 1,
-                sample_rate: SAMPLE_RATE as u32,
-                bits_per_sample: 32,
-                sample_format: hound::SampleFormat::Float,
-            },
-        )
-        .unwrap();
-        for sample in audio {
-            writer.write_sample(*sample as f32).unwrap();
-        }
-        writer.finalize().unwrap();
-    }
-
-    #[test]
-    #[allow(clippy::needless_range_loop)]
-    fn test_realtime_stft() {
-        let mut planner = realfft::RealFftPlanner::<f64>::new();
-        let rfft = planner.plan_fft_forward(FFT_SIZE);
-        let irfft = planner.plan_fft_inverse(FFT_SIZE);
-        let window = WindowFunction::Hann.generate(FFT_SIZE);
-
-        // Circular streaming buffers for input and output
-        let mut input_buffer: VecDeque<f64> = VecDeque::new();
-        let mut scratch_buffer: VecDeque<f64> = VecDeque::new();
-        let mut output_buffer: VecDeque<f64> = VecDeque::new();
-
-        let audio_input = generate_audio(TEST_LENGTH_SAMPLES);
-        let mut audio_output = vec![];
-
-        for block_in in audio_input.chunks(BLOCK_SIZE) {
-            let mut block_in = block_in.to_vec();
-            if block_in.len() < BLOCK_SIZE {
-                block_in.resize(BLOCK_SIZE, 0.0); // Zero pad if necessary
-            }
-
-            input_buffer.extend(block_in.iter().cloned());
-
-            let mut block_out = vec![0.0; BLOCK_SIZE];
-
-            // If we have enough samples of input, process as much as we can
-            while input_buffer.len() >= FFT_SIZE {
-                let mut time_domain = vec![0.0; FFT_SIZE];
-                for i in 0..FFT_SIZE {
-                    time_domain[i] = input_buffer[i] * window[i];
-                }
-                input_buffer.drain(0..HOP_SIZE);
-
-                let mut spectrum = vec![Complex64::new(0.0, 0.0); FFT_SIZE / 2 + 1];
-                rfft.process(&mut time_domain, &mut spectrum).unwrap();
-
-                irfft.process(&mut spectrum, &mut time_domain).unwrap();
-
-                // Overlap-add
-                for i in 0..FFT_SIZE {
-                    let denom = FFT_SIZE as f64 * 0.5 * (FFT_SIZE as f64 / HOP_SIZE as f64);
-                    let sample = time_domain[i] / denom;
-                    if i < scratch_buffer.len() {
-                        scratch_buffer[i] += sample;
-                    } else {
-                        scratch_buffer.push_back(sample);
-                    }
-                }
-
-                output_buffer.extend(scratch_buffer.drain(0..HOP_SIZE));
-            }
-
-            // Output as much as we can
-            for i in 0..BLOCK_SIZE {
-                if let Some(sample) = output_buffer.pop_front() {
-                    block_out[i] = sample;
-                }
-            }
-
-            // Add the processed block to the output
-            audio_output.extend_from_slice(&block_out);
-        }
-
-        // Save input and output audio for comparison
-        output_audio(&audio_input, "target/test_in.wav");
-        output_audio(&audio_output, "target/test_out.wav");
     }
 }

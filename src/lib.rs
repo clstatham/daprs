@@ -53,7 +53,7 @@ pub mod prelude {
 
     #[cfg(feature = "fft")]
     pub use crate::fft::{
-        builtins::*, Fft, FftGraph, FftGraphBuilder, FftNode, FftProcessor, FftSpec,
+        builtins::*, Fft, FftGraph, FftGraphBuilder, FftNode, FftProcessor, FftSpec, WindowFunction,
     };
 }
 

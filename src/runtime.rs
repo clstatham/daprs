@@ -203,6 +203,7 @@ impl Runtime {
         self.max_block_size = max_block_size;
 
         self.graph.allocate(sample_rate, max_block_size);
+        self.graph.resize_buffers(sample_rate, max_block_size);
 
         for buffers in self.buffer_cache.values_mut() {
             buffers.resize(max_block_size);
