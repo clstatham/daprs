@@ -1048,7 +1048,7 @@ impl Processor for FiniteOrZero {
 
 /// A processor that deduplicates a signal by only outputting a new value when it changes.
 ///
-/// This can be thought of as the opposite of the [`Register`](crate::builtins::storage::Register) processor, and will effectively undo its effect.
+/// This can be thought of as the opposite of the [`Register`] processor, and will effectively undo its effect.
 ///
 /// The output signal will likely be much sparser than the input signal, reducing the amount of data that needs to be processed downstream.
 ///

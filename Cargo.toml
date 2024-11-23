@@ -14,7 +14,7 @@ name = "raug"
 members = ["raug-macros"]
 
 [features]
-default = []
+default = ["fft", "expr"]
 f32_samples = []
 jack = ["cpal/jack"]
 expr = ["dep:evalexpr"]

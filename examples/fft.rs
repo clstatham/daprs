@@ -10,7 +10,6 @@ fn main() {
 
     let sine = graph.add(BlSawOscillator::new(110.0));
     let saw = graph.add(BlSquareOscillator::new(110.0, 0.5));
-    // let saw = saw * 2.0 - 1.0;
 
     let fft = graph.add(FftGraph::new(512, 256, WindowFunction::Hann).build(|fft| {
         let sine_input = fft.add_input();

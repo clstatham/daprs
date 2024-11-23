@@ -1,10 +1,12 @@
 use raug::prelude::*;
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct GainProc {
     gain: Float,
 }
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for GainProc {
     fn input_spec(&self) -> Vec<SignalSpec> {
         vec![SignalSpec::new("in", SignalType::Float)]

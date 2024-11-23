@@ -104,7 +104,7 @@ impl Processor for Metro {
 
 /// A processor that delays a signal by one sample.
 ///
-/// Note that feedback loops in a [`Graph`](crate::graph::Graph) implicitly introduce a delay of one sample, so this processor is not usually required to be used manually.
+/// Note that feedback loops in a [`Graph`] implicitly introduce a delay of one sample, so this processor is not usually required to be used manually.
 ///
 /// # Inputs
 ///

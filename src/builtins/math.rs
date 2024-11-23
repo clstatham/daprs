@@ -159,6 +159,7 @@ impl Processor for FreqToMidi {
 #[cfg(feature = "expr")]
 #[derive(Clone, Debug)]
 pub struct Expr {
+    #[allow(unused)]
     source: String,
     context: evalexpr::HashMapContext<evalexpr::DefaultNumericTypes>,
     expr: evalexpr::Node<evalexpr::DefaultNumericTypes>,
@@ -254,7 +255,7 @@ impl Processor for Expr {
                 let buffer =
                     buffer
                         .as_type::<Float>()
-                        .ok_or_else(|| ProcessorError::InputSpecMismatch {
+                        .ok_or(ProcessorError::InputSpecMismatch {
                             index: inp_idx,
                             expected: SignalType::Float,
                             actual,
