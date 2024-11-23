@@ -17,7 +17,8 @@ fn main() {
 
     let expr = graph.add(Expr::new("if(counter % 2 < 1, a, b)"));
 
-    expr.input("counter").connect(counter.output(0));
+    expr.input("counter")
+        .connect(counter.output(0).cast(SignalType::Float));
     expr.input("a").connect(sine1.output(0));
     expr.input("b").connect(sine2.output(0));
 

@@ -159,6 +159,7 @@ impl Processor for FreqToMidi {
 #[cfg(feature = "expr")]
 #[derive(Clone, Debug)]
 pub struct Expr {
+    source: String,
     context: evalexpr::HashMapContext<evalexpr::DefaultNumericTypes>,
     expr: evalexpr::Node<evalexpr::DefaultNumericTypes>,
     inputs: Vec<String>,
@@ -168,14 +169,15 @@ pub struct Expr {
 #[cfg(feature = "expr")]
 impl Expr {
     /// Creates a new `Expr` processor with the given expression. The expression is pre-compiled into an [`evalexpr::Node`] and cannot be changed.
-    pub fn new(expr: impl AsRef<str>) -> Self {
+    pub fn new(source: impl AsRef<str>) -> Self {
         let expr: evalexpr::Node<evalexpr::DefaultNumericTypes> =
-            evalexpr::build_operator_tree(expr.as_ref()).unwrap();
+            evalexpr::build_operator_tree(source.as_ref()).unwrap();
         let inputs: Vec<String> = expr
             .iter_read_variable_identifiers()
             .map(|s| s.to_string())
             .collect();
         Self {
+            source: source.as_ref().to_string(),
             context: evalexpr::HashMapContext::new(),
             expr,
             input_values: Vec::with_capacity(inputs.len()),
@@ -197,7 +199,35 @@ impl Expr {
     }
 }
 
+#[cfg(all(feature = "expr", feature = "serde"))]
+mod serde_impl {
+    use super::Expr;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[derive(Serialize, Deserialize)]
+    struct ExprData {
+        source: String,
+    }
+
+    impl Serialize for Expr {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            let data = ExprData {
+                source: self.source.clone(),
+            };
+            data.serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Expr {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let data = ExprData::deserialize(deserializer)?;
+            Ok(Expr::new(data.source))
+        }
+    }
+}
+
 #[cfg(feature = "expr")]
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Expr {
     fn input_spec(&self) -> Vec<SignalSpec> {
         self.inputs
@@ -215,7 +245,7 @@ impl Processor for Expr {
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (samp_idx, out) in outputs.iter_output_as::<Float>(0)?.enumerate() {
+        for (samp_idx, out) in outputs.iter_output_mut_as::<Float>(0)?.enumerate() {
             self.input_values.clear();
 
             for (inp_idx, name) in self.inputs.iter().enumerate() {

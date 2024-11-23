@@ -27,9 +27,6 @@ fn main() {
 
     let mix = fft.output(0);
 
-    // let master = graph.add(PeakLimiter::default());
-    // mix.connect(&master.input(0));
-
     let master = mix;
 
     out1.input(0).connect(&master);

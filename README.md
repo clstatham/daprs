@@ -25,6 +25,14 @@ See [examples/processor.rs](https://github.com/clstatham/raug/blob/master/exampl
 
 See [examples/demo.rs](https://github.com/clstatham/raug/blob/master/examples/demo.rs) for a simple example of building a signal flow graph.
 
+## Optional Cargo Feature Flags
+
+- `f32_samples`: Use `f32` audio samples instead of the default `f64`.
+- `serde`: Enable [serde](https://crates.io/crates/serde) v1 support for most relevant structures.
+- `expr`: Enable parsing mathematical expressions with [`evalexpr`](https://crates.io/crates/evalexpr).
+- `fft`: Enable FFT support for frequency-domain processing using [`realfft`](https://crates.io/crates/realfft).
+- `jack`: Enable JACK support for realtime audio processing on Linux.
+
 ## Related Projects
 
 - Python bindings: [raug-python](https://github.com/clstatham/raug-python)

@@ -20,18 +20,6 @@ pub mod fft;
 
 extern crate self as raug;
 
-#[cfg(all(feature = "serde", feature = "fft"))]
-compile_error!(
-    "The `serde` and `fft` features are not currently compatible. \
-    Please disable one of them to compile the library."
-);
-
-#[cfg(all(feature = "serde", feature = "expr"))]
-compile_error!(
-    "The `serde` and `expr` features are not currently compatible. \
-    Please disable one of them to compile the library."
-);
-
 /// Re-exports of commonly used types and traits from the crate.
 #[allow(unused_imports)]
 pub mod prelude {

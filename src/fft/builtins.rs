@@ -1,8 +1,10 @@
 use crate::prelude::*;
 
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FftConvolve;
 
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl FftProcessor for FftConvolve {
     fn input_spec(&self) -> Vec<FftSpec> {
         vec![

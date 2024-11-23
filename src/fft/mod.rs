@@ -228,6 +228,7 @@ impl FftPlan {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FftSpec {
     pub name: String,
 }
@@ -238,6 +239,7 @@ impl FftSpec {
     }
 }
 
+#[cfg_attr(feature = "serde", typetag::serde(tag = "type"))]
 pub trait FftProcessor: Downcast + Send + FftProcessorClone {
     fn input_spec(&self) -> Vec<FftSpec>;
     fn output_spec(&self) -> Vec<FftSpec>;
@@ -276,6 +278,7 @@ impl Clone for Box<dyn FftProcessor> {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FftProcessorNode {
     processor: Box<dyn FftProcessor>,
     input_spec: Vec<FftSpec>,
@@ -311,6 +314,7 @@ impl FftProcessorNode {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FftGraphNode {
     Endpoint,
     Processor(FftProcessorNode),
@@ -349,6 +353,7 @@ impl FftGraphNode {
 }
 
 #[derive(Clone, Debug, Default, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FftEdge {
     pub source_output: usize,
     pub target_input: usize,
@@ -410,11 +415,11 @@ impl FftNodeBuffers {
 type FftGraphVisitor = DfsPostOrder<NodeIndex, FxHashSet<NodeIndex>>;
 
 #[derive(Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WindowFunction {
     Rectangular,
     #[default]
     Hann,
-    Custom(Arc<dyn Fn(usize, usize) -> Float + Send + Sync>),
 }
 
 impl WindowFunction {
@@ -429,11 +434,6 @@ impl WindowFunction {
             Self::Hann => {
                 buf = apodize::hanning_iter(length).collect();
             }
-            Self::Custom(f) => {
-                for i in 0..length {
-                    buf[i] = f(i, length);
-                }
-            }
         }
         FloatBuf(buf)
     }
@@ -446,12 +446,12 @@ pub struct FftGraph {
     plan: FftPlan,
 
     hop_length: usize,
+    #[allow(unused)]
+    window_function: WindowFunction,
     window: FloatBuf,
 
     inputs: Vec<NodeIndex>,
     outputs: Vec<NodeIndex>,
-
-    dbg_total_blocks: usize,
 
     visitor: FftGraphVisitor,
     visit_path: Vec<NodeIndex>,
@@ -466,40 +466,17 @@ impl Default for FftGraph {
 }
 
 impl FftGraph {
-    #[track_caller]
     pub fn new(fft_length: usize, hop_length: usize, window_function: WindowFunction) -> Self {
-        debug_assert!(
-            fft_length.is_power_of_two(),
-            "FFT length must be a power of two"
-        );
         let plan = FftPlan::new(fft_length);
         let window = window_function.generate(fft_length);
         let window_sum = window.iter().sum::<Float>();
         let window: Box<[Float]> = window.iter().map(|x| x / window_sum).collect();
-        // calculate the dual window for overlap-add
-        // from scipy source:
-        //
-        // DD = w2.copy()
-        // for k_ in range(hop, len(win), hop):
-        //     DD[k_:] += w2[:-k_]
-        //     DD[:-k_] += w2[k_:]
-        // let mut dd = window.clone();
-        // for k in (hop_length..window.len()).step_by(hop_length) {
-        //     for i in 0..window.len() {
-        //         dd[i] += window[(i + k) % window.len()];
-        //         dd[(i + k) % window.len()] += window[i];
-        //     }
-        // }
-        // // win /= DD
-        // for (x, y) in window.iter_mut().zip(dd.iter()) {
-        //     *x /= *y;
-        // }
 
         Self {
             plan,
             hop_length,
             window: FloatBuf(window),
-            dbg_total_blocks: 0,
+            window_function,
             digraph: StableDiGraph::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
@@ -751,8 +728,6 @@ impl FftGraph {
             }
         }
 
-        self.dbg_total_blocks += 1;
-
         Ok(())
     }
 
@@ -799,6 +774,49 @@ impl FftGraph {
     }
 }
 
+#[cfg(feature = "serde")]
+mod serde_impl {
+    use super::*;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[derive(Serialize, Deserialize)]
+    struct FftGraphData {
+        graph: StableDiGraph<FftGraphNode, FftEdge>,
+        fft_length: usize,
+        hop_length: usize,
+        window_function: WindowFunction,
+        inputs: Vec<NodeIndex>,
+        outputs: Vec<NodeIndex>,
+    }
+
+    impl Serialize for FftGraph {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            let data = FftGraphData {
+                graph: self.digraph.clone(),
+                fft_length: self.plan.fft_length,
+                hop_length: self.hop_length,
+                window_function: self.window_function.clone(),
+                inputs: self.inputs.clone(),
+                outputs: self.outputs.clone(),
+            };
+            data.serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for FftGraph {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let data = FftGraphData::deserialize(deserializer)?;
+            Ok(Self {
+                digraph: data.graph,
+                inputs: data.inputs,
+                outputs: data.outputs,
+                ..Self::new(data.fft_length, data.hop_length, data.window_function)
+            })
+        }
+    }
+}
+
+#[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for FftGraph {
     fn input_spec(&self) -> Vec<SignalSpec> {
         let mut specs = Vec::new();
