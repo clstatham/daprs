@@ -163,3 +163,32 @@ mod logging {
 pub mod __itertools {
     pub use itertools::{cons_tuples, izip};
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::prelude::*;
+
+    fn setup_test_graph() -> Graph {
+        let graph = GraphBuilder::new();
+        let out = graph.add_audio_output();
+        let sine = graph.add(SineOscillator::new(440.0));
+        out.input(0).connect(sine);
+        graph.build()
+    }
+
+    #[cfg(feature = "profiling")]
+    #[test]
+    fn test_allocations() {
+        let mut runtime = Runtime::new(setup_test_graph());
+        runtime.allocate_for_block_size(48000.0, 1024);
+
+        let stats = allocation_counter::measure(|| {
+            for _ in 0..100 {
+                runtime.process().unwrap();
+            }
+        });
+
+        println!("Allocation stats: {:#?}", stats);
+        assert_eq!(stats.count_total, 0);
+    }
+}

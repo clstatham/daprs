@@ -162,8 +162,8 @@ impl FftNodeBuffers {
                 time_domain,
                 frequency_domain,
             } => {
-                *ring_buffer = VecDeque::with_capacity(block_size);
-                *overlap_buffer = VecDeque::with_capacity(fft_length);
+                *ring_buffer = VecDeque::with_capacity(block_size + fft_length);
+                *overlap_buffer = VecDeque::with_capacity(fft_length * 2);
                 time_domain.0 = vec![0.0; fft_length * 2].into_boxed_slice();
                 frequency_domain.0 = vec![Complex::default(); fft_length + 1].into_boxed_slice();
             }
@@ -346,6 +346,7 @@ impl FftGraph {
         }
     }
 
+    #[cfg_attr(feature = "profiling", inline(never))]
     #[allow(clippy::needless_range_loop)]
     fn process_inner(
         &mut self,
@@ -481,6 +482,7 @@ impl FftGraph {
         Ok(())
     }
 
+    #[cfg_attr(feature = "profiling", inline(never))]
     fn process_node(&mut self, node_id: NodeIndex) -> Result<(), ProcessorError> {
         let mut inputs = smallvec::SmallVec::<[&Fft; 4]>::new();
         let mut outputs = self.buffer_cache.remove(&node_id).unwrap();
