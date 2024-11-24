@@ -23,11 +23,12 @@ pub struct Constant {
 }
 
 impl Constant {
-    /// Creates a new `Constant` processor.
+    /// Creates a new `Constant` processor that outputs the given `Signal`.
     pub fn new(value: impl Signal) -> Self {
         Self::new_any(value.into_any_signal())
     }
 
+    /// Creates a new `Constant` processor that outputs the given `AnySignal`.
     pub fn new_any(value: AnySignal) -> Self {
         Self { value }
     }

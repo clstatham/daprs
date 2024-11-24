@@ -7,7 +7,7 @@ fn main() {
     let out1 = graph.add_audio_output();
     let out2 = graph.add_audio_output();
 
-    let midi = graph.add_midi_input("midiin");
+    let midi = graph.add_midi_input("midi_in");
 
     let sine = graph.add(BlSawOscillator::default());
 
@@ -28,7 +28,7 @@ fn main() {
 
     let mut runtime = graph.build_runtime();
 
-    raug::list_midi_ports();
+    raug::util::list_midi_ports();
 
     let handle = runtime
         .run(

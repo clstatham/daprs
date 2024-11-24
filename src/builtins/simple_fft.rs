@@ -1,3 +1,5 @@
+//! Simple wrappers around the FFT-based processors.
+
 use crate::prelude::*;
 
 /// An FFT-based convolution processor.
@@ -21,6 +23,7 @@ pub struct SimpleFftConvolve {
 }
 
 impl SimpleFftConvolve {
+    /// Creates a new FFT-based convolution processor with the given FFT length, hop length, and window function.
     pub fn new(fft_length: usize, hop_length: usize, window_function: WindowFunction) -> Self {
         let graph = FftGraph::new(fft_length, hop_length, window_function).build(|fft| {
             let a = fft.add_input();

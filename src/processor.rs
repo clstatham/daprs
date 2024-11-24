@@ -120,7 +120,9 @@ where
 /// - `Sample` means the processor processes each sample individually.
 #[derive(Debug, Clone, Copy)]
 pub enum ProcessMode {
+    /// The processor should process the entire block of samples at once.
     Block,
+    /// The processor should process the sample at the given index.
     Sample(
         /// The index of the current sample within the block.
         usize,
@@ -146,6 +148,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    /// Returns the number of signals in the output.
     #[inline]
     pub fn len(&self) -> usize {
         match self {
@@ -154,6 +157,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    /// Returns `true` if the output signal is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
         match self {
@@ -186,6 +190,11 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    /// Returns a reference to the output signal at the given index, if it is of the given type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the output signal is not of the given type.
     #[inline]
     pub fn get_as<S: Signal>(&self, index: usize) -> Option<&Option<S>> {
         match self {
@@ -196,6 +205,11 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    /// Sets the output signal at the given index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the output signal is not the same type as the given value.
     #[inline]
     pub fn set(&mut self, index: usize, value: AnySignalRef) {
         match self {
@@ -208,6 +222,11 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    /// Sets the output signal at the given index, if it is of the given type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the output signal is not of the given type.
     #[inline]
     pub fn set_as<S: Signal>(&mut self, index: usize, value: impl Into<Option<S>>) {
         match self {
@@ -220,6 +239,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    /// Sets the output signal at the given index to `None`.
     #[inline]
     pub fn set_none(&mut self, index: usize) {
         match self {
@@ -228,6 +248,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    /// Fills the output signal with the given value, if it is of the correct type.
     #[inline]
     pub fn fill_as<S: Signal + Clone>(&mut self, value: impl Into<Option<S>>) {
         match self {
@@ -238,6 +259,7 @@ impl<'a> ProcessorOutput<'a> {
         }
     }
 
+    /// Fills the output signal with the given value.
     #[inline]
     pub fn fill(&mut self, value: AnySignal) {
         match self {
@@ -269,6 +291,7 @@ pub struct ProcessorInputs<'a, 'b> {
 }
 
 impl<'a, 'b> ProcessorInputs<'a, 'b> {
+    /// Creates a new collection of input signals.
     #[inline]
     pub fn new(
         input_specs: &'a [SignalSpec],
@@ -319,6 +342,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
             .copied()
     }
 
+    /// Returns an iterator over the input signal at the given index.
     #[inline]
     pub fn iter_input(&self, index: usize) -> impl Iterator<Item = Option<AnySignalRef>> {
         let buffer = &self.inputs[index];
@@ -436,6 +460,7 @@ pub struct ProcessorOutputs<'a> {
 
 impl<'a> ProcessorOutputs<'a> {
     #[inline]
+    /// Creates a new collection of output signals.
     pub fn new(
         output_spec: &'a [SignalSpec],
         outputs: &'a mut [SignalBuffer],
@@ -464,6 +489,7 @@ impl<'a> ProcessorOutputs<'a> {
         &self.output_spec[index]
     }
 
+    /// Returns an iterator over the output signal at the given index.
     #[inline]
     pub fn iter_output_mut(&mut self, index: usize) -> impl Iterator<Item = AnySignalMut> {
         let output = &mut self.outputs[index];

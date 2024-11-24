@@ -181,11 +181,13 @@ impl Runtime {
         }
     }
 
+    /// Returns the current sample rate.
     #[inline]
     pub fn sample_rate(&self) -> Float {
         self.sample_rate
     }
 
+    /// Returns the current block size.
     #[inline]
     pub fn block_size(&self) -> usize {
         self.block_size

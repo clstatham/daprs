@@ -9,7 +9,9 @@ pub struct Edge {
     /// The input index of the target node.
     pub target_input: u32,
 
+    /// The name of the output of the source node.
     pub source_output_name: Option<String>,
+    /// The name of the input of the target node.
     pub target_input_name: Option<String>,
 }
 

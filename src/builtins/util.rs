@@ -184,6 +184,7 @@ impl Message {
         Self::new_any(message.into_any_signal())
     }
 
+    /// Create a new `MessageSender` processor with the given message.
     pub fn new_any(message: AnySignal) -> Self {
         Self { message }
     }
@@ -698,6 +699,7 @@ impl Param {
         this
     }
 
+    /// Creates a new `Param` processor with the given name and optional initial value, minimum, and maximum.
     pub fn bounded(
         name: impl Into<String>,
         initial_value: impl Into<Option<Float>>,

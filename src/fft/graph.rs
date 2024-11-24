@@ -1,3 +1,5 @@
+//! A directed graph of nodes that process FFT signals.
+
 use std::collections::VecDeque;
 
 use num::Complex;
@@ -8,6 +10,7 @@ use crate::prelude::*;
 
 use super::{signal::FloatBuf, FftPlan};
 
+/// A node in an [`FftGraph`] that processes FFT signals.
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FftProcessorNode {
@@ -17,10 +20,12 @@ pub struct FftProcessorNode {
 }
 
 impl FftProcessorNode {
+    /// Creates a new `FftProcessorNode` with the given [`FftProcessor`].
     pub fn new(processor: impl FftProcessor) -> Self {
         Self::new_boxed(Box::new(processor))
     }
 
+    /// Creates a new `FftProcessorNode` with the given boxed [`FftProcessor`].
     pub fn new_boxed(processor: Box<dyn FftProcessor>) -> Self {
         let input_spec = processor.input_spec();
         let output_spec = processor.output_spec();
@@ -31,41 +36,53 @@ impl FftProcessorNode {
         }
     }
 
+    /// Returns information about the input signals of the processor.
     pub fn input_spec(&self) -> &[FftSpec] {
         &self.input_spec
     }
 
+    /// Returns information about the output signals of the processor.
     pub fn output_spec(&self) -> &[FftSpec] {
         &self.output_spec
     }
 
+    /// Allocates memory for the processor.
     pub fn allocate(&mut self, fft_length: usize) {
         self.processor.allocate(fft_length);
     }
 }
 
+/// A node in an [`FftGraph`].
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FftGraphNode {
+    /// An endpoint node that represents an input or output signal.
     Endpoint,
+    /// A processor node that processes FFT signals.
     Processor(FftProcessorNode),
 }
 
 impl FftGraphNode {
+    /// Creates a new endpoint node.
     pub fn new_endpoint() -> Self {
         Self::Endpoint
     }
 
+    /// Creates a new processor node with the given processor.
     pub fn new_processor(processor: impl FftProcessor) -> Self {
         Self::Processor(FftProcessorNode::new(processor))
     }
 
+    /// Allocates memory for the node.
     pub fn allocate(&mut self, fft_length: usize) {
         if let Self::Processor(proc) = self {
             proc.processor.allocate(fft_length);
         }
     }
 
+    /// Processes the input signals and writes the output signals.
+    ///
+    /// Endpoints will simply copy the input signals to the output signals.
     pub fn process(
         &mut self,
         fft_length: usize,
@@ -83,25 +100,39 @@ impl FftGraphNode {
     }
 }
 
+/// A connection between two nodes in an [`FftGraph`].
 #[derive(Clone, Debug, Default, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FftEdge {
+    /// The index of the output signal of the source node.
     pub source_output: usize,
+    /// The index of the input signal of the target node.
     pub target_input: usize,
 }
 
+/// Internal buffer storage for an [`FftNode`] in an [`FftGraph`].
 #[derive(Clone)]
-pub enum FftNodeBuffers {
+pub(crate) enum FftNodeBuffers {
+    /// An endpoint node that represents an input or output signal.
     Endpoint {
+        /// A ring buffer used as an input/output stream.
         ring_buffer: VecDeque<Float>,
+        /// A buffer used to store the overlap between FFT frames.
         overlap_buffer: VecDeque<Float>,
+        /// A buffer used to store the time-domain signal.
         time_domain: FloatBuf,
+        /// A buffer used to store the frequency-domain signal.
         frequency_domain: Fft,
     },
-    Processor(Vec<Fft>),
+    /// A processor node that processes FFT signals.
+    Processor(
+        /// A buffer used to store the frequency-domain output signals of the processor.
+        Vec<Fft>,
+    ),
 }
 
 impl FftNodeBuffers {
+    /// Creates a new [`Endpoint`](FftNodeBuffers::Endpoint) node buffer.
     pub fn new_endpoint(fft_length: usize) -> Self {
         Self::Endpoint {
             ring_buffer: VecDeque::new(),
@@ -111,6 +142,7 @@ impl FftNodeBuffers {
         }
     }
 
+    /// Creates a new [`Processor`](FftNodeBuffers::Processor) node buffer.
     pub fn new_processor(fft_length: usize, num_outputs: usize) -> Self {
         let mut buffers = Vec::new();
         for _ in 0..num_outputs {
@@ -121,7 +153,8 @@ impl FftNodeBuffers {
         Self::Processor(buffers)
     }
 
-    pub fn resize(&mut self, fft_length: usize, num_outputs: usize, block_size: usize) {
+    /// Allocates memory for the buffers based on the given parameters.
+    pub fn allocate(&mut self, fft_length: usize, num_outputs: usize, block_size: usize) {
         match self {
             Self::Endpoint {
                 ring_buffer,
@@ -145,6 +178,7 @@ impl FftNodeBuffers {
 
 type FftGraphVisitor = DfsPostOrder<NodeIndex, FxHashSet<NodeIndex>>;
 
+/// A directed graph of nodes that process FFT signals.
 #[derive(Clone)]
 pub struct FftGraph {
     digraph: StableDiGraph<FftGraphNode, FftEdge>,
@@ -172,6 +206,7 @@ impl Default for FftGraph {
 }
 
 impl FftGraph {
+    /// Creates a new, empty `FftGraph` with the given FFT length, hop length, and window function.
     pub fn new(fft_length: usize, hop_length: usize, window_function: WindowFunction) -> Self {
         let plan = FftPlan::new(fft_length);
         let window = window_function.generate(fft_length);
@@ -192,41 +227,51 @@ impl FftGraph {
         }
     }
 
+    /// Constructs an `FftGraph` with a closure and the [`FftGraphBuilder`] API.
     pub fn build(self, f: impl FnOnce(&mut FftGraphBuilder)) -> Self {
         let mut builder = FftGraphBuilder::from_graph(self);
         f(&mut builder);
         builder.build()
     }
 
+    /// Returns the FFT window length of the graph (how many FFT points are used).
     pub fn fft_length(&self) -> usize {
         self.plan.fft_length
     }
 
+    /// Returns the hop length of the graph (the stride between FFT frames).
     pub fn hop_length(&self) -> usize {
         self.hop_length
     }
 
+    /// Returns the overlap length of the graph (how many samples overlap between FFT frames).
     pub fn overlap_length(&self) -> usize {
         self.plan.fft_length - self.hop_length
     }
 
+    /// Adds an input node to the graph and returns its index.
     pub fn add_input(&mut self) -> NodeIndex {
         let node = self.digraph.add_node(FftGraphNode::new_endpoint());
         self.inputs.push(node);
         node
     }
 
+    /// Adds an output node to the graph and returns its index.
     pub fn add_output(&mut self) -> NodeIndex {
         let node = self.digraph.add_node(FftGraphNode::new_endpoint());
         self.outputs.push(node);
         node
     }
 
+    /// Adds a processor node to the graph and returns its index.
     pub fn add(&mut self, processor: impl FftProcessor) -> NodeIndex {
         self.digraph
             .add_node(FftGraphNode::new_processor(processor))
     }
 
+    /// Connects the output of one node to the input of another node.
+    ///
+    /// If there is already a connection to the target input, it will be replaced.
     pub fn connect(
         &mut self,
         source: NodeIndex,
@@ -256,7 +301,7 @@ impl FftGraph {
         self.reset_visitor();
     }
 
-    pub fn reset_visitor(&mut self) {
+    fn reset_visitor(&mut self) {
         if self.visit_path.capacity() < self.digraph.node_count() {
             self.visit_path = Vec::with_capacity(self.digraph.node_count());
         }
@@ -274,6 +319,7 @@ impl FftGraph {
         self.visit_path.reverse();
     }
 
+    /// Allocates memory for the graph based on the given parameters.
     pub fn allocate(&mut self, block_size: usize) {
         self.reset_visitor();
 
@@ -285,13 +331,13 @@ impl FftGraph {
                         .buffer_cache
                         .entry(*node_id)
                         .or_insert_with(|| FftNodeBuffers::new_endpoint(self.plan.fft_length));
-                    buffers.resize(self.plan.fft_length, 0, block_size);
+                    buffers.allocate(self.plan.fft_length, 0, block_size);
                 }
                 FftGraphNode::Processor(proc) => {
                     let buffers = self.buffer_cache.entry(*node_id).or_insert_with(|| {
                         FftNodeBuffers::new_processor(self.plan.fft_length, proc.output_spec.len())
                     });
-                    buffers.resize(self.plan.fft_length, proc.output_spec.len(), block_size);
+                    buffers.allocate(self.plan.fft_length, proc.output_spec.len(), block_size);
                 }
             }
 
@@ -301,7 +347,7 @@ impl FftGraph {
     }
 
     #[allow(clippy::needless_range_loop)]
-    pub fn process_inner(
+    fn process_inner(
         &mut self,
         inputs: ProcessorInputs,
         mut outputs: ProcessorOutputs,

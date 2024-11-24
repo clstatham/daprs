@@ -1,27 +1,37 @@
+//! FFT processors for frequency-domain processing.
+
 use downcast_rs::{impl_downcast, Downcast};
 
 use crate::prelude::*;
 
+/// A specification for an input or output of an FFT processor.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FftSpec {
+    /// The name of the input or output.
     pub name: String,
 }
 
 impl FftSpec {
+    /// Creates a new FFT specification with the given name.
     pub fn new(name: impl Into<String>) -> Self {
         Self { name: name.into() }
     }
 }
 
+/// A special type of processor that processes frequency-domain data in an [`FftGraph`].
 #[cfg_attr(feature = "serde", typetag::serde(tag = "type"))]
 pub trait FftProcessor: Downcast + Send + FftProcessorClone {
+    /// Returns the input specifications for this processor.
     fn input_spec(&self) -> Vec<FftSpec>;
+    /// Returns the output specifications for this processor.
     fn output_spec(&self) -> Vec<FftSpec>;
 
+    /// Allocates any necessary resources for the given FFT length.
     #[allow(unused)]
     fn allocate(&mut self, fft_length: usize) {}
 
+    /// Processes the given inputs and stores the result in the given outputs.
     fn process(
         &mut self,
         fft_length: usize,

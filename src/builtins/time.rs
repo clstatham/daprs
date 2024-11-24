@@ -510,6 +510,7 @@ impl Processor for LinearDecayEnv {
     }
 }
 
+/// The state of an ADSR envelope generator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ADSRState {

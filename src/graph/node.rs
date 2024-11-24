@@ -81,6 +81,7 @@ impl ProcessorNode {
         &mut *self.processor
     }
 
+    /// Allocates memory for the processor.
     #[inline]
     pub fn allocate(&mut self, sample_rate: Float, max_block_size: usize) {
         self.processor.allocate(sample_rate, max_block_size);

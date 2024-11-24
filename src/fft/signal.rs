@@ -1,8 +1,14 @@
+//! FFT signal types.
+
 use num::Complex;
 
 use crate::signal::Float;
 use std::ops::{AddAssign, Deref, DerefMut, MulAssign};
 
+/// A buffer of real numbers.
+///
+/// This differs from [`Buffer<Float>`](crate::signal::Buffer) in that it is does not internally store [`Option`]s - every element is guaranteed to have value.
+/// It also cannot be resized, pushed to, or popped from.
 #[derive(Debug, Clone)]
 pub struct FloatBuf(pub(crate) Box<[Float]>);
 
@@ -64,10 +70,14 @@ impl MulAssign<&Self> for FloatBuf {
     }
 }
 
+/// A buffer of complex numbers.
 #[derive(Debug, Clone)]
 pub struct Fft(pub(crate) Box<[Complex<Float>]>);
 
 impl Fft {
+    /// Creates a new `Fft` for the given FFT length.
+    ///
+    /// Since this is a real-to-complex FFT, the length of the output is `fft_length / 2 + 1`.
     pub fn new_for_real_length(fft_length: usize) -> Self {
         let complex_length = fft_length / 2 + 1;
         Self(vec![Complex::default(); complex_length].into_boxed_slice())

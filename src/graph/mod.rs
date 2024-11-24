@@ -275,6 +275,7 @@ impl Graph {
         self.output_nodes.len()
     }
 
+    /// Returns the name of the given node's processor.
     #[inline]
     pub fn node_name(&self, node: NodeIndex) -> &str {
         self.digraph[node].name()

@@ -1,3 +1,5 @@
+//! Built-in FFT processors.
+
 use crate::prelude::*;
 
 /// A convolution processor for [`FftGraph`]s.
