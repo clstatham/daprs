@@ -1121,7 +1121,7 @@ dependencies = [
  "num",
  "petgraph",
  "rand",
- "raug-macros 0.1.0",
+ "raug-macros",
  "realfft",
  "rustc-hash 2.0.0",
  "serde",
@@ -1134,16 +1134,8 @@ dependencies = [
 [[package]]
 name = "raug-macros"
 version = "0.0.4"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "raug-macros"
-version = "0.1.0"
-source = "git+https://github.com/clstatham/raug#fcf209e0a46b1614ff8f0b4f733069d380eda274"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8e291f4720e1299738959fb214b11df4ff76a2101e8dae31cd184e1b18fed86"
 dependencies = [
  "proc-macro2",
  "quote",
