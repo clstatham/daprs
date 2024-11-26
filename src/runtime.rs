@@ -117,6 +117,7 @@ pub enum MidiPort {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct NodeBuffers {
     input_spec: Vec<SignalSpec>,
     output_spec: Vec<SignalSpec>,
@@ -133,6 +134,7 @@ impl NodeBuffers {
 
 /// The audio graph processing runtime.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Runtime {
     graph: Graph,
     buffer_cache: FxHashMap<NodeIndex, NodeBuffers>,
@@ -288,7 +290,7 @@ impl Runtime {
             inputs[edge.target_input as usize] = Some(buffer);
         }
 
-        let node = self.graph.digraph_mut().node_weight_mut(node_id).unwrap();
+        let node = self.graph.digraph.node_weight_mut(node_id).unwrap();
 
         if inputs.spilled() {
             debug_once!(format!("{}_spilled", node_id.index()) => "Input array for {} ({}) spilled over to the heap (has {} inputs > 8)", node.name(), node_id.index(), num_inputs);
@@ -298,6 +300,7 @@ impl Runtime {
             ProcessorInputs::new(
                 &buffers.input_spec,
                 &inputs[..],
+                &self.graph.assets,
                 mode,
                 self.sample_rate,
                 self.block_size,
@@ -306,7 +309,7 @@ impl Runtime {
         );
 
         if let Err(err) = result {
-            let node = self.graph.digraph().node_weight(node_id).unwrap();
+            let node = self.graph.digraph.node_weight(node_id).unwrap();
             log::error!("Error processing node {}: {:?}", node.name(), err);
             let error = GraphRunError {
                 node_index: node_id,

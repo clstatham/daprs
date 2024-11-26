@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    graph::Graph,
+    graph::{asset::Asset, Graph},
     prelude::{Param, Processor},
     runtime::Runtime,
 };
@@ -55,6 +55,11 @@ impl GraphBuilder {
             graph: self.clone(),
             node_id: graph.add_processor(processor),
         })
+    }
+
+    /// Adds an asset to the graph.
+    pub fn add_asset(&self, name: impl Into<String>, asset: impl Into<Asset>) {
+        self.with_graph_mut(|graph| graph.add_asset(name, asset.into()));
     }
 
     /// Adds a parameter node to the graph.

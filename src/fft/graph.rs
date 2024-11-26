@@ -1,14 +1,12 @@
 //! A directed graph of nodes that process FFT signals.
 
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 
 use num::Complex;
 use petgraph::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::prelude::*;
-
-use super::{signal::FloatBuf, FftPlan};
+use crate::{fft_builtins::*, prelude::*};
 
 /// A node in an [`FftGraph`] that processes FFT signals.
 #[derive(Clone)]
@@ -47,56 +45,17 @@ impl FftProcessorNode {
     }
 
     /// Allocates memory for the processor.
-    pub fn allocate(&mut self, fft_length: usize) {
-        self.processor.allocate(fft_length);
-    }
-}
-
-/// A node in an [`FftGraph`].
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum FftGraphNode {
-    /// An endpoint node that represents an input or output signal.
-    Endpoint,
-    /// A processor node that processes FFT signals.
-    Processor(FftProcessorNode),
-}
-
-impl FftGraphNode {
-    /// Creates a new endpoint node.
-    pub fn new_endpoint() -> Self {
-        Self::Endpoint
+    pub fn allocate(&mut self, fft_length: usize, padded_length: usize) {
+        self.processor.allocate(fft_length, padded_length);
     }
 
-    /// Creates a new processor node with the given processor.
-    pub fn new_processor(processor: impl FftProcessor) -> Self {
-        Self::Processor(FftProcessorNode::new(processor))
-    }
-
-    /// Allocates memory for the node.
-    pub fn allocate(&mut self, fft_length: usize) {
-        if let Self::Processor(proc) = self {
-            proc.processor.allocate(fft_length);
-        }
-    }
-
-    /// Processes the input signals and writes the output signals.
-    ///
-    /// Endpoints will simply copy the input signals to the output signals.
     pub fn process(
         &mut self,
         fft_length: usize,
-        inputs: &[&Fft],
-        outputs: &mut [Fft],
+        inputs: &[&FftSignal],
+        outputs: &mut [FftSignal],
     ) -> Result<(), ProcessorError> {
-        if let Self::Processor(proc) = self {
-            proc.processor.process(fft_length, inputs, outputs)
-        } else {
-            for (input, output) in inputs.iter().zip(outputs.iter_mut()) {
-                output.copy_from_slice(input);
-            }
-            Ok(())
-        }
+        self.processor.process(fft_length, inputs, outputs)
     }
 }
 
@@ -110,93 +69,53 @@ pub struct FftEdge {
     pub target_input: usize,
 }
 
-/// Internal buffer storage for an [`FftNode`] in an [`FftGraph`].
-#[derive(Clone)]
-pub(crate) enum FftNodeBuffers {
-    /// An endpoint node that represents an input or output signal.
-    Endpoint {
-        /// A ring buffer used as an input/output stream.
-        ring_buffer: VecDeque<Float>,
-        /// A buffer used to store the overlap between FFT frames.
-        overlap_buffer: VecDeque<Float>,
-        /// A buffer used to store the time-domain signal.
-        time_domain: FloatBuf,
-        /// A buffer used to store the frequency-domain signal.
-        frequency_domain: Fft,
-    },
-    /// A processor node that processes FFT signals.
-    Processor(
-        /// A buffer used to store the frequency-domain output signals of the processor.
-        Vec<Fft>,
-    ),
-}
-
-impl FftNodeBuffers {
-    /// Creates a new [`Endpoint`](FftNodeBuffers::Endpoint) node buffer.
-    pub fn new_endpoint(fft_length: usize) -> Self {
-        Self::Endpoint {
-            ring_buffer: VecDeque::new(),
-            overlap_buffer: VecDeque::new(),
-            time_domain: FloatBuf(vec![0.0; fft_length * 2].into_boxed_slice()),
-            frequency_domain: Fft::new_for_real_length(fft_length * 2),
-        }
-    }
-
-    /// Creates a new [`Processor`](FftNodeBuffers::Processor) node buffer.
-    pub fn new_processor(fft_length: usize, num_outputs: usize) -> Self {
-        let mut buffers = Vec::new();
-        for _ in 0..num_outputs {
-            buffers.push(Fft(
-                vec![Complex::default(); fft_length + 1].into_boxed_slice()
-            ));
-        }
-        Self::Processor(buffers)
-    }
-
-    /// Allocates memory for the buffers based on the given parameters.
-    pub fn allocate(&mut self, fft_length: usize, num_outputs: usize, block_size: usize) {
-        match self {
-            Self::Endpoint {
-                ring_buffer,
-                overlap_buffer,
-                time_domain,
-                frequency_domain,
-            } => {
-                *ring_buffer = VecDeque::with_capacity(block_size + fft_length);
-                *overlap_buffer = VecDeque::with_capacity(fft_length * 2);
-                time_domain.0 = vec![0.0; fft_length * 2].into_boxed_slice();
-                frequency_domain.0 = vec![Complex::default(); fft_length + 1].into_boxed_slice();
-            }
-            Self::Processor(buffers) => {
-                buffers.resize_with(num_outputs, || {
-                    Fft(vec![Complex::default(); fft_length + 1].into_boxed_slice())
-                });
-            }
-        }
-    }
-}
-
 type FftGraphVisitor = DfsPostOrder<NodeIndex, FxHashSet<NodeIndex>>;
+
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FftAudioInput {
+    pub(crate) ring_buffer: VecDeque<Float>,
+    pub(crate) time_domain: FftSignal,
+}
+
+impl Default for FftAudioInput {
+    fn default() -> Self {
+        Self {
+            ring_buffer: VecDeque::new(),
+            time_domain: FftSignal::RealBuf(RealBuf::default()),
+        }
+    }
+}
+
+#[derive(Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FftAudioOutput {
+    pub(crate) ring_buffer: VecDeque<Float>,
+    pub(crate) overlap_buffer: VecDeque<Float>,
+}
 
 /// A directed graph of nodes that process FFT signals.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FftGraph {
-    digraph: StableDiGraph<FftGraphNode, FftEdge>,
+    pub(crate) digraph: StableDiGraph<FftProcessorNode, FftEdge>,
 
-    plan: FftPlan,
-
+    fft_length: usize,
     hop_length: usize,
     #[allow(unused)]
     window_function: WindowFunction,
-    window: FloatBuf,
+    window: RealBuf,
 
     inputs: Vec<NodeIndex>,
     outputs: Vec<NodeIndex>,
+    audio_inputs: FxHashMap<NodeIndex, FftAudioInput>,
+    audio_outputs: FxHashMap<NodeIndex, FftAudioOutput>,
 
+    #[cfg_attr(feature = "serde", serde(skip))]
     visitor: FftGraphVisitor,
     visit_path: Vec<NodeIndex>,
 
-    buffer_cache: FxHashMap<NodeIndex, FftNodeBuffers>,
+    buffer_cache: FxHashMap<NodeIndex, Vec<FftSignal>>,
 }
 
 impl Default for FftGraph {
@@ -208,19 +127,30 @@ impl Default for FftGraph {
 impl FftGraph {
     /// Creates a new, empty `FftGraph` with the given FFT length, hop length, and window function.
     pub fn new(fft_length: usize, hop_length: usize, window_function: WindowFunction) -> Self {
-        let plan = FftPlan::new(fft_length);
-        let window = window_function.generate(fft_length);
-        let window_sum = window.iter().sum::<Float>();
-        let window: Box<[Float]> = window.iter().map(|x| x / window_sum).collect();
+        let mut window = window_function.generate(fft_length);
+
+        // rotate the window 180 degrees, so it is centered around 0
+        window.rotate_right(fft_length / 2);
+
+        let overlapping_frames = fft_length / hop_length;
+        let mut window_sum = window.iter().sum::<Float>();
+        window_sum *= 2.0 * overlapping_frames as Float;
+
+        // normalize the window
+        for x in window.iter_mut() {
+            *x /= window_sum;
+        }
 
         Self {
-            plan,
+            fft_length,
             hop_length,
-            window: FloatBuf(window),
+            window,
             window_function,
             digraph: StableDiGraph::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
+            audio_inputs: FxHashMap::default(),
+            audio_outputs: FxHashMap::default(),
             visitor: FftGraphVisitor::default(),
             visit_path: Vec::new(),
             buffer_cache: FxHashMap::default(),
@@ -236,7 +166,7 @@ impl FftGraph {
 
     /// Returns the FFT window length of the graph (how many FFT points are used).
     pub fn fft_length(&self) -> usize {
-        self.plan.fft_length
+        self.fft_length
     }
 
     /// Returns the hop length of the graph (the stride between FFT frames).
@@ -246,27 +176,38 @@ impl FftGraph {
 
     /// Returns the overlap length of the graph (how many samples overlap between FFT frames).
     pub fn overlap_length(&self) -> usize {
-        self.plan.fft_length - self.hop_length
+        self.fft_length - self.hop_length
     }
 
     /// Adds an input node to the graph and returns its index.
-    pub fn add_input(&mut self) -> NodeIndex {
-        let node = self.digraph.add_node(FftGraphNode::new_endpoint());
+    pub fn add_input(&mut self, processor: impl FftProcessor) -> NodeIndex {
+        let node = self.digraph.add_node(FftProcessorNode::new(processor));
         self.inputs.push(node);
         node
     }
 
+    pub fn add_audio_input(&mut self) -> NodeIndex {
+        let index = self.add_input(Rfft::new(self.fft_length * 2));
+        self.audio_inputs.insert(index, FftAudioInput::default());
+        index
+    }
+
     /// Adds an output node to the graph and returns its index.
-    pub fn add_output(&mut self) -> NodeIndex {
-        let node = self.digraph.add_node(FftGraphNode::new_endpoint());
+    pub fn add_output(&mut self, processor: impl FftProcessor) -> NodeIndex {
+        let node = self.digraph.add_node(FftProcessorNode::new(processor));
         self.outputs.push(node);
         node
     }
 
+    pub fn add_audio_output(&mut self) -> NodeIndex {
+        let index = self.add_output(Irfft::new(self.fft_length * 2));
+        self.audio_outputs.insert(index, FftAudioOutput::default());
+        index
+    }
+
     /// Adds a processor node to the graph and returns its index.
     pub fn add(&mut self, processor: impl FftProcessor) -> NodeIndex {
-        self.digraph
-            .add_node(FftGraphNode::new_processor(processor))
+        self.digraph.add_node(FftProcessorNode::new(processor))
     }
 
     /// Connects the output of one node to the input of another node.
@@ -323,26 +264,42 @@ impl FftGraph {
     pub fn allocate(&mut self, block_size: usize) {
         self.reset_visitor();
 
+        let fft_length = self.fft_length();
+
         for node_id in &self.visit_path {
-            let node = self.digraph.node_weight(*node_id).unwrap();
-            match node {
-                FftGraphNode::Endpoint => {
-                    let buffers = self
-                        .buffer_cache
-                        .entry(*node_id)
-                        .or_insert_with(|| FftNodeBuffers::new_endpoint(self.plan.fft_length));
-                    buffers.allocate(self.plan.fft_length, 0, block_size);
-                }
-                FftGraphNode::Processor(proc) => {
-                    let buffers = self.buffer_cache.entry(*node_id).or_insert_with(|| {
-                        FftNodeBuffers::new_processor(self.plan.fft_length, proc.output_spec.len())
-                    });
-                    buffers.allocate(self.plan.fft_length, proc.output_spec.len(), block_size);
+            let node = self.digraph.node_weight_mut(*node_id).unwrap();
+            let mut buffers = Vec::new();
+            for out in node.output_spec() {
+                match out.signal_type {
+                    FftSignalType::RealBuf(length) => {
+                        let buf =
+                            vec![0.0; length.calculate(fft_length, block_size)].into_boxed_slice();
+                        buffers.push(FftSignal::RealBuf(RealBuf(buf)));
+                    }
+                    FftSignalType::ComplexBuf(length) => {
+                        let buf =
+                            vec![Complex::default(); length.calculate(fft_length, block_size)]
+                                .into_boxed_slice();
+                        buffers.push(FftSignal::ComplexBuf(ComplexBuf(buf)));
+                    }
+                    FftSignalType::Param(_) => {}
                 }
             }
 
-            let node = self.digraph.node_weight_mut(*node_id).unwrap();
-            node.allocate(self.plan.fft_length);
+            self.buffer_cache.insert(*node_id, buffers);
+
+            node.allocate(self.fft_length, self.fft_length * 2);
+        }
+
+        for input in self.audio_inputs.values_mut() {
+            input.ring_buffer = VecDeque::with_capacity(self.fft_length + block_size);
+            input.time_domain =
+                FftSignal::RealBuf(RealBuf(vec![0.0; self.fft_length * 2].into_boxed_slice()));
+        }
+
+        for output in self.audio_outputs.values_mut() {
+            output.ring_buffer = VecDeque::with_capacity(self.fft_length + block_size);
+            output.overlap_buffer = VecDeque::with_capacity(self.fft_length + block_size);
         }
     }
 
@@ -358,12 +315,8 @@ impl FftGraph {
 
         let mut input_buffer_len = 0;
         for input_index in 0..self.inputs.len() {
-            let buffers = self
-                .buffer_cache
-                .get_mut(&self.inputs[input_index])
-                .unwrap();
-            let FftNodeBuffers::Endpoint { ring_buffer, .. } = buffers else {
-                unreachable!()
+            let Some(inp) = self.audio_inputs.get_mut(&self.inputs[input_index]) else {
+                continue;
             };
 
             let input = inputs.input(input_index).unwrap();
@@ -371,48 +324,28 @@ impl FftGraph {
 
             // fill the input buffer
             for i in 0..input.len() {
-                ring_buffer.push_back(input[i].unwrap_or_default());
+                inp.ring_buffer.push_back(input[i].unwrap_or_default());
             }
 
-            input_buffer_len = ring_buffer.len();
+            input_buffer_len = inp.ring_buffer.len();
         }
 
         // while we still have enough samples to process
         while input_buffer_len >= fft_length {
-            // for each input, window the input, perform the FFT, and advance the ring buffer
             for input_index in 0..self.inputs.len() {
-                let buffers = self
-                    .buffer_cache
-                    .get_mut(&self.inputs[input_index])
-                    .unwrap();
-                let FftNodeBuffers::Endpoint {
-                    ring_buffer,
-                    time_domain,
-                    frequency_domain,
-                    ..
-                } = buffers
-                else {
-                    unreachable!()
+                let Some(inp) = self.audio_inputs.get_mut(&self.inputs[input_index]) else {
+                    continue;
                 };
 
-                // pad the input buffer with zeros
+                let time_domain = inp.time_domain.as_real_buf_mut().unwrap();
                 for i in 0..fft_length {
-                    time_domain[i] = ring_buffer[i] * self.window[i];
+                    time_domain[i] = inp.ring_buffer[i] * self.window[i];
                 }
-                for i in fft_length..fft_length * 2 {
-                    time_domain[i] = 0.0;
-                }
-
-                // perform the FFT
-                self.plan
-                    .forward(time_domain.as_mut(), frequency_domain.as_mut())?;
+                time_domain[fft_length..].fill(0.0);
 
                 // advance the input buffer
-                ring_buffer.drain(..hop_length);
+                inp.ring_buffer.drain(..hop_length);
             }
-
-            // we just consumed `hop_length` samples from each input buffer
-            input_buffer_len -= hop_length;
 
             // run the FFT processor nodes
             for i in 0..self.visit_path.len() {
@@ -420,61 +353,51 @@ impl FftGraph {
                 self.process_node(node_id)?;
             }
 
-            // for each output, perform the IFFT, overlap-add, and write to the output's ring buffer
             for output_index in 0..self.outputs.len() {
-                let buffers = self
-                    .buffer_cache
-                    .get_mut(&self.outputs[output_index])
-                    .unwrap();
-                let FftNodeBuffers::Endpoint {
-                    frequency_domain,
-                    overlap_buffer,
-                    time_domain,
-                    ring_buffer,
-                } = buffers
-                else {
-                    unreachable!()
+                let Some(out) = self.audio_outputs.get_mut(&self.outputs[output_index]) else {
+                    continue;
                 };
 
-                // perform the IFFT
-                self.plan
-                    .inverse(frequency_domain.as_mut(), time_domain.as_mut())?;
+                let FftAudioOutput {
+                    ring_buffer,
+                    overlap_buffer,
+                } = out;
+
+                let buffers = self.buffer_cache.get(&self.outputs[output_index]).unwrap();
+
+                let FftSignal::RealBuf(output_buf) = &buffers[0] else {
+                    continue;
+                };
 
                 // overlap-add
                 for i in 0..fft_length * 2 {
-                    let denom = 1.0;
-                    let sample = time_domain[i] / denom;
                     if i < overlap_buffer.len() {
-                        overlap_buffer[i] += sample;
+                        overlap_buffer[i] += output_buf[i];
                     } else {
-                        overlap_buffer.push_back(sample);
+                        overlap_buffer.push_back(output_buf[i]);
                     }
                 }
 
-                time_domain.fill(0.0);
-
-                // write to the output's ring buffer
                 ring_buffer.extend(overlap_buffer.drain(..hop_length));
             }
+
+            // we just consumed `hop_length` samples from each input buffer
+            input_buffer_len -= hop_length;
         }
 
         // for each output, write as much of the output's ring buffer as possible to the block's corresponding output buffer
         for output_index in 0..self.outputs.len() {
-            let buffers = self
-                .buffer_cache
-                .get_mut(&self.outputs[output_index])
-                .unwrap();
-            let FftNodeBuffers::Endpoint { ring_buffer, .. } = buffers else {
-                unreachable!()
+            let Some(audio_out) = self.audio_outputs.get_mut(&self.outputs[output_index]) else {
+                continue;
             };
 
-            let mut output = outputs.output(output_index);
+            let mut proc_out = outputs.output(output_index);
 
             for i in 0..inputs.block_size() {
-                if let Some(sample) = ring_buffer.pop_front() {
-                    output.set_as(i, sample);
+                if let Some(sample) = audio_out.ring_buffer.pop_front() {
+                    proc_out.set_as(i, sample);
                 } else {
-                    output.set_as(i, 0.0);
+                    proc_out.set_as(i, 0.0);
                 }
             }
         }
@@ -484,87 +407,32 @@ impl FftGraph {
 
     #[cfg_attr(feature = "profiling", inline(never))]
     fn process_node(&mut self, node_id: NodeIndex) -> Result<(), ProcessorError> {
-        let mut inputs = smallvec::SmallVec::<[&Fft; 4]>::new();
+        let mut inputs = BTreeMap::new();
+        // let mut inputs = smallvec::SmallVec::<[&FftSignal; 4]>::new();
         let mut outputs = self.buffer_cache.remove(&node_id).unwrap();
 
-        for (source, edge) in self
-            .digraph
-            .edges_directed(node_id, Direction::Incoming)
-            .map(|e| (e.source(), e.weight()))
-        {
-            let source_buffers = self.buffer_cache.get(&source).unwrap();
-            match source_buffers {
-                FftNodeBuffers::Endpoint {
-                    frequency_domain: current_fft,
-                    ..
-                } => {
-                    inputs.push(current_fft);
-                }
-                FftNodeBuffers::Processor(buffers) => {
-                    inputs.push(&buffers[edge.source_output]);
-                }
+        if let Some(inp) = self.audio_inputs.get(&node_id) {
+            inputs.insert(0, &inp.time_domain);
+        } else {
+            for (source, edge) in self
+                .digraph
+                .edges_directed(node_id, Direction::Incoming)
+                .map(|e| (e.source(), e.weight()))
+            {
+                let source_buffers = self.buffer_cache.get(&source).unwrap();
+                let input = &source_buffers[edge.source_output];
+                inputs.insert(edge.target_input, input);
             }
         }
 
-        {
-            let outputs = match &mut outputs {
-                FftNodeBuffers::Endpoint {
-                    frequency_domain: current_fft,
-                    ..
-                } => std::slice::from_mut(current_fft),
-                FftNodeBuffers::Processor(buffers) => buffers.as_mut(),
-            };
+        let inputs: smallvec::SmallVec<[_; 4]> = inputs.into_iter().map(|(_, v)| v).collect();
 
-            self.digraph[node_id].process(self.plan.fft_length, &inputs, outputs)?;
-        }
+        self.digraph[node_id].process(self.fft_length, &inputs, &mut outputs)?;
 
         drop(inputs);
-
         self.buffer_cache.insert(node_id, outputs);
 
         Ok(())
-    }
-}
-
-#[cfg(feature = "serde")]
-mod serde_impl {
-    use super::*;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    #[derive(Serialize, Deserialize)]
-    struct FftGraphData {
-        graph: StableDiGraph<FftGraphNode, FftEdge>,
-        fft_length: usize,
-        hop_length: usize,
-        window_function: WindowFunction,
-        inputs: Vec<NodeIndex>,
-        outputs: Vec<NodeIndex>,
-    }
-
-    impl Serialize for FftGraph {
-        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            let data = FftGraphData {
-                graph: self.digraph.clone(),
-                fft_length: self.plan.fft_length,
-                hop_length: self.hop_length,
-                window_function: self.window_function.clone(),
-                inputs: self.inputs.clone(),
-                outputs: self.outputs.clone(),
-            };
-            data.serialize(serializer)
-        }
-    }
-
-    impl<'de> Deserialize<'de> for FftGraph {
-        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            let data = FftGraphData::deserialize(deserializer)?;
-            Ok(Self {
-                digraph: data.graph,
-                inputs: data.inputs,
-                outputs: data.outputs,
-                ..Self::new(data.fft_length, data.hop_length, data.window_function)
-            })
-        }
     }
 }
 

@@ -2,17 +2,25 @@
 
 use num::Complex;
 
-use crate::signal::Float;
+use crate::prelude::*;
 use std::ops::{AddAssign, Deref, DerefMut, MulAssign};
 
 /// A buffer of real numbers.
 ///
 /// This differs from [`Buffer<Float>`](crate::signal::Buffer) in that it is does not internally store [`Option`]s - every element is guaranteed to have value.
 /// It also cannot be resized, pushed to, or popped from.
-#[derive(Debug, Clone)]
-pub struct FloatBuf(pub(crate) Box<[Float]>);
+#[derive(Debug, Clone, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct RealBuf(pub(crate) Box<[Float]>);
 
-impl Deref for FloatBuf {
+impl RealBuf {
+    /// Creates a new `RealBuf` with the given length.
+    pub fn new(length: usize) -> Self {
+        Self(vec![0.0; length].into_boxed_slice())
+    }
+}
+
+impl Deref for RealBuf {
     type Target = [Float];
 
     fn deref(&self) -> &Self::Target {
@@ -20,25 +28,25 @@ impl Deref for FloatBuf {
     }
 }
 
-impl DerefMut for FloatBuf {
+impl DerefMut for RealBuf {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl AsRef<[Float]> for FloatBuf {
+impl AsRef<[Float]> for RealBuf {
     fn as_ref(&self) -> &[Float] {
         &self.0
     }
 }
 
-impl AsMut<[Float]> for FloatBuf {
+impl AsMut<[Float]> for RealBuf {
     fn as_mut(&mut self) -> &mut [Float] {
         &mut self.0
     }
 }
 
-impl AddAssign<Float> for FloatBuf {
+impl AddAssign<Float> for RealBuf {
     fn add_assign(&mut self, rhs: Float) {
         for x in self.iter_mut() {
             *x += rhs;
@@ -46,7 +54,7 @@ impl AddAssign<Float> for FloatBuf {
     }
 }
 
-impl AddAssign<&Self> for FloatBuf {
+impl AddAssign<&Self> for RealBuf {
     fn add_assign(&mut self, rhs: &Self) {
         for (x, y) in self.iter_mut().zip(rhs.iter()) {
             *x += *y;
@@ -54,7 +62,7 @@ impl AddAssign<&Self> for FloatBuf {
     }
 }
 
-impl MulAssign<Float> for FloatBuf {
+impl MulAssign<Float> for RealBuf {
     fn mul_assign(&mut self, rhs: Float) {
         for x in self.iter_mut() {
             *x *= rhs;
@@ -62,7 +70,7 @@ impl MulAssign<Float> for FloatBuf {
     }
 }
 
-impl MulAssign<&Self> for FloatBuf {
+impl MulAssign<&Self> for RealBuf {
     fn mul_assign(&mut self, rhs: &Self) {
         for (x, y) in self.iter_mut().zip(rhs.iter()) {
             *x *= *y;
@@ -70,11 +78,36 @@ impl MulAssign<&Self> for FloatBuf {
     }
 }
 
-/// A buffer of complex numbers.
-#[derive(Debug, Clone)]
-pub struct Fft(pub(crate) Box<[Complex<Float>]>);
+impl FromIterator<Float> for RealBuf {
+    fn from_iter<I: IntoIterator<Item = Float>>(iter: I) -> Self {
+        Self(iter.into_iter().collect::<Vec<_>>().into_boxed_slice())
+    }
+}
 
-impl Fft {
+impl<'a> IntoIterator for &'a RealBuf {
+    type Item = &'a Float;
+    type IntoIter = std::slice::Iter<'a, Float>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut RealBuf {
+    type Item = &'a mut Float;
+    type IntoIter = std::slice::IterMut<'a, Float>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter_mut()
+    }
+}
+
+/// A buffer of complex numbers.
+#[derive(Debug, Clone, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ComplexBuf(pub(crate) Box<[Complex<Float>]>);
+
+impl ComplexBuf {
     /// Creates a new `Fft` for the given FFT length.
     ///
     /// Since this is a real-to-complex FFT, the length of the output is `fft_length / 2 + 1`.
@@ -84,7 +117,7 @@ impl Fft {
     }
 }
 
-impl Deref for Fft {
+impl Deref for ComplexBuf {
     type Target = [Complex<Float>];
 
     fn deref(&self) -> &Self::Target {
@@ -92,25 +125,31 @@ impl Deref for Fft {
     }
 }
 
-impl DerefMut for Fft {
+impl DerefMut for ComplexBuf {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl AsRef<[Complex<Float>]> for Fft {
+impl AsRef<[Complex<Float>]> for ComplexBuf {
     fn as_ref(&self) -> &[Complex<Float>] {
         &self.0
     }
 }
 
-impl AsMut<[Complex<Float>]> for Fft {
+impl AsMut<[Complex<Float>]> for ComplexBuf {
     fn as_mut(&mut self) -> &mut [Complex<Float>] {
         &mut self.0
     }
 }
 
-impl<'a> IntoIterator for &'a Fft {
+impl FromIterator<Complex<Float>> for ComplexBuf {
+    fn from_iter<I: IntoIterator<Item = Complex<Float>>>(iter: I) -> Self {
+        Self(iter.into_iter().collect::<Vec<_>>().into_boxed_slice())
+    }
+}
+
+impl<'a> IntoIterator for &'a ComplexBuf {
     type Item = &'a Complex<Float>;
     type IntoIter = std::slice::Iter<'a, Complex<Float>>;
 
@@ -119,7 +158,7 @@ impl<'a> IntoIterator for &'a Fft {
     }
 }
 
-impl<'a> IntoIterator for &'a mut Fft {
+impl<'a> IntoIterator for &'a mut ComplexBuf {
     type Item = &'a mut Complex<Float>;
     type IntoIter = std::slice::IterMut<'a, Complex<Float>>;
 
@@ -128,26 +167,87 @@ impl<'a> IntoIterator for &'a mut Fft {
     }
 }
 
-impl MulAssign<Float> for Fft {
-    fn mul_assign(&mut self, rhs: Float) {
-        for x in self.iter_mut() {
-            *x *= rhs;
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FftBufLength {
+    FftLength,
+    PaddedLength,
+    FftLengthPlusOne,
+    BlockSize,
+    Custom(usize),
+}
+
+impl FftBufLength {
+    pub fn calculate(&self, fft_length: usize, block_size: usize) -> usize {
+        match self {
+            FftBufLength::FftLength => fft_length,
+            FftBufLength::PaddedLength => fft_length * 2,
+            FftBufLength::FftLengthPlusOne => fft_length + 1,
+            FftBufLength::BlockSize => block_size,
+            FftBufLength::Custom(length) => *length,
         }
     }
 }
 
-impl MulAssign<Complex<Float>> for Fft {
-    fn mul_assign(&mut self, rhs: Complex<Float>) {
-        for x in self.iter_mut() {
-            *x *= rhs;
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FftSignalType {
+    Param(SignalType),
+    RealBuf(FftBufLength),
+    ComplexBuf(FftBufLength),
 }
 
-impl MulAssign<Self> for Fft {
-    fn mul_assign(&mut self, rhs: Self) {
-        for (x, y) in self.iter_mut().zip(rhs.iter()) {
-            *x *= *y;
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FftSignal {
+    Param(Param),
+    RealBuf(RealBuf),
+    ComplexBuf(ComplexBuf),
+}
+
+impl FftSignal {
+    pub fn signal_type(&self) -> FftSignalType {
+        match self {
+            FftSignal::Param(param) => FftSignalType::Param(param.signal_type()),
+            FftSignal::RealBuf(buf) => FftSignalType::RealBuf(FftBufLength::Custom(buf.len())),
+            FftSignal::ComplexBuf(buf) => {
+                FftSignalType::ComplexBuf(FftBufLength::Custom(buf.len()))
+            }
+        }
+    }
+
+    pub fn as_param(&self) -> Option<&Param> {
+        match self {
+            FftSignal::Param(param) => Some(param),
+            _ => None,
+        }
+    }
+
+    pub fn as_real_buf(&self) -> Option<&RealBuf> {
+        match self {
+            FftSignal::RealBuf(buf) => Some(buf),
+            _ => None,
+        }
+    }
+
+    pub fn as_complex_buf(&self) -> Option<&ComplexBuf> {
+        match self {
+            FftSignal::ComplexBuf(buf) => Some(buf),
+            _ => None,
+        }
+    }
+
+    pub fn as_real_buf_mut(&mut self) -> Option<&mut RealBuf> {
+        match self {
+            FftSignal::RealBuf(buf) => Some(buf),
+            _ => None,
+        }
+    }
+
+    pub fn as_complex_buf_mut(&mut self) -> Option<&mut ComplexBuf> {
+        match self {
+            FftSignal::ComplexBuf(buf) => Some(buf),
+            _ => None,
         }
     }
 }

@@ -1141,8 +1141,6 @@ dependencies = [
 [[package]]
 name = "raug-macros"
 version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8e291f4720e1299738959fb214b11df4ff76a2101e8dae31cd184e1b18fed86"
 dependencies = [
  "proc-macro2",
  "quote",

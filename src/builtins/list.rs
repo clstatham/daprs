@@ -244,7 +244,7 @@ impl Processor for Unpack {
 
     fn output_spec(&self) -> Vec<SignalSpec> {
         (0..self.num_outputs)
-            .map(|i| SignalSpec::new(i.to_string(), self.signal_type.clone()))
+            .map(|i| SignalSpec::new(i.to_string(), self.signal_type))
             .collect()
     }
 

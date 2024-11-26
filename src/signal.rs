@@ -882,7 +882,7 @@ impl<'a> AnySignalMut<'a> {
 }
 
 /// A signal type.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SignalType {
     /// A floating-point signal.

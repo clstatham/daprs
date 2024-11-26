@@ -146,11 +146,8 @@ impl Node {
             index,
             self.name()
         );
-        self.graph.with_graph(|graph| {
-            graph.digraph()[self.id()].input_spec()[index as usize]
-                .signal_type
-                .clone()
-        })
+        self.graph
+            .with_graph(|graph| graph.digraph()[self.id()].input_spec()[index as usize].signal_type)
     }
 
     /// Returns the signal type of the output at the given index.
@@ -169,9 +166,7 @@ impl Node {
             self.name()
         );
         self.graph.with_graph(|graph| {
-            graph.digraph()[self.id()].output_spec()[index as usize]
-                .signal_type
-                .clone()
+            graph.digraph()[self.id()].output_spec()[index as usize].signal_type
         })
     }
 
@@ -770,6 +765,7 @@ impl IntoOutput for &Output {
 }
 
 impl<T: IntoNode> IntoOutput for T {
+    #[track_caller]
     fn into_output(self, graph: &GraphBuilder) -> Output {
         let node = self.into_node(graph);
         node.assert_single_output("into_output");

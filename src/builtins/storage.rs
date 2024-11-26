@@ -20,14 +20,17 @@ use crate::prelude::*;
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AudioBuffer {
-    buffer: Buffer<Float>,
+    buffer: String,
     index: Float,
 }
 
 impl AudioBuffer {
     /// Creates a new [`AudioBuffer`] processor with the given buffer.
-    pub fn new(buffer: Buffer<Float>) -> Self {
-        Self { buffer, index: 0.0 }
+    pub fn new(buffer: impl Into<String>) -> Self {
+        Self {
+            buffer: buffer.into(),
+            index: 0.0,
+        }
     }
 }
 
@@ -41,7 +44,10 @@ impl Processor for AudioBuffer {
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", SignalType::Float)]
+        vec![
+            SignalSpec::new("out", SignalType::Float),
+            SignalSpec::new("length", SignalType::Int),
+        ]
     }
 
     fn process(
@@ -49,22 +55,27 @@ impl Processor for AudioBuffer {
         inputs: ProcessorInputs,
         outputs: ProcessorOutputs,
     ) -> Result<(), ProcessorError> {
-        for (index, write, out) in iter_proc_io_as!(
+        let buffer = inputs.asset(&self.buffer)?;
+        let mut buffer = buffer.try_lock().unwrap();
+        let buffer = buffer.as_buffer_mut().ok_or_else(|| {
+            ProcessorError::InvalidAsset(self.buffer.clone(), "Buffer".to_string())
+        })?;
+        for (index, write, out, length) in iter_proc_io_as!(
             inputs as [Float, Float],
-            outputs as [Float]
+            outputs as [Float, i64]
         ) {
             self.index = index.unwrap_or(self.index);
 
             if let Some(write) = *write {
-                self.buffer[self.index as usize] = Some(write);
+                buffer[self.index as usize] = Some(write);
             }
 
             if self.index.fract() != 0.0 {
                 let pos_floor = self.index.floor() as usize;
                 let pos_ceil = self.index.ceil() as usize;
 
-                let value_floor = self.buffer[pos_floor].unwrap_or_default();
-                let value_ceil = self.buffer[pos_ceil].unwrap_or_default();
+                let value_floor = buffer[pos_floor].unwrap_or_default();
+                let value_ceil = buffer[pos_ceil].unwrap_or_default();
 
                 let t = self.index.fract();
 
@@ -78,8 +89,10 @@ impl Processor for AudioBuffer {
                     self.index = index as Float;
                 }
 
-                *out = Some(self.buffer[self.index as usize].unwrap_or_default());
+                *out = Some(buffer[self.index as usize].unwrap_or_default());
             }
+
+            *length = Some(buffer.len() as i64);
         }
 
         Ok(())

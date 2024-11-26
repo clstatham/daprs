@@ -43,7 +43,7 @@ smallvec = "1.13.2"
 serde = { version = "1.0", optional = true }
 typetag = { version = "0.2", optional = true }
 erased-serde = { version = "0.4", optional = true }
-raug-macros = { version = "0.0.4" }
+raug-macros = { path = "../raug-macros" }
 realfft = { version = "3.4", optional = true }
 num = { version = "0.4.3", features = [] }
 apodize = "1.0.0"

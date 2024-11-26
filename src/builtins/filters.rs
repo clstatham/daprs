@@ -356,9 +356,14 @@ pub struct AutoBiquad {
     pub gain: Float,
 }
 
-impl Default for AutoBiquad {
-    fn default() -> Self {
+impl AutoBiquad {
+    /// Creates a new `AutoBiquad` filter with the given type, cutoff frequency, Q factor, and gain.
+    pub fn new(biquad_type: BiquadType, cutoff: Float, q: Float, gain: Float) -> Self {
         Self {
+            biquad_type,
+            cutoff,
+            q,
+            gain,
             a0: 1.0,
             a1: 0.0,
             a2: 0.0,
@@ -368,23 +373,6 @@ impl Default for AutoBiquad {
             x2: 0.0,
             y1: 0.0,
             y2: 0.0,
-            biquad_type: BiquadType::LowPass,
-            cutoff: 1000.0,
-            q: 0.707,
-            gain: 0.0,
-        }
-    }
-}
-
-impl AutoBiquad {
-    /// Creates a new `AutoBiquad` filter with the given type, cutoff frequency, Q factor, and gain.
-    pub fn new(biquad_type: BiquadType, cutoff: Float, q: Float, gain: Float) -> Self {
-        Self {
-            biquad_type,
-            cutoff,
-            q,
-            gain,
-            ..Default::default()
         }
     }
 

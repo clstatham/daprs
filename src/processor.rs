@@ -7,6 +7,7 @@ use itertools::Either;
 use thiserror::Error;
 
 use crate::{
+    graph::asset::{AssetRef, Assets},
     signal::{
         AnySignal, AnySignalMut, AnySignalRef, Float, List, MidiMessage, Signal, SignalBuffer,
         SignalType,
@@ -55,10 +56,22 @@ pub enum ProcessorError {
     #[error("Invalid cast: {0:?} to {1:?}")]
     InvalidCast(SignalType, SignalType),
 
+    #[error("Sub-graph error: {0}")]
+    SubGraph(#[from] Box<crate::graph::GraphRunError>),
+
+    #[error("Asset `{0}` type invalid: {0}")]
+    InvalidAsset(String, String),
+
+    #[error("Asset `{0}` not found")]
+    AssetNotFound(String),
+
     #[cfg(feature = "fft")]
     /// FFT error.
     #[error("FFT error: {0}")]
     Fft(#[from] crate::fft::FftError),
+
+    #[error("Other error")]
+    Other,
 }
 
 /// Information about an input or output of a [`Processor`].
@@ -280,6 +293,9 @@ pub struct ProcessorInputs<'a, 'b> {
     /// The input signals.
     pub inputs: &'a [Option<&'b SignalBuffer>],
 
+    /// The graph's assets, made available to the processor.
+    pub assets: &'a Assets,
+
     /// The mode in which the processor should process signals.
     pub mode: ProcessMode,
 
@@ -296,6 +312,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     pub fn new(
         input_specs: &'a [SignalSpec],
         inputs: &'a [Option<&'b SignalBuffer>],
+        assets: &'a Assets,
         mode: ProcessMode,
         sample_rate: Float,
         block_size: usize,
@@ -303,6 +320,7 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
         Self {
             input_specs,
             inputs,
+            assets,
             mode,
             sample_rate,
             block_size,
@@ -331,6 +349,14 @@ impl<'a, 'b> ProcessorInputs<'a, 'b> {
     #[inline]
     pub fn block_size(&self) -> usize {
         self.block_size
+    }
+
+    /// Returns the asset with the given name, if it exists.
+    #[inline]
+    pub fn asset(&self, name: &str) -> Result<AssetRef, ProcessorError> {
+        self.assets
+            .get(name)
+            .ok_or_else(|| ProcessorError::AssetNotFound(name.into()))
     }
 
     /// Returns the input signal at the given index. Unconnected inputs are represented as `None`.

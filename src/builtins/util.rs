@@ -74,11 +74,11 @@ impl Passthrough {
 #[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Passthrough {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", self.signal_type.clone())]
+        vec![SignalSpec::new("in", self.signal_type)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", self.signal_type.clone())]
+        vec![SignalSpec::new("out", self.signal_type)]
     }
 
     fn process(
@@ -127,11 +127,11 @@ impl Cast {
 #[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Cast {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", self.from.clone())]
+        vec![SignalSpec::new("in", self.from)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("out", self.to.clone())]
+        vec![SignalSpec::new("out", self.to)]
     }
 
     fn process(
@@ -145,10 +145,10 @@ impl Processor for Cast {
                 continue;
             };
             let in_signal = in_signal.to_owned();
-            let Some(cast) = in_signal.cast(self.to.clone()) else {
+            let Some(cast) = in_signal.cast(self.to) else {
                 return Err(ProcessorError::InvalidCast(
                     in_signal.signal_type(),
-                    self.to.clone(),
+                    self.to,
                 ));
             };
             out_signal.clone_from_ref(cast.as_ref());
@@ -597,7 +597,7 @@ impl SignalRx {
     }
 
     /// Receives a message from the transmitter.
-    pub fn recv(&mut self) -> Option<AnySignal> {
+    pub fn recv(&self) -> Option<AnySignal> {
         self.rx.try_recv().ok()
     }
 }
@@ -618,7 +618,7 @@ impl ParamRx {
     }
 
     /// Receives a message from the transmitter and stores it as the last message.
-    pub fn recv(&mut self) -> Option<AnySignal> {
+    pub fn recv(&self) -> Option<AnySignal> {
         let mut last = self.last.try_lock().ok()?;
         if let Some(msg) = self.rx.recv() {
             if let Some(last) = &mut *last {
@@ -673,10 +673,8 @@ impl Default for ParamChannel {
 /// | --- | --- | --- | --- |
 /// | `0` | `get` | `Any` | The current value of the parameter. |
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Param {
     name: String,
-    #[cfg_attr(feature = "serde", serde(skip))]
     channel: ParamChannel,
     signal_type: SignalType,
     minimum: Option<Float>,
@@ -724,6 +722,11 @@ impl Param {
         &self.name
     }
 
+    /// Returns the signal type of the parameter.
+    pub fn signal_type(&self) -> SignalType {
+        self.signal_type
+    }
+
     /// Returns the transmitter for the parameter.
     pub fn tx(&self) -> &SignalTx {
         &self.channel.0
@@ -758,8 +761,8 @@ impl Param {
     }
 
     /// Receives the value of the parameter.
-    pub fn recv(&mut self) -> Option<AnySignal> {
-        let message = self.rx_mut().recv();
+    pub fn recv(&self) -> Option<AnySignal> {
+        let message = self.rx().recv();
 
         match (message, self.minimum, self.maximum) {
             (Some(AnySignal::Float(Some(value))), Some(min), Some(max)) => {
@@ -797,11 +800,11 @@ impl Param {
 #[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Param {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("set", self.signal_type.clone())]
+        vec![SignalSpec::new("set", self.signal_type)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("get", self.signal_type.clone())]
+        vec![SignalSpec::new("get", self.signal_type)]
     }
 
     fn process(
@@ -824,6 +827,61 @@ impl Processor for Param {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Param {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(serde::Serialize)]
+        struct ParamSer {
+            name: String,
+            signal_type: SignalType,
+            minimum: Option<Float>,
+            maximum: Option<Float>,
+            initial_value: Option<AnySignal>,
+        }
+
+        self.recv();
+
+        let ser = ParamSer {
+            name: self.name.clone(),
+            signal_type: self.signal_type,
+            minimum: self.minimum,
+            maximum: self.maximum,
+            initial_value: self.last(),
+        };
+
+        ser.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Param {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        struct ParamDe {
+            name: String,
+            signal_type: SignalType,
+            minimum: Option<Float>,
+            maximum: Option<Float>,
+            initial_value: Option<AnySignal>,
+        }
+
+        let de = ParamDe::deserialize(deserializer)?;
+
+        let param = Param {
+            name: de.name,
+            channel: ParamChannel::default(),
+            signal_type: de.signal_type,
+            minimum: de.minimum,
+            maximum: de.maximum,
+        };
+        if let Some(initial_value) = de.initial_value {
+            param.tx().send(initial_value);
+        }
+
+        Ok(param)
     }
 }
 
@@ -1142,7 +1200,7 @@ impl IsSome {
 #[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for IsSome {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", self.signal_type.clone())]
+        vec![SignalSpec::new("in", self.signal_type)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {
@@ -1191,7 +1249,7 @@ impl IsNone {
 #[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for IsNone {
     fn input_spec(&self) -> Vec<SignalSpec> {
-        vec![SignalSpec::new("in", self.signal_type.clone())]
+        vec![SignalSpec::new("in", self.signal_type)]
     }
 
     fn output_spec(&self) -> Vec<SignalSpec> {

@@ -1,5 +1,6 @@
 //! A directed graph of [`Processor`]s connected by [`Edge`]s.
 
+use asset::{Asset, Assets};
 use edge::Edge;
 use node::ProcessorNode;
 use petgraph::{
@@ -14,6 +15,7 @@ use crate::{
     signal::{Float, MidiMessage, SignalType},
 };
 
+pub mod asset;
 pub mod edge;
 pub mod node;
 
@@ -26,7 +28,7 @@ pub type NodeIndex = petgraph::graph::NodeIndex<GraphIx>;
 pub type DiGraph = StableDiGraph<ProcessorNode, Edge, GraphIx>;
 
 /// An error that occurred while running a graph.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 #[error("Graph run error at node {} ({}): {signal_type:?}", node_index.index(), node_processor)]
 pub struct GraphRunError {
     /// The index of the node where the error occurred.
@@ -38,7 +40,7 @@ pub struct GraphRunError {
 }
 
 /// The type of error that occurred while running a graph.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 #[non_exhaustive]
 pub enum GraphRunErrorType {
     /// An error occurred while processing the node.
@@ -78,7 +80,10 @@ pub type GraphConstructionResult<T> = Result<T, GraphConstructionError>;
 #[derive(Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Graph {
-    digraph: DiGraph,
+    pub(crate) digraph: DiGraph,
+
+    // assets in the graph
+    pub(crate) assets: Assets,
 
     // parameters for the graph
     params: FxHashMap<String, NodeIndex>,
@@ -115,6 +120,17 @@ impl Graph {
     #[inline]
     pub fn digraph_mut(&mut self) -> &mut DiGraph {
         &mut self.digraph
+    }
+
+    /// Returns a reference to the assets in the graph.
+    #[inline]
+    pub fn assets(&self) -> &Assets {
+        &self.assets
+    }
+
+    /// Adds an asset to the graph.
+    pub fn add_asset(&mut self, name: impl Into<String>, asset: Asset) {
+        self.assets.insert(name.into(), asset);
     }
 
     /// Adds an audio input node to the graph.

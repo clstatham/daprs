@@ -201,33 +201,6 @@ impl Expr {
     }
 }
 
-#[cfg(all(feature = "expr", feature = "serde"))]
-mod serde_impl {
-    use super::Expr;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    #[derive(Serialize, Deserialize)]
-    struct ExprData {
-        source: String,
-    }
-
-    impl Serialize for Expr {
-        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            let data = ExprData {
-                source: self.source.clone(),
-            };
-            data.serialize(serializer)
-        }
-    }
-
-    impl<'de> Deserialize<'de> for Expr {
-        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            let data = ExprData::deserialize(deserializer)?;
-            Ok(Expr::new(data.source))
-        }
-    }
-}
-
 #[cfg(feature = "expr")]
 #[cfg_attr(feature = "serde", typetag::serde)]
 impl Processor for Expr {
@@ -618,3 +591,33 @@ impl_unary_proc!(
     (Float = Float),
     "A processor that calculates the base-10 logarithm of a signal."
 );
+
+#[cfg(feature = "serde")]
+mod serde_impl {
+
+    #[cfg(feature = "expr")]
+    mod expr {
+        use super::super::Expr;
+        use serde::{Deserialize, Deserializer, Serialize, Serializer};
+        #[derive(Serialize, Deserialize)]
+        struct ExprData {
+            source: String,
+        }
+
+        impl Serialize for Expr {
+            fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                let data = ExprData {
+                    source: self.source.clone(),
+                };
+                data.serialize(serializer)
+            }
+        }
+
+        impl<'de> Deserialize<'de> for Expr {
+            fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                let data = ExprData::deserialize(deserializer)?;
+                Ok(Expr::new(data.source))
+            }
+        }
+    }
+}
