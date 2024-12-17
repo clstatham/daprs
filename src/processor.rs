@@ -181,7 +181,7 @@ impl<'a> ProcessorOutput<'a> {
 
     /// Returns an iterator over the output signal.
     #[inline]
-    pub fn iter_mut(&'a mut self) -> impl Iterator<Item = AnySignalMut> {
+    pub fn iter_mut(&'a mut self) -> impl Iterator<Item = AnySignalMut<'a>> {
         match self {
             ProcessorOutput::Block(buffer) => Either::Left(buffer.iter_mut()),
             ProcessorOutput::Sample(buffer, sample_index) => {
@@ -192,7 +192,7 @@ impl<'a> ProcessorOutput<'a> {
 
     /// Returns an iterator over the output signal, if it is of the given type.
     #[inline]
-    pub fn iter_mut_as<S: Signal>(&'a mut self) -> impl Iterator<Item = &mut Option<S>> {
+    pub fn iter_mut_as<S: Signal>(&'a mut self) -> impl Iterator<Item = &'a mut Option<S>> {
         match self {
             ProcessorOutput::Block(buffer) => {
                 Either::Left(buffer.as_type_mut().unwrap().iter_mut())

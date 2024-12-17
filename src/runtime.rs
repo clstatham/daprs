@@ -496,17 +496,17 @@ impl Runtime {
             AudioBackend::Alsa => cpal::available_hosts()
                 .into_iter()
                 .find(|h| *h == cpal::HostId::Alsa)
-                .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
+                .ok_or(RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
             #[cfg(all(target_os = "linux", feature = "jack"))]
             AudioBackend::Jack => cpal::available_hosts()
                 .into_iter()
                 .find(|h| *h == cpal::HostId::Jack)
-                .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
+                .ok_or(RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
             #[cfg(target_os = "windows")]
             AudioBackend::Wasapi => cpal::available_hosts()
                 .into_iter()
                 .find(|h| *h == cpal::HostId::Wasapi)
-                .ok_or_else(|| RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
+                .ok_or(RuntimeError::HostUnavailable(cpal::HostUnavailable))?,
         };
         let host = cpal::host_from_id(host_id)?;
 
@@ -521,7 +521,7 @@ impl Runtime {
                 .find(|d| d.name().unwrap().contains(name)),
         };
 
-        let cpal_device = cpal_device.ok_or_else(|| RuntimeError::DeviceUnavailable(device))?;
+        let cpal_device = cpal_device.ok_or(RuntimeError::DeviceUnavailable(device))?;
 
         log::info!("Using device: {}", cpal_device.name()?);
 
@@ -550,7 +550,7 @@ impl Runtime {
                     .into_iter()
                     .find(|port| midi_connection.port_name(port).unwrap().contains(name)),
             }
-            .ok_or_else(|| RuntimeError::MidiPortUnavailable(midi_port))?;
+            .ok_or(RuntimeError::MidiPortUnavailable(midi_port))?;
 
             log::info!(
                 "Using MIDI port: {:?}",
